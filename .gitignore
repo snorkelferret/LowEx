@@ -66,5 +66,6 @@ ViewerCache/
 .DS_Store
 Thumbs.db
 
-# nodejs
+# Dependencies (covers node_modules anywhere in the tree)
 node_modules/
+**/node_modules/
