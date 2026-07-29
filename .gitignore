@@ -1,0 +1,70 @@
+# ==========================================
+# Unreal Engine 5 Temporary & Local Files
+# ==========================================
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+Script/
+.idea/
+.vscode/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.xcodeproj
+*.xcworkspace
+
+# Nested Unreal projects (e.g., inside /game)
+game/Binaries/
+game/Build/
+game/DerivedDataCache/
+game/Intermediate/
+game/Saved/
+
+# ==========================================
+# Emacs Temporary & Backup Files
+# ==========================================
+# Crash/Lock files (e.g., .#filename.el)
+.\#*
+\#*#
+# Auto-save files
+*~
+# Compiled byte-code
+*.elc
+# Semantic/CEDET databases
+/semantic.cache
+# Flymake temporary files
+*_flymake.*
+# Distraction-free / local session cache
+.dir-locals.el
+.ensime_cache/
+.eunuchs
+/tramp
+GPATH
+GRTAGS
+GTAGS
+
+# ==========================================
+# Foundry Nuke Temporary & Cache Files
+# ==========================================
+# Nuke disk cache directories
+.nuke/
+# Nuke autosave files
+*.nk~
+# Crash dumps and log traces
+*.log
+*.tmp
+# Local viewer cache data
+nuke_cache/
+ViewerCache/
+
+# ==========================================
+# OS & System Noise
+# ==========================================
+.DS_Store
+Thumbs.db
+
+# nodejs
+node_modules/
