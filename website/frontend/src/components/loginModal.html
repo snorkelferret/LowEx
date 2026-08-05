@@ -1,0 +1,23 @@
+<div id="loginModal" class="modal-overlay hidden">
+  <div class="modal-content card">
+    <h3>👤 Sign in as another user</h3>
+    <p>Enter credentials to switch your active session context.</p>
+    
+    <form id="modalLoginForm">
+      <div class="form-group">
+        <label for="modalUsername">Username</label>
+        <input type="text" id="modalUsername" required autocomplete="username" placeholder="Enter username" />
+      </div>
+
+      <div class="form-group">
+        <label for="modalPassword">Password</label>
+        <input type="password" id="modalPassword" required autocomplete="current-password" placeholder="Enter password" />
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="closeModalBtn" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+      </div>
+    </form>
+  </div>
+</div>

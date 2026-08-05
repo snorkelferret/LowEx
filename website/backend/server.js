@@ -1,147 +1,336 @@
+require('dotenv').config(); // Load variables from .env file
+
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
+const bcrypt = require('bcryptjs');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const adminRoutes = require('./routes/admin');
+const superuserRoutes = require('./routes/superuser');
+
+// Import Shared DB Instance
+const db = require('./db');
+
+
+//const superuserRoutes = require('./routes/superuser');
+
 
 const app = express();
-app.use(cors());
+
+// CONFIGURATION CONSTANTS (Loaded from environment)
+
+const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || 'http://localhost';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_fallback_secret_key_change_in_prod';
+
+// Enable CORS dynamically for client URL
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
+//app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
+app.use(cookieParser());
 
-const JWT_SECRET = 'super_secret_game_engine_key_2026';
 
-// --- IN-MEMORY SUPERUSER ACCOUNT ---
-// In production, this lives in your database.
-const superuserAccount = {
-    id: 'usr_super_01',
-    username: 'admin',
-    email: 'admin@lowexpectations.com',
-    password: 'SuperPassword123!', // Plaintext for demo, hash with bcrypt in production
-    role: 'superuser',
-    // Generated TOTP secret for 2FA app (e.g., Google Authenticator)
-    twoFactorSecret: null, 
-    is2FAEnabled: false
+// 1. Serve static frontend assets built by build.js
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// 2. Authentication endpoints (/api/auth/login, /api/auth/verify-2fa, etc.)
+app.use('/api/auth', require('./routes/auth'));
+
+// 3. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
+app.use('/app', require('./routes/views'));
+
+// 4. Fallback: Any unknown public route goes back to the splash page
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
+
+
+// Mount separated routes
+app.use('/api/admin', adminRoutes);
+app.use('/api/superuser', superuserRoutes);
+
+
+
+// Prepared DB Queries
+const queries = {
+  getUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
+  getUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
+  getUserByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
+  getUserByGoogleId: db.prepare('SELECT * FROM users WHERE google_id = ?'),
+  update2FASecret: db.prepare('UPDATE users SET two_factor_secret = ? WHERE id = ?'),
+  enable2FA: db.prepare('UPDATE users SET is_2fa_enabled = 1 WHERE id = ?'),
+  getInvitation: db.prepare('SELECT * FROM invitations WHERE token = ? AND is_used = 0'),
+  markInviteUsed: db.prepare('UPDATE invitations SET is_used = 1 WHERE id = ?'),
+  createUser: db.prepare(`
+    INSERT INTO users (username, email, password_hash, role)
+    VALUES (@username, @email, @password_hash, @role)
+  `),
+  createGoogleUser: db.prepare(`
+    INSERT INTO users (username, email, google_id, role)
+    VALUES (?, ?, ?, 'user')
+  `)
 };
 
 // -------------------------------------------------------------
-// 1. GENERATE 2FA QR CODE (For initial Superuser Setup)
+// 2. PASSPORT GOOGLE OAUTH CONFIGURATION
 // -------------------------------------------------------------
-app.get('/api/auth/setup-2fa', async (req, res) => {
-    // Generate a new TOTP secret key
-    const secret = speakeasy.generateSecret({
-        name: `Low Expectations (Superuser: ${superuserAccount.username})`
-    });
-
-    superuserAccount.twoFactorSecret = secret.base32;
-
-    // Generate QR Code Data URL to scan with Google Authenticator / 1Password
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID || 'MOCK_GOOGLE_CLIENT_ID',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'MOCK_GOOGLE_CLIENT_SECRET',
+    callbackURL: `${HOST}:${PORT}/api/auth/google/callback` // Configured dynamically
+    //callbackURL: 'http://localhost:5000/api/auth/google/callback'
+  },
+  (accessToken, refreshToken, profile, done) => {
     try {
-        const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
-        res.json({
-            message: 'Scan this QR code with your 2FA app',
-            qrCodeUrl: qrCodeUrl,
-            manualKey: secret.base32
-        });
+      const googleId = profile.id;
+      const email = profile.emails && profile.emails[0] ? profile.emails[0].value : `${googleId}@google.user`;
+      const username = profile.displayName ? profile.displayName.replace(/\s+/g, '_').toLowerCase() : `google_${googleId}`;
+
+      let user = queries.getUserByGoogleId.get(googleId) || queries.getUserByEmail.get(email);
+
+      if (!user) {
+        const result = queries.createGoogleUser.run(username, email, googleId);
+        user = queries.getUserById.get(result.lastInsertRowid);
+      }
+
+      return done(null, user);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to generate QR code' });
+      return done(err, null);
     }
-});
+  }
+));
 
 // -------------------------------------------------------------
-// 2. STEP 1: VERIFY PRIMARY CREDENTIALS
+// 3. AUTHENTICATION MIDDLEWARE
 // -------------------------------------------------------------
-app.post('/api/auth/login-step1', (req, res) => {
-    const { username, password } = req.body;
 
-    // Check credentials against Superuser account
-    if (username !== superuserAccount.username || password !== superuserAccount.password) {
-        return res.status(401).json({ error: 'Invalid username or password' });
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // Attach both or normalize id for compatibility
+    req.user = {
+      ...decoded,
+      id: decoded.userId || decoded.id
+    };
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired session token' });
+  }
+};
+
+
+const requireRole = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied: Insufficient permissions' });
     }
-
-    // Pass: Tell client 2FA is required for this role
-    res.json({
-        success: true,
-        role: superuserAccount.role,
-        requires2FA: true,
-        message: 'Credentials valid. Proceed to Step 2FA.'
-    });
-});
+    next();
+  };
+};
 
 // -------------------------------------------------------------
-// 3. STEP 2: VERIFY 2FA TOTP CODE & ISSUE SUPERUSER JWT
+// 4. OAUTH ROUTES
 // -------------------------------------------------------------
-app.post('/api/auth/login-step2', (req, res) => {
-    const { username, code } = req.body;
+app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 
-    if (username !== superuserAccount.username) {
-        return res.status(400).json({ error: 'User mismatch' });
+app.get('/api/auth/google/callback', (req, res, next) => {
+  passport.authenticate('google', { session: false }, (err, user) => {
+    if (err || !user) {
+      return res.redirect('/portal.html?error=oauth_failed');
     }
 
-    // If 2FA hasn't been configured yet via /setup-2fa, allow temporary bypass code '000000'
-    let verified = false;
-
-    if (superuserAccount.twoFactorSecret) {
-        verified = speakeasy.totp.verify({
-            secret: superuserAccount.twoFactorSecret,
-            encoding: 'base32',
-            token: code,
-            window: 1 // Allows 30s clock drift
-        });
-    } else if (code === '000000') {
-        verified = true; // Fallback demo code
-    }
-
-    if (!verified) {
-        return res.status(401).json({ error: 'Invalid 2FA Authenticator code' });
-    }
-
-    // Mark 2FA as active once verified
-    superuserAccount.is2FAEnabled = true;
-
-    // Issue Superuser JWT Session Token
     const sessionToken = jwt.sign(
-        {
-            userId: superuserAccount.id,
-            username: superuserAccount.username,
-            role: superuserAccount.role
-        },
-        JWT_SECRET,
-        { expiresIn: '2h' }
+      { userId: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '2h' }
     );
+    res.redirect(`${CLIENT_URL}/portal.html?token=${sessionToken}&user=${encodeURIComponent(user.username)}`);
+   // res.redirect(`/portal.html?token=${sessionToken}&user=${encodeURIComponent(user.username)}`);
+  })(req, res, next);
+});
 
-    res.json({
-        success: true,
-        token: sessionToken,
-        user: {
-            username: superuserAccount.username,
-            role: superuserAccount.role
-        }
+// -------------------------------------------------------------
+// 5. INVITATION & REGISTRATION
+// -------------------------------------------------------------
+
+// Admin/Superuser creates an invite token for developers/admins
+app.post('/api/auth/create-invite', authenticateToken, requireRole('admin', 'superuser'), (req, res) => {
+  const { email, assigned_role } = req.body;
+  const token = require('crypto').randomBytes(16).toString('hex');
+
+  try {
+    db.prepare(`
+      INSERT INTO invitations (email, assigned_role, token)
+      VALUES (?, ?, ?)
+    `).run(email, assigned_role, token);
+
+    res.json({ message: 'Invite created successfully', inviteToken: token });
+  } catch (err) {
+    res.status(400).json({ error: 'Invitation already exists for this email' });
+  }
+});
+
+// Register via Invitation Token
+app.post('/api/auth/register-invited', async (req, res) => {
+  const { username, password, inviteToken } = req.body;
+
+  const invite = queries.getInvitation.get(inviteToken);
+  if (!invite) {
+    return res.status(403).json({ error: 'Invalid or expired invitation token' });
+  }
+
+  try {
+    const password_hash = await bcrypt.hash(password, 12);
+    
+    queries.createUser.run({
+      username,
+      email: invite.email,
+      password_hash,
+      role: invite.assigned_role
     });
+
+    queries.markInviteUsed.run(invite.id);
+
+    res.json({ success: true, message: 'Account created successfully. You may now log in.' });
+  } catch (err) {
+    res.status(400).json({ error: 'Username or Email already registered' });
+  }
 });
 
 // -------------------------------------------------------------
-// 4. PROTECTED SUPERUSER ROUTE (Example Dashboard Access)
+// 6. 2FA SETUP (FOR LOGGED IN HIGH-PRIVILEGE USERS)
 // -------------------------------------------------------------
-app.get('/api/superuser/dashboard', (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+app.get('/api/auth/setup-2fa', authenticateToken, async (req, res) => {
+  const user = queries.getUserById.get(req.user.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const token = authHeader.split(' ')[1];
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (decoded.role !== 'superuser') {
-            return res.status(403).json({ error: 'Access denied: Superuser role required' });
-        }
-        res.json({
-            status: 'Authorized',
-            welcome: `Welcome Commander ${decoded.username}!`,
-            systemMetrics: { serverStatus: 'ONLINE', connectedPlayers: 142, memoryUsage: '42%' }
-        });
-    } catch (err) {
-        res.status(401).json({ error: 'Invalid or expired session token' });
+  const secret = speakeasy.generateSecret({
+    name: `Low Expectations (${user.username})`
+  });
+
+  queries.update2FASecret.run(secret.base32, user.id);
+
+  try {
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+    res.json({
+      message: 'Scan this QR code with your 2FA app',
+      qrCodeUrl: qrCodeUrl,
+      manualKey: secret.base32
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate QR code' });
+  }
+});
+
+// -------------------------------------------------------------
+// 7. TWO-STEP LOGIN FLOW
+// -------------------------------------------------------------
+
+// STEP 1: Verify Password
+app.post('/api/auth/login-step1', async (req, res) => {
+  const { username, password } = req.body;
+
+  const user = queries.getUserByUsername.get(username);
+  if (!user || !user.password_hash) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  if (!user.is_active) {
+    return res.status(403).json({ error: 'Account is disabled' });
+  }
+
+  const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+  if (!isPasswordValid) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  // Check if role requires 2FA or if account has it enabled
+  const requires2FA = user.is_2fa_enabled === 1 || ['admin', 'superuser'].includes(user.role);
+
+  res.json({
+    success: true,
+    role: user.role,
+    requires2FA: requires2FA,
+    message: requires2FA ? 'Credentials valid. Proceed to Step 2FA.' : 'Credentials valid. Logged in.'
+  });
+});
+
+// STEP 2: Verify 2FA & Issue JWT
+app.post('/api/auth/login-step2', (req, res) => {
+  const { username, code } = req.body;
+
+  const user = queries.getUserByUsername.get(username);
+  if (!user) return res.status(400).json({ error: 'User mismatch' });
+
+  let verified = false;
+
+  if (user.two_factor_secret) {
+    verified = speakeasy.totp.verify({
+      secret: user.two_factor_secret,
+      encoding: 'base32',
+      token: code,
+      window: 1
+    });
+  } else if (code === '000000') {
+    // Fallback demo code before initial 2FA setup
+    verified = true;
+  }
+
+  if (!verified) {
+    return res.status(401).json({ error: 'Invalid 2FA Authenticator code' });
+  }
+
+  if (user.is_2fa_enabled === 0) {
+    queries.enable2FA.run(user.id);
+  }
+
+  const sessionToken = jwt.sign(
+    {
+      userId: user.id,
+      username: user.username,
+      role: user.role
+    },
+    JWT_SECRET,
+    { expiresIn: '2h' }
+  );
+
+  res.json({
+    success: true,
+    token: sessionToken,
+    user: {
+      username: user.username,
+      role: user.role
     }
+  });
 });
 
-app.listen(5000, () => {
-    console.log('🚀 Auth Service running on http://localhost:5000');
+
+
+// -------------------------------------------------------------
+// 8. SUPERUSER ROUTES
+// -------------------------------------------------------------
+// This replaces your old single app.get('/api/superuser/dashboard') route!
+app.use('/api/superuser', authenticateToken, superuserRoutes);
+
+
+
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on ${HOST}:${PORT}`);
+ 
 });
+
+
+
+

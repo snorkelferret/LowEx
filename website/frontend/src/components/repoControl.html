@@ -1,0 +1,20 @@
+<section class="card superuser-module" id="repo-control-module">
+  <h3>🔑 GitHub & Repository Management</h3>
+  <div class="module-body">
+    <div class="status-indicator">
+      <span class="label">Repo Connection:</span>
+      <span id="repoStatus" class="badge">Checking...</span>
+    </div>
+
+    <form id="githubKeysForm" class="control-group">
+      <label for="ghToken">GitHub Personal Access Token / Deploy Key</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
+      <button type="submit" class="btn btn-warning">Update Repo Keys</button>
+    </form>
+
+    <div class="repo-actions">
+      <button id="triggerSyncBtn" class="btn btn-primary">Sync with Remote</button>
+      <button id="triggerBuildBtn" class="btn btn-secondary">Trigger Remote Deployment</button>
+    </div>
+  </div>
+</section>

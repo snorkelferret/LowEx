@@ -2,17 +2,28 @@
   "name": "low-expectations-website",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "start:backend": "node backend/server.js",
     "start:frontend": "vite frontend",
     "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
   },
   "dependencies": {
-    "bootstrap": "^5.3.3"
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.2",
+    "bootstrap": "^5.3.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "qrcode": "^1.5.3",
+    "speakeasy": "^2.0.0"
   },
   "devDependencies": {
-    "concurrently": "^10.0.4",
-    "vite": "^8.1.5"
+    "concurrently": "^8.2.2",
+    "vite": "^8.2.0"
   }
 }

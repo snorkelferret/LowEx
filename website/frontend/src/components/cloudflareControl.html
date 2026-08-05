@@ -1,0 +1,22 @@
+<section class="card superuser-module" id="cloudflare-control-module">
+  <h3>⚡ Cloudflare Edge & Infrastructure</h3>
+  <div class="module-body">
+    <div class="status-indicator">
+      <span class="label">Zone Status:</span>
+      <span id="cfZoneStatus" class="badge">Active</span>
+    </div>
+
+    <form id="cfKeysForm" class="control-group">
+      <label for="cfApiToken">Cloudflare API Token / Global Key</label>
+      <input type="password" id="cfApiToken" placeholder="xxxxxxxxxxxxxxxx" autocomplete="off" />
+      <label for="cfZoneId">Zone ID</label>
+      <input type="text" id="cfZoneId" placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353" />
+      <button type="submit" class="btn btn-warning">Save Cloudflare Credentials</button>
+    </form>
+
+    <div class="cf-quick-actions">
+      <button id="purgeCacheBtn" class="btn btn-danger">Purge Everything (Cache)</button>
+      <button id="toggleDevModeBtn" class="btn btn-secondary">Toggle Cloudflare Dev Mode</button>
+    </div>
+  </div>
+</section>

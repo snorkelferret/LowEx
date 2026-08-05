@@ -1,44 +1,20 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Low Expectations - Official Storefront & Sandbox</title>
-    <!-- Bootstrap 5 CSS -->
+    
+    <!-- Bootstrap 5 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        .login-dropdown {
-            width: 320px;
-            background-color: #1a1d20;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-        .feature-card {
-            background-color: #212529;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
-        .feature-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(255, 255, 255, 0.25);
-        }
-        #sandbox-canvas {
-            background: #090a0f;
-            cursor: crosshair;
-        }
-        .btn-social {
-            background-color: #2b3035;
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .btn-social:hover {
-            background-color: #343a40;
-            color: #fff;
-        }
-    </style>
+
+    <!-- Custom Global Styles -->
+    <link rel="stylesheet" href="./src/styles.css">
+
+    <!-- Clean, Modular Frontend Scripts -->
+    <script type="module" src="./src/auth.js"></script>
+    <script type="module" src="./src/sandboxEngine.js"></script>
 </head>
 <body class="bg-dark text-light min-vh-100 d-flex flex-column">
 
@@ -63,11 +39,14 @@
                 <!-- Top-Right Multi-Role 2FA Login Dropdown -->
                 <div class="dropdown ms-auto">
                     <button class="btn btn-outline-light btn-sm dropdown-toggle px-3" type="button" id="loginDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                        <i class="bi bi-person-fill me-1"></i> Log In
+                        <i class="bi bi-person-fill me-1"></i> <span id="login-btn-label">Log In</span>
                     </button>
                     
                     <div class="dropdown-menu dropdown-menu-end p-4 shadow-lg login-dropdown text-light" aria-labelledby="loginDropdown">
                         
+                        <!-- Error Alert Banner -->
+                        <div id="login-error" class="alert alert-danger py-1 px-2 small d-none mb-3" role="alert"></div>
+
                         <!-- STEP 1: Username/Password + OAuth -->
                         <div id="login-step-1">
                             <h6 class="fw-bold mb-3 d-flex justify-content-between align-items-center">
@@ -93,7 +72,7 @@
                             <form id="step1Form">
                                 <div class="mb-2">
                                     <label class="form-label small text-secondary mb-1">Username / Email</label>
-                                    <input type="text" id="login-user" class="form-control form-control-sm bg-dark text-light border-secondary" required placeholder="user, dev, or admin">
+                                    <input type="text" id="login-user" class="form-control form-control-sm bg-dark text-light border-secondary" required placeholder="admin or username">
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label small text-secondary mb-1">Password</label>
@@ -116,11 +95,11 @@
                                 <h6 class="fw-bold mb-0">Two-Factor Auth</h6>
                             </div>
                             
-                            <p class="small text-secondary mb-3">Enter the 6-digit code from your authenticator app or hardware key.</p>
+                            <p class="small text-secondary mb-3">Enter the 6-digit code from your authenticator app (use <code>000000</code> for default initial setup).</p>
                             
                             <form id="step2Form">
                                 <div class="mb-3">
-                                    <input type="text" id="2fa-code" class="form-control form-control-lg bg-dark text-light border-secondary text-center letter-spacing-2 fw-bold" placeholder="000 000" maxlength="6" required>
+                                    <input type="text" id="2fa-code" class="form-control form-control-lg bg-dark text-light border-secondary text-center letter-spacing-2 fw-bold" placeholder="000000" maxlength="6" required>
                                 </div>
                                 <button type="submit" class="btn btn-success btn-sm w-100 fw-semibold mb-2">Verify & Log In</button>
                             </form>
@@ -290,172 +269,5 @@
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Login UI & 2FA Step Switching Script -->
-    <script>
-const API_URL = 'http://localhost:5000/api/auth';
-let activeUsername = '';
-
-function showStep(stepNumber) {
-    document.getElementById('login-step-1').classList.toggle('d-none', stepNumber !== 1);
-    document.getElementById('login-step-2').classList.toggle('d-none', stepNumber !== 2);
-}
-
-// STEP 1: Send Username + Password
-document.getElementById('step1Form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const user = document.getElementById('login-user').value;
-    const pass = document.getElementById('login-pass').value;
-
-    try {
-        const res = await fetch(`${API_URL}/login-step1`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, password: pass })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
-            activeUsername = user;
-            showStep(2); // Advance to 2FA Step
-        } else {
-            alert(data.error || 'Login failed');
-        }
-    } catch (err) {
-        alert('Could not connect to Auth Backend server');
-    }
-});
-
-// STEP 2: Send 2FA Code & Store Superuser JWT
-document.getElementById('step2Form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const code = document.getElementById('2fa-code').value;
-
-    try {
-        const res = await fetch(`${API_URL}/login-step2`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: activeUsername, code: code })
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-            // Save token in memory/sessionStorage for superuser API requests
-            sessionStorage.setItem('superuser_token', data.token);
-            alert(`Superuser Authenticated! Role: ${data.user.role}`);
-            
-            // Redirect or open superuser tools
-            console.log('JWT Token:', data.token);
-        } else {
-            alert(data.error || '2FA Verification Failed');
-        }
-    } catch (err) {
-        alert('Verification request failed');
-    }
-});
-    </script>
-
-    <!-- Embedded Game Taster Engine Logic -->
-    <script>
-        const canvas = document.getElementById('sandbox-canvas');
-        const overlay = document.getElementById('canvas-overlay');
-        const hud = document.getElementById('hud');
-        const scoreEl = document.getElementById('score');
-        const ctx = canvas.getContext('2d');
-
-        let isPlaying = false;
-        let score = 0;
-        let player = { x: 0, y: 0, radius: 10, speed: 3.5 };
-        let collectibles = [];
-        const keys = {};
-
-        overlay.addEventListener('click', () => {
-            overlay.classList.add('d-none');
-            hud.classList.remove('d-none');
-            isPlaying = true;
-            
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
-            
-            player.x = canvas.width / 2;
-            player.y = canvas.height / 2;
-            
-            spawnNodes(6);
-            requestAnimationFrame(gameLoop);
-        });
-
-        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-
-        function spawnNodes(count) {
-            for (let i = 0; i < count; i++) {
-                collectibles.push({
-                    x: Math.random() * (canvas.width - 40) + 20,
-                    y: Math.random() * (canvas.height - 40) + 20,
-                    radius: 6
-                });
-            }
-        }
-
-        function update() {
-            if (keys['w'] || keys['arrowup']) player.y -= player.speed;
-            if (keys['s'] || keys['arrowdown']) player.y += player.speed;
-            if (keys['a'] || keys['arrowleft']) player.x -= player.speed;
-            if (keys['d'] || keys['arrowright']) player.x += player.speed;
-
-            player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
-            player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
-
-            collectibles.forEach((node, index) => {
-                const dist = Math.hypot(player.x - node.x, player.y - node.y);
-                if (dist < player.radius + node.radius) {
-                    collectibles.splice(index, 1);
-                    score += 10;
-                    scoreEl.textContent = score;
-                    spawnNodes(1);
-                }
-            });
-        }
-
-        function render() {
-            ctx.fillStyle = '#090a0f';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-            ctx.lineWidth = 1;
-            const step = 40;
-            for (let x = 0; x < canvas.width; x += step) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-            }
-            for (let y = 0; y < canvas.height; y += step) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-            }
-
-            collectibles.forEach(node => {
-                ctx.fillStyle = '#ffc107';
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            ctx.fillStyle = '#0d6efd';
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-
-        function gameLoop() {
-            if (!isPlaying) return;
-            update();
-            render();
-            requestAnimationFrame(gameLoop);
-        }
-    </script>
 </body>
 </html>
-

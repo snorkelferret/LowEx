@@ -66,6 +66,27 @@ ViewerCache/
 .DS_Store
 Thumbs.db
 
+
+ #==========================================
+# Website
+# ==========================================
 # Dependencies (covers node_modules anywhere in the tree)
 node_modules/
 **/node_modules/
+node_modules/
+.env
+
+
+
+# ==========================================
+# SQLite database files
+# ==========================================
+
+#SQLite Database Files
+backend/*.db
+backend/*.db-wal
+backend/*.db-shm
+
+backend/database.db*
+
+

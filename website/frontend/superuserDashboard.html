@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superuser Command Center</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <div id="superuser-app" class="dashboard-container">
+    
+<!-- Module: frontend/src/components/header.html -->
+
+<header class="app-header">
+  <div class="header-brand">
+    <h1>⚡ Superuser Command Center</h1>
+  </div>
+
+  <div class="header-user-actions" id="headerUserActions">
+    <div class="user-info">
+      <span class="status-dot online"></span>
+      <span id="currentUserLabel">Logged in as: <strong>Loading...</strong></span>
+    </div>
+
+    <div class="button-group">
+      <!-- "Sign in as..." Button -->
+      <button id="signInAsBtn" class="btn btn-secondary btn-sm" title="Sign in as another user">
+        👤 Sign in as...
+      </button>
+
+      <!-- Logout Button -->
+      <button id="logoutBtn" class="btn btn-danger btn-sm" title="Log out of system">
+        🚪 Logout
+      </button>
+    </div>
+  </div>
+</header>
+
+
+<!-- Module: frontend/src/components/adminPanel.html -->
+<section class="card superuser-module" id="admin-panel-module">
+  <h3>🛡️ Admin Operations</h3>
+  <div class="module-body">
+    <p>User account management, roles, and order overviews.</p>
+    <div id="adminStatsContainer">Loading admin stats...</div>
+  </div>
+</section>
+
+
+<!-- Module: frontend/src/components/developerPanel.html -->
+<section class="card superuser-module" id="developer-panel-module">
+  <h3>🛠️ Developer Tools & Sandbox</h3>
+  <div class="module-body">
+    <p>System debug tools, raw query execution, and environment overrides.</p>
+    <button id="runDiagnosticsBtn" class="btn btn-secondary">Run System Diagnostics</button>
+  </div>
+</section>
+
+
+<!-- Module: frontend/src/components/repoControl.html -->
+<section class="card superuser-module" id="repo-control-module">
+  <h3>🔑 GitHub & Repository Management</h3>
+  <div class="module-body">
+    <div class="status-indicator">
+      <span class="label">Repo Connection:</span>
+      <span id="repoStatus" class="badge">Checking...</span>
+    </div>
+
+    <form id="githubKeysForm" class="control-group">
+      <label for="ghToken">GitHub Personal Access Token / Deploy Key</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
+      <button type="submit" class="btn btn-warning">Update Repo Keys</button>
+    </form>
+
+    <div class="repo-actions">
+      <button id="triggerSyncBtn" class="btn btn-primary">Sync with Remote</button>
+      <button id="triggerBuildBtn" class="btn btn-secondary">Trigger Remote Deployment</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- Module: frontend/src/components/cloudflareControl.html -->
+<section class="card superuser-module" id="cloudflare-control-module">
+  <h3>⚡ Cloudflare Edge & Infrastructure</h3>
+  <div class="module-body">
+    <div class="status-indicator">
+      <span class="label">Zone Status:</span>
+      <span id="cfZoneStatus" class="badge">Active</span>
+    </div>
+
+    <form id="cfKeysForm" class="control-group">
+      <label for="cfApiToken">Cloudflare API Token / Global Key</label>
+      <input type="password" id="cfApiToken" placeholder="xxxxxxxxxxxxxxxx" autocomplete="off" />
+      <label for="cfZoneId">Zone ID</label>
+      <input type="text" id="cfZoneId" placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353" />
+      <button type="submit" class="btn btn-warning">Save Cloudflare Credentials</button>
+    </form>
+
+    <div class="cf-quick-actions">
+      <button id="purgeCacheBtn" class="btn btn-danger">Purge Everything (Cache)</button>
+      <button id="toggleDevModeBtn" class="btn btn-secondary">Toggle Cloudflare Dev Mode</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- Module: frontend/src/components/loginModal.html -->
+<div id="loginModal" class="modal-overlay hidden">
+  <div class="modal-content card">
+    <h3>👤 Sign in as another user</h3>
+    <p>Enter credentials to switch your active session context.</p>
+    
+    <form id="modalLoginForm">
+      <div class="form-group">
+        <label for="modalUsername">Username</label>
+        <input type="text" id="modalUsername" required autocomplete="username" placeholder="Enter username" />
+      </div>
+
+      <div class="form-group">
+        <label for="modalPassword">Password</label>
+        <input type="password" id="modalPassword" required autocomplete="current-password" placeholder="Enter password" />
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="closeModalBtn" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+  </div>
+
+  <script type="module" src="./src/superuser.js"></script>
+</body>
+</html>
