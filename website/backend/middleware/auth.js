@@ -1,32 +1,39 @@
+// backend/middleware/auth.js
 const jwt = require('jsonwebtoken');
 
-// Verify JWT Token
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret', (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid or expired token' });
     req.user = user;
     next();
   });
 }
 
-// Standard Admin Guard
-function requireAdmin(req, res, next) {
-  if (!req.user || (!req.user.is_admin && !req.user.is_superuser)) {
-    return res.status(403).json({ error: 'Access denied: Admin role required' });
-  }
-  next();
-}
-
-// Strictly Superuser Guard
 function requireSuperuser(req, res, next) {
-  if (!req.user || !req.user.is_superuser) {
-    return res.status(403).json({ error: 'Access denied: Superuser privilege required' });
+  // Check the single-source role
+  if (req.user?.role === 'superuser') {
+    return next();
   }
-  next();
+  return res.status(403).json({ error: 'Unauthorized: Superuser access required.' });
 }
 
-module.exports = { authenticateToken, requireAdmin, requireSuperuser };
+function requireAdmin(req, res, next) {
+  // Superusers automatically pass admin checks
+  if (req.user?.role === 'admin' || req.user?.role === 'superuser') {
+    return next();
+  }
+  return res.status(403).json({ error: 'Unauthorized: Admin access required.' });
+}
+
+module.exports = {
+  authenticateToken,
+  requireSuperuser,
+  requireAdmin
+};

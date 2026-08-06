@@ -1,60 +1,63 @@
 /**
- * Superuser Command Center - Modular Event Handler
- * Strictly handles API triggers and identity switching for superuser powers.
+ * Superuser Command Center
+ * Single-entry architecture with strict modular setup handlers.
  */
 
-document.addEventListener('DOMContentLoaded', () => {
-  // ---------------------------------------------------------------------------
-  // 1. Session & Superuser Guard
-  // ---------------------------------------------------------------------------
-  const token = sessionStorage.getItem('jwt_token');
-  const user = JSON.parse(sessionStorage.getItem('user_info') || '{}');
+// =============================================================================
+// 1. AUTH GUARD (Pure function - no DOM operations)
+// =============================================================================
+function getSuperuserSession() {
+  const token = localStorage.getItem('jwt_token');
+  if (!token) return null;
 
-  // Client-side route guard
-  if (!token || !user.is_superuser) {
-    alert('Unauthorized: Superuser access required.');
-    window.location.href = '/index.html';
-    return;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload?.role === 'superuser' ? payload : null;
+  } catch (err) {
+    console.error('Invalid token payload:', err);
+    return null;
   }
+}
 
-  // Common request header generator
-  const getAuthHeaders = () => ({
+// Global helper for authenticated API requests
+function getAuthHeaders() {
+  return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
-  });
+    'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+  };
+}
 
-  // Render current user status badge in header
+// =============================================================================
+// 2. MODULE SETUP HANDLERS (Only executed after auth verification)
+// =============================================================================
+
+function setupHeader(userPayload) {
   const currentUserLabel = document.getElementById('currentUserLabel');
-  if (currentUserLabel && user.username) {
-    currentUserLabel.innerHTML = `Logged in as: <strong>${user.username}</strong> <span class="badge badge-success">(Superuser)</span>`;
+  if (currentUserLabel && userPayload?.username) {
+    currentUserLabel.innerHTML = `Logged in as: <strong>${userPayload.username}</strong> <span class="badge badge-success">(Superuser)</span>`;
   }
 
-  // ---------------------------------------------------------------------------
-  // 2. Header Actions & Login / "Sign in as..." Modal
-  // ---------------------------------------------------------------------------
   const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      localStorage.clear();
+      window.location.href = '/index.html';
+    });
+  }
+}
+
+function setupIdentityModal() {
   const signInAsBtn = document.getElementById('signInAsBtn');
   const loginModal = document.getElementById('loginModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
   const modalLoginForm = document.getElementById('modalLoginForm');
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      sessionStorage.clear();
-      window.location.href = '/index.html';
-    });
-  }
-
   if (signInAsBtn && loginModal) {
-    signInAsBtn.addEventListener('click', () => {
-      loginModal.classList.remove('hidden');
-    });
+    signInAsBtn.addEventListener('click', () => loginModal.classList.remove('hidden'));
   }
 
   if (closeModalBtn && loginModal) {
-    closeModalBtn.addEventListener('click', () => {
-      loginModal.classList.add('hidden');
-    });
+    closeModalBtn.addEventListener('click', () => loginModal.classList.add('hidden'));
   }
 
   if (modalLoginForm) {
@@ -73,12 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Sign in failed');
 
-        // Swap active session context
-        sessionStorage.setItem('jwt_token', data.token);
-        sessionStorage.setItem('user_info', JSON.stringify(data.user));
+        localStorage.setItem('jwt_token', data.token);
 
-        // Redirect based on swapped privilege level
-        if (data.user.is_superuser) {
+        if (data.user?.role === 'superuser' || data.user?.is_superuser) {
           window.location.reload();
         } else {
           window.location.href = '/shopfront.html';
@@ -88,19 +88,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 3. Admin Panel Operations
-  // ---------------------------------------------------------------------------
+function setupAdminStats() {
   const adminStatsContainer = document.getElementById('adminStatsContainer');
-  
-  async function loadAdminStats() {
-    if (!adminStatsContainer) return;
+  if (!adminStatsContainer) return;
+
+  (async () => {
     try {
       const res = await fetch('/api/admin/stats', { headers: getAuthHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch admin stats');
-      
+
       adminStatsContainer.innerHTML = `
         <div class="stats-grid">
           <div><strong>Active Users:</strong> ${data.activeUsers ?? 'N/A'}</div>
@@ -111,40 +110,36 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       adminStatsContainer.innerHTML = `<span class="error">Error loading stats: ${err.message}</span>`;
     }
-  }
+  })();
+}
 
-  loadAdminStats();
-
-  // ---------------------------------------------------------------------------
-  // 4. Developer Tools & Sandbox Module
-  // ---------------------------------------------------------------------------
+function setupDiagnostics() {
   const runDiagnosticsBtn = document.getElementById('runDiagnosticsBtn');
-  if (runDiagnosticsBtn) {
-    runDiagnosticsBtn.addEventListener('click', async () => {
-      runDiagnosticsBtn.disabled = true;
-      runDiagnosticsBtn.textContent = 'Running Diagnostics...';
+  if (!runDiagnosticsBtn) return;
 
-      try {
-        const res = await fetch('/api/superuser/developer/diagnostics', {
-          method: 'POST',
-          headers: getAuthHeaders()
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Diagnostics failed');
+  runDiagnosticsBtn.addEventListener('click', async () => {
+    runDiagnosticsBtn.disabled = true;
+    runDiagnosticsBtn.textContent = 'Running Diagnostics...';
 
-        alert(`Diagnostics Complete:\n${JSON.stringify(data, null, 2)}`);
-      } catch (err) {
-        alert(`Developer Engine Error: ${err.message}`);
-      } finally {
-        runDiagnosticsBtn.disabled = false;
-        runDiagnosticsBtn.textContent = 'Run System Diagnostics';
-      }
-    });
-  }
+    try {
+      const res = await fetch('/api/superuser/developer/diagnostics', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Diagnostics failed');
 
-  // ---------------------------------------------------------------------------
-  // 5. GitHub Repository Management Module
-  // ---------------------------------------------------------------------------
+      alert(`Diagnostics Complete:\n${JSON.stringify(data, null, 2)}`);
+    } catch (err) {
+      alert(`Developer Engine Error: ${err.message}`);
+    } finally {
+      runDiagnosticsBtn.disabled = false;
+      runDiagnosticsBtn.textContent = 'Run System Diagnostics';
+    }
+  });
+}
+
+function setupGitHubModule() {
   const githubKeysForm = document.getElementById('githubKeysForm');
   const triggerSyncBtn = document.getElementById('triggerSyncBtn');
   const triggerBuildBtn = document.getElementById('triggerBuildBtn');
@@ -203,10 +198,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 6. Cloudflare Infrastructure Module
-  // ---------------------------------------------------------------------------
+function setupCloudflareModule() {
   const cfKeysForm = document.getElementById('cfKeysForm');
   const purgeCacheBtn = document.getElementById('purgeCacheBtn');
   const toggleDevModeBtn = document.getElementById('toggleDevModeBtn');
@@ -268,4 +262,27 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+}
+
+// =============================================================================
+// 3. MASTER ENTRY POINT
+// =============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Step A: Evaluate Auth
+  const superuserSession = getSuperuserSession();
+
+  // Step B: Guard Check - Exit early if unauthorized
+  if (!superuserSession) {
+    alert('Unauthorized: Superuser access required.');
+    window.location.href = '/index.html';
+    return; // Hard stop. Nothing below will execute.
+  }
+
+  // Step C: Initialize Modules Safely
+  setupHeader(superuserSession);
+  setupIdentityModal();
+  setupAdminStats();
+  setupDiagnostics();
+  setupGitHubModule();
+  setupCloudflareModule();
 });

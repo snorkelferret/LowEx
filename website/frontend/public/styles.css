@@ -1,0 +1,96 @@
+/* Custom Global Dark Theme Enhancements */
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #0d0e12 !important;
+}
+
+/* Feature Cards & Glassmorphism */
+.feature-card {
+  background-color: #12141c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.feature-card:hover {
+  border-color: rgba(13, 110, 253, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Superuser Modules */
+.superuser-module {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.superuser-module:hover {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Form Controls Dark Theme Overrides */
+.form-control:focus {
+  background-color: #161822 !important;
+  color: #fff !important;
+  border-color: #0d6efd !important;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+}
+
+/* Modal Overlay Utility Classes (Compatibility with existing JS toggles) */
+.modal-overlay.hidden,
+.modal-overlay.d-none {
+  display: none !important;
+}
+
+.modal-overlay:not(.hidden):not(.d-none) {
+  display: flex !important;
+}
+
+/* Status Indicator Dot */
+.status-dot {
+  box-shadow: 0 0 6px rgba(25, 135, 84, 0.8);
+}
+  
+￼
+￼
+/* ==========================================================================
+   Login Dropdown & Auth Components
+   ========================================================================== */
+
+
+/* Custom storefront & login UI overrides */
+
+.login-dropdown {
+    width: 320px;
+    background-color: #1a1d20;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.feature-card {
+    background-color: #212529;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+#sandbox-canvas {
+    background: #090a0f;
+    cursor: crosshair;
+}
+
+.btn-social {
+    background-color: #2b3035;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-social:hover {
+    background-color: #343a40;
+    color: #fff;
+}
+
+.letter-spacing-2 {
+    letter-spacing: 0.2em;
+}

@@ -1,31 +1,26 @@
-// backend/routes/views.js
 const express = require('express');
 const path = require('path');
 const router = express.Router();
+const { authenticateToken, requireAdmin, requireSuperuser } = require('../middleware/auth');
 
-// Import your auth middleware (adjust path as needed)
-const { authenticateToken, requireRole } = require('../middleware/auth');
-
-const VIEWS_DIR = path.join(__dirname, '../views');
-
-// 1. User Dashboard (Steam launcher & profile)
+// Protected User View
 router.get('/user', authenticateToken, (req, res) => {
-  res.sendFile(path.join(VIEWS_DIR, 'userDashboard.html'));
+  res.sendFile(path.join(__dirname, '../../frontend/dist/shopfront.html'));
 });
 
-// 2. Developer Dashboard
-router.get('/developer', authenticateToken, requireRole('developer', 'admin', 'superuser'), (req, res) => {
-  res.sendFile(path.join(VIEWS_DIR, 'developerDashboard.html'));
+// Protected Admin View
+router.get('/admin', authenticateToken, requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/adminDashboard.html'));
 });
 
-// 3. Admin Dashboard
-router.get('/admin', authenticateToken, requireRole('admin', 'superuser'), (req, res) => {
-  res.sendFile(path.join(VIEWS_DIR, 'adminDashboard.html'));
+// Protected Superuser / Developer View
+router.get('/superuser', authenticateToken, requireSuperuser, (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/superuserDashboard.html'));
 });
 
-// 4. Superuser Dashboard (Privileged Governance)
-router.get('/superuser', authenticateToken, requireRole('superuser'), (req, res) => {
-  res.sendFile(path.join(VIEWS_DIR, 'superuserDashboard.html'));
+// Developer View
+router.get('/developer', authenticateToken, requireSuperuser, (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/superuserDashboard.html'));
 });
 
 module.exports = router;

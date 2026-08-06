@@ -98,8 +98,8 @@ document.getElementById('step2Form')?.addEventListener('submit', async (e) => {
 
 
 function saveSessionAndFinish(token, user) {
-  sessionStorage.setItem('jwt_token', token);
-  sessionStorage.setItem('user_info', JSON.stringify(user));
+  localStorage.setItem('jwt_token', token);
+  localStorage.setItem('user_info', JSON.stringify(user));
 
   // 1. Hide Bootstrap Dropdown Modal if open
   const dropdownEl = document.getElementById('loginDropdown');

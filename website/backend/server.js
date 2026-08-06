@@ -10,6 +10,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const path = require('path');
 const cookieParser = require('cookie-parser');
+const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const superuserRoutes = require('./routes/superuser');
 
@@ -36,25 +37,24 @@ app.use(express.json());
 app.use(passport.initialize());
 app.use(cookieParser());
 
-
 // 1. Serve static frontend assets built by build.js
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.use(express.static(path.join(__dirname, '../frontend/public')));
 
-// 2. Authentication endpoints (/api/auth/login, /api/auth/verify-2fa, etc.)
+// 2. Authentication endpoints (/api/auth/login, etc.)
 app.use('/api/auth', require('./routes/auth'));
 
-// 3. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
+// 3. Admin & Superuser API routes
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/superuser', require('./routes/superuser'));
+
+// 4. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
 app.use('/app', require('./routes/views'));
 
-// 4. Fallback: Any unknown public route goes back to the splash page
-app.get('*', (req, res) => {
+// 5. Fallback: Any unknown public route goes back to the splash page
+app.get('/*splat', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
-
-
-// Mount separated routes
-app.use('/api/admin', adminRoutes);
-app.use('/api/superuser', superuserRoutes);
 
 
 
