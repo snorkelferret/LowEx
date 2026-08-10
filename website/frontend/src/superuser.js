@@ -1,50 +1,20 @@
-/**
- * Superuser Command Center
- * Single-entry architecture with strict modular setup handlers.
- */
+// frontend/src/superuser.js
+import { checkAuthGuard, executeGlobalLogout } from './authUtils.js';
 
-// =============================================================================
-// 1. AUTH GUARD (Pure function - no DOM operations)
-// =============================================================================
-function getSuperuserSession() {
-  const token = localStorage.getItem('jwt_token');
-  if (!token) return null;
+// ==========================================
+// 1. Strict Module-Level Configuration
+// ==========================================
+const apiUrl = import.meta.env.VITE_API_URL;
 
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload?.role === 'superuser' ? payload : null;
-  } catch (err) {
-    console.error('Invalid token payload:', err);
-    return null;
-  }
+if (!apiUrl) {
+  throw new Error('FATAL: VITE_API_URL is missing from environment variables.');
 }
 
-// Global helper for authenticated API requests
-function getAuthHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
-  };
-}
+const API_URL = apiUrl;
 
 // =============================================================================
-// 2. MODULE SETUP HANDLERS (Only executed after auth verification)
+// 2. MODULE INITIALIZERS (Purely Unique Superuser Functionality)
 // =============================================================================
-
-function setupHeader(userPayload) {
-  const currentUserLabel = document.getElementById('currentUserLabel');
-  if (currentUserLabel && userPayload?.username) {
-    currentUserLabel.innerHTML = `Logged in as: <strong>${userPayload.username}</strong> <span class="badge badge-success">(Superuser)</span>`;
-  }
-
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      localStorage.clear();
-      window.location.href = '/index.html';
-    });
-  }
-}
 
 function setupIdentityModal() {
   const signInAsBtn = document.getElementById('signInAsBtn');
@@ -67,18 +37,19 @@ function setupIdentityModal() {
       const password = document.getElementById('modalPassword').value;
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${API_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username, password }),
+          credentials: 'include'
         });
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Sign in failed');
 
-        localStorage.setItem('jwt_token', data.token);
+        localStorage.setItem('user_info', JSON.stringify(data.user));
 
-        if (data.user?.role === 'superuser' || data.user?.is_superuser) {
+        if (data.user?.role === 'superuser') {
           window.location.reload();
         } else {
           window.location.href = '/shopfront.html';
@@ -96,7 +67,9 @@ function setupAdminStats() {
 
   (async () => {
     try {
-      const res = await fetch('/api/admin/stats', { headers: getAuthHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/stats`, {
+        credentials: 'include'
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch admin stats');
 
@@ -122,9 +95,9 @@ function setupDiagnostics() {
     runDiagnosticsBtn.textContent = 'Running Diagnostics...';
 
     try {
-      const res = await fetch('/api/superuser/developer/diagnostics', {
+      const res = await fetch(`${API_URL}/api/superuser/developer/diagnostics`, {
         method: 'POST',
-        headers: getAuthHeaders()
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Diagnostics failed');
@@ -143,7 +116,6 @@ function setupGitHubModule() {
   const githubKeysForm = document.getElementById('githubKeysForm');
   const triggerSyncBtn = document.getElementById('triggerSyncBtn');
   const triggerBuildBtn = document.getElementById('triggerBuildBtn');
-  const repoStatus = document.getElementById('repoStatus');
 
   if (githubKeysForm) {
     githubKeysForm.addEventListener('submit', async (e) => {
@@ -151,15 +123,13 @@ function setupGitHubModule() {
       const tokenInput = document.getElementById('ghToken').value;
 
       try {
-        const res = await fetch('/api/superuser/github/keys', {
+        const res = await fetch(`${API_URL}/api/superuser/github/keys`, {
           method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ token: tokenInput })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: tokenInput }),
+          credentials: 'include'
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update GitHub keys');
-
-        if (repoStatus) repoStatus.textContent = 'Connected';
+        if (!res.ok) throw new Error('Failed to update GitHub keys');
         alert('GitHub repository deployment keys updated successfully!');
       } catch (err) {
         alert(`GitHub Config Error: ${err.message}`);
@@ -170,13 +140,12 @@ function setupGitHubModule() {
   if (triggerSyncBtn) {
     triggerSyncBtn.addEventListener('click', async () => {
       try {
-        const res = await fetch('/api/superuser/github/sync', {
+        const res = await fetch(`${API_URL}/api/superuser/github/sync`, {
           method: 'POST',
-          headers: getAuthHeaders()
+          credentials: 'include'
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Sync failed');
-        alert(data.message || 'Remote repository synchronized.');
+        if (!res.ok) throw new Error('Sync failed');
+        alert('Remote repository synchronized.');
       } catch (err) {
         alert(`Sync Error: ${err.message}`);
       }
@@ -186,79 +155,14 @@ function setupGitHubModule() {
   if (triggerBuildBtn) {
     triggerBuildBtn.addEventListener('click', async () => {
       try {
-        const res = await fetch('/api/superuser/github/deploy', {
+        const res = await fetch(`${API_URL}/api/superuser/github/deploy`, {
           method: 'POST',
-          headers: getAuthHeaders()
+          credentials: 'include'
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Deploy failed');
-        alert(data.message || 'Remote GitHub deployment triggered!');
+        if (!res.ok) throw new Error('Deploy failed');
+        alert('Remote GitHub deployment triggered!');
       } catch (err) {
         alert(`Deploy Error: ${err.message}`);
-      }
-    });
-  }
-}
-
-function setupCloudflareModule() {
-  const cfKeysForm = document.getElementById('cfKeysForm');
-  const purgeCacheBtn = document.getElementById('purgeCacheBtn');
-  const toggleDevModeBtn = document.getElementById('toggleDevModeBtn');
-
-  if (cfKeysForm) {
-    cfKeysForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const apiToken = document.getElementById('cfApiToken').value;
-      const zoneId = document.getElementById('cfZoneId').value;
-
-      try {
-        const res = await fetch('/api/superuser/cloudflare/keys', {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ apiToken, zoneId })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update Cloudflare credentials');
-
-        alert('Cloudflare credentials saved securely!');
-      } catch (err) {
-        alert(`Cloudflare Config Error: ${err.message}`);
-      }
-    });
-  }
-
-  if (purgeCacheBtn) {
-    purgeCacheBtn.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to purge all global Cloudflare edge caches?')) return;
-
-      try {
-        const res = await fetch('/api/superuser/cloudflare/purge', {
-          method: 'POST',
-          headers: getAuthHeaders()
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Purge failed');
-
-        alert('Cloudflare cache purge completed successfully!');
-      } catch (err) {
-        alert(`Cache Purge Error: ${err.message}`);
-      }
-    });
-  }
-
-  if (toggleDevModeBtn) {
-    toggleDevModeBtn.addEventListener('click', async () => {
-      try {
-        const res = await fetch('/api/superuser/cloudflare/toggle-devmode', {
-          method: 'POST',
-          headers: getAuthHeaders()
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Toggle failed');
-
-        alert(`Cloudflare Development Mode is now: ${data.devMode ? 'ENABLED' : 'DISABLED'}`);
-      } catch (err) {
-        alert(`Dev Mode Toggle Error: ${err.message}`);
       }
     });
   }
@@ -268,21 +172,17 @@ function setupCloudflareModule() {
 // 3. MASTER ENTRY POINT
 // =============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Step A: Evaluate Auth
-  const superuserSession = getSuperuserSession();
-
-  // Step B: Guard Check - Exit early if unauthorized
-  if (!superuserSession) {
+  const session = checkAuthGuard('superuser');
+  if (!session) {
     alert('Unauthorized: Superuser access required.');
     window.location.href = '/index.html';
-    return; // Hard stop. Nothing below will execute.
+    return;
   }
 
-  // Step C: Initialize Modules Safely
-  setupHeader(superuserSession);
+  document.getElementById('logoutBtn')?.addEventListener('click', executeGlobalLogout);
+
   setupIdentityModal();
   setupAdminStats();
   setupDiagnostics();
   setupGitHubModule();
-  setupCloudflareModule();
 });

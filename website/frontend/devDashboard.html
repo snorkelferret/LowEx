@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dev Utilities</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="bg-dark text-light min-vh-100 d-flex flex-column">
+  <div id="superuser-app" class="dashboard-container">
+    
+<!-- Module: frontend/src/components/header.html -->
+
+
+<!-- frontend/src/components/header.html -->
+<header class="app-header">
+  <div class="header-brand">
+    <!-- The script will replace this text based on the user's role -->
+    <h1 id="headerDashboardTitle">⚡ Dashboard</h1>
+  </div>
+
+  <div class="header-user-actions" id="headerUserActions">
+    <div class="user-info">
+      <span class="status-dot online"></span>
+      <span id="currentUserLabel">Logged in as: <strong id="headerUsernameTarget">Loading...</strong></span>
+    </div>
+  </div>
+</header>
+
+
+
+
+
+<!-- Missing Module: frontend/src/components/developerPanel.html -->
+<section class="card missing-module"><p>Module loading error: frontend/src/components/developerPanel.html</p></section>
+
+<!-- Module: frontend/src/components/developerInviteExp.html -->
+<section class="card superuser-module" id="developer-panel-module">
+  <h3>🛠️ Developer Tools & Sandbox</h3>
+  <div class="module-body">
+    <p>System debug tools, raw query execution, and environment overrides.</p>
+    <button id="runDiagnosticsBtn" class="btn btn-secondary">Run System Diagnostics</button>
+  </div>
+</section>
+
+<section>
+  <!-- Expired / Invalid Token Screen -->
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+  <div class="card bg-dark text-light border-secondary p-4 shadow-lg text-center" style="max-width: 440px;">
+    
+    <div class="mb-3">
+      <i class="bi bi-clock-history text-warning display-4"></i>
+    </div>
+    
+    <h4 class="fw-bold text-white mb-2">Invitation Expired</h4>
+    <p class="text-secondary small mb-4">
+      Invitation links are valid for 28 days for security. This link has passed its expiration window.
+    </p>
+
+    <!-- State A: Reissue Allowed -->
+    <div id="reissue-allowed-state">
+      <p class="small text-muted mb-3">
+        Click below to notify the admin team to refresh your 28-day access link.
+      </p>
+      <button id="btn-request-reissue" class="btn btn-warning w-100 fw-bold py-2 mb-2" onclick="handleDeveloperReissueRequest()">
+        <i class="bi bi-arrow-repeat me-1"></i> Request Reissued Link
+      </button>
+      <div class="text-secondary opacity-75 small" style="font-size: 0.75rem;">
+        Reissues remaining: <strong id="reissue-count-badge" class="text-light">3 of 6</strong>
+      </div>
+    </div>
+
+    <!-- State B: Max Limit Reached (6 of 6 used) -->
+    <div id="reissue-limit-state" class="d-none">
+      <div class="alert alert-danger py-2 px-3 small mb-3" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        Maximum reissue limit reached (6/6).
+      </div>
+      <p class="small text-secondary mb-0">
+        Please contact your administrator directly to issue a brand new developer account invitation.
+      </p>
+    </div>
+
+    <!-- Status Message Display -->
+    <div id="reissue-status-msg" class="alert d-none mt-3 mb-0 py-2 small" role="alert"></div>
+
+  </div>
+</div>
+</section>
+
+
+<!-- Module: frontend/src/components/loginModal.html -->
+<div id="loginModal" class="modal-overlay hidden">
+  <div class="modal-content card">
+    <h3>👤 Sign in as another user</h3>
+    <p>Enter credentials to switch your active session context.</p>
+    
+    <form id="modalLoginForm">
+      <div class="form-group">
+        <label for="modalUsername">Username</label>
+        <input type="text" id="modalUsername" required autocomplete="username" placeholder="Enter username" />
+      </div>
+
+      <div class="form-group">
+        <label for="modalPassword">Password</label>
+        <input type="password" id="modalPassword" required autocomplete="current-password" placeholder="Enter password" />
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="closeModalBtn" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+  </div>
+
+  <!-- Bootstrap 5 JS Bundle (Always included prior to app logic) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- App Entry Scripts -->
+  <script type="module" src="./src/header.js"></script>
+  <script type="module" src="./src/developerInviteExp.js"></script>
+  <script type="module" src="./src/devloperPanel.js"></script>
+</body>
+</html>

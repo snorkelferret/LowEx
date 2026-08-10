@@ -1,23 +1,28 @@
-
 import { defineConfig, loadEnv } from 'vite';
+
+
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
-  // Automatically loads .env from the root working directory
-  const env = loadEnv(mode, process.cwd(), '');
+  const rootDir = __dirname;
+  const env = loadEnv(mode, rootDir, '');
 
-  const backendHost = env.BACKEND_HOST || env.HOST || '127.0.0.1';
-  const backendPort = env.PORT || env.BACKEND_PORT || 5000;
-  const frontendPort = parseInt(env.VITE_PORT || '5173', 10);
+  // Strict config-time check
+  if (!env.VITE_API_URL) {
+    throw new Error('FATAL: VITE_API_URL is missing from environment configuration.');
+  }
 
   return {
-    // Tells Vite that frontend/ is the directory containing index.html
-    root: 'frontend',
+      root: path.resolve(rootDir, 'frontend'),
+    envDir: rootDir, // <-- Forces Vite's bundler to look in this exact folder for .env
+    define: {
+      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL), // <-- Force-injects the variable
+    },
     server: {
-      port: frontendPort,
+      port: parseInt(env.VITE_PORT || '5173', 10),
       proxy: {
         '/api': {
-          target: `http://${backendHost}:${backendPort}`,
+          target: env.SERVER_URL,
           changeOrigin: true,
         },
       },
@@ -27,8 +32,12 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       rollupOptions: {
         input: {
-          main: path.resolve(__dirname, 'frontend/index.html'),
-          shopfront: path.resolve(__dirname, 'frontend/shopfront.html'),
+          main: path.resolve(rootDir, 'frontend/index.html'),
+          shopfront: path.resolve(rootDir, 'frontend/shopfront.html'),
+          superuser: path.resolve(rootDir, 'frontend/superuserDashboard.html'),
+          admin: path.resolve(rootDir, 'frontend/adminDashboard.html'),
+          developer: path.resolve(rootDir, 'frontend/devDashboard.html'),
+          user: path.resolve(rootDir, 'frontend/user.html'),
         },
       },
     },

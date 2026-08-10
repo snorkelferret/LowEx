@@ -1,3 +1,4 @@
+//website/backend/routes/auth.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -49,9 +50,16 @@ router.post('/login', async (req, res) => {
     );
 
     // 7. Return Clean Response (Never return password_hash!)
+
+    // Bake the secure HTTP-only cookie
+    res.cookie('token', token, {
+      httpOnly: true, // Prevents cross-site scripting (XSS) attacks
+      secure: process.env.NODE_ENV === 'production', // true in production
+      maxAge: 8 * 60 * 60 * 1000 // 8 hours matching the JWT expiration
+    });
+      
     return res.json({
       success: true,
-      token,
       user: {
         id: user.id,
         username: user.username,

@@ -13,6 +13,14 @@ const cookieParser = require('cookie-parser');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const superuserRoutes = require('./routes/superuser');
+const inviteDevRoutes = require('./routes/inviteDevs');
+const {
+  authenticateToken,
+  requireSuperuser,
+  requireAdmin
+} = require('./middleware/auth');
+
+
 
 // Import Shared DB Instance
 const db = require('./db');
@@ -25,10 +33,13 @@ const app = express();
 
 // CONFIGURATION CONSTANTS (Loaded from environment)
 
-const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST || 'http://localhost';
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_fallback_secret_key_change_in_prod';
+const PORT = process.env.PORT ;
+const HOST = process.env.HOST;
+const CLIENT_URL = process.env.CLIENT_URL ;
+const JWT_SECRET = process.env.JWT_SECRET ;
+
+console.log("ENV CONFIG PORT ", PORT, "HOST ", HOST, "CLIENT URL ", CLIENT_URL); 
+
 
 // Enable CORS dynamically for client URL
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
@@ -47,6 +58,7 @@ app.use('/api/auth', require('./routes/auth'));
 // 3. Admin & Superuser API routes
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/superuser', require('./routes/superuser'));
+app.use('/api/inviteDevs', inviteDevRoutes);
 
 // 4. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
 app.use('/app', require('./routes/views'));
@@ -107,38 +119,7 @@ passport.use(new GoogleStrategy({
   }
 ));
 
-// -------------------------------------------------------------
-// 3. AUTHENTICATION MIDDLEWARE
-// -------------------------------------------------------------
 
-
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    // Attach both or normalize id for compatibility
-    req.user = {
-      ...decoded,
-      id: decoded.userId || decoded.id
-    };
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired session token' });
-  }
-};
-
-
-const requireRole = (...roles) => {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Access denied: Insufficient permissions' });
-    }
-    next();
-  };
-};
 
 // -------------------------------------------------------------
 // 4. OAUTH ROUTES
@@ -166,7 +147,7 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 // -------------------------------------------------------------
 
 // Admin/Superuser creates an invite token for developers/admins
-app.post('/api/auth/create-invite', authenticateToken, requireRole('admin', 'superuser'), (req, res) => {
+app.post('/api/auth/create-invite', authenticateToken, requireAdmin, (req, res) => {
   const { email, assigned_role } = req.body;
   const token = require('crypto').randomBytes(16).toString('hex');
 
@@ -306,14 +287,20 @@ app.post('/api/auth/login-step2', (req, res) => {
     { expiresIn: '2h' }
   );
 
-  res.json({
-    success: true,
-    token: sessionToken,
-    user: {
-      username: user.username,
-      role: user.role
-    }
-  });
+ res.cookie('token', sessionToken, {
+  httpOnly: true,
+  secure: false,       // true in production over HTTPS
+  sameSite: 'lax',
+  maxAge: 2 * 60 * 60 * 1000
+});
+
+res.json({
+  success: true,
+  user: {
+    username: user.username,
+    role: user.role
+  }
+});
 });
 
 
@@ -330,7 +317,3 @@ app.listen(PORT, () => {
     console.log(`🚀 Server running on ${HOST}:${PORT}`);
  
 });
-
-
-
-

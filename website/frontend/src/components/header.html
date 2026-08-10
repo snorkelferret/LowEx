@@ -1,25 +1,19 @@
 
+
+<!-- frontend/src/components/header.html -->
 <header class="app-header">
   <div class="header-brand">
-    <h1>⚡ Superuser Command Center</h1>
+    <!-- The script will replace this text based on the user's role -->
+    <h1 id="headerDashboardTitle">⚡ Dashboard</h1>
   </div>
 
   <div class="header-user-actions" id="headerUserActions">
     <div class="user-info">
       <span class="status-dot online"></span>
-      <span id="currentUserLabel">Logged in as: <strong>Loading...</strong></span>
-    </div>
-
-    <div class="button-group">
-      <!-- "Sign in as..." Button -->
-      <button id="signInAsBtn" class="btn btn-secondary btn-sm" title="Sign in as another user">
-        👤 Sign in as...
-      </button>
-
-      <!-- Logout Button -->
-      <button id="logoutBtn" class="btn btn-danger btn-sm" title="Log out of system">
-        🚪 Logout
-      </button>
+      <span id="currentUserLabel">Logged in as: <strong id="headerUsernameTarget">Loading...</strong></span>
     </div>
   </div>
 </header>
+
+
+

@@ -8,9 +8,31 @@ const dbPath = path.join(__dirname, 'database.db');
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
+// Safely add missing columns to existing tables without breaking data
+const applySchemaPatches = () => {
+  const columns = db.prepare("PRAGMA table_info(invitations)").all().map(c => c.name);
+
+  // Add 28-day expiration (defaults to 28 days from creation time)
+  if (!columns.includes('expires_at')) {
+    db.exec(`ALTER TABLE invitations ADD COLUMN expires_at DATETIME DEFAULT (datetime('now', '+28 days'));`);
+    // Backfill existing records to expire in 28 days if they were NULL
+    db.exec(`UPDATE invitations SET expires_at = datetime('now', '+28 days') WHERE expires_at IS NULL;`);
+  }
+
+  // Add reissue_count tracking (max 6 cap via application logic)
+  if (!columns.includes('reissue_count')) {
+    db.exec(`ALTER TABLE invitations ADD COLUMN reissue_count INTEGER DEFAULT 0;`);
+  }
+
+  // Add last_reissued_at timestamp
+  if (!columns.includes('last_reissued_at')) {
+    db.exec(`ALTER TABLE invitations ADD COLUMN last_reissued_at DATETIME;`);
+  }
+};
+
 // Initialize Database Schema
 const initDb = () => {
-  // Invitations Table
+  // Invitations Table (Updated with 28-day expiration & reissue limit)
   db.exec(`
     CREATE TABLE IF NOT EXISTS invitations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,9 +40,15 @@ const initDb = () => {
       assigned_role TEXT CHECK(assigned_role IN ('developer', 'admin', 'superuser')) NOT NULL,
       token TEXT UNIQUE NOT NULL,
       is_used INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME DEFAULT (datetime('now', '+28 days')),
+      reissue_count INTEGER DEFAULT 0 CHECK(reissue_count <= 6),
+      last_reissued_at DATETIME
     );
   `);
+
+  // Apply column additions if running against an existing database file
+  applySchemaPatches();
 
   // Users Table
   db.exec(`

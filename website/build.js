@@ -5,18 +5,58 @@ const path = require('path');
 const pageConfigurations = [
   {
     output: 'frontend/superuserDashboard.html',
-    title: 'Superuser Command Center',
-    script: './src/superuser.js',
+      title: 'Superuser Command Center',
+      scripts: [
+      './src/header.js',          // Fill in login details	  
+      './src/superuser.js',       // Superuser Core Panel logic
+      './src/sharedInvites.js'    // Single-instance shared developer invite code
+    ],
     styles: '/styles.css',
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',
+      'frontend/src/components/devInvites.html', 
       'frontend/src/components/developerPanel.html',
       'frontend/src/components/repoControl.html',
       'frontend/src/components/cloudflareControl.html',
       'frontend/src/components/loginModal.html',
     ],
   },
+ {
+    output: 'frontend/adminDashboard.html',
+    title: 'Admin Management',
+     scripts: [
+      './src/header.js',          // Fill in login details	  	 
+      './src/admin.js',    // Admin Core logic
+      './src/sharedInvites.js'    // Exact same single-instance file compiled here!
+    ],
+    styles: '/styles.css',
+    modules: [
+      'frontend/src/components/header.html',
+      'frontend/src/components/adminPanel.html',
+      'frontend/src/components/devInvites.html', // <--- Added here!
+      'frontend/src/components/loginModal.html',
+    ],
+ },
+    
+{
+    output: 'frontend/devDashboard.html',
+    title: 'Dev Utilities',
+     scripts: [
+      './src/header.js',          // Fill in login details	  	 
+      './src/developerInviteExp.js',    // Admin Core logic
+      './src/devloperPanel.js'    // Exact same single-instance file compiled here!
+    ],
+    styles: '/styles.css',
+    modules: [
+      'frontend/src/components/header.html',
+      'frontend/src/components/developerPanel.html',
+      'frontend/src/components/developerInviteExp.html', // <--- Added here!
+      'frontend/src/components/loginModal.html',
+    ],
+ },
+
+    
 ];
 
 function compilePage(config) {
@@ -33,6 +73,14 @@ function compilePage(config) {
       console.warn(`  ⚠️ Warning: Component file missing at ${modulePath}. Inserting placeholder container.`);
       bodyContent += `\n<!-- Missing Module: ${modulePath} -->\n<section class="card missing-module"><p>Module loading error: ${modulePath}</p></section>\n`;
     }
+  }
+
+  // Generate individual <script> tags for each script file listed in the array
+  let scriptTags = '';
+  if (Array.isArray(config.scripts)) {
+    config.scripts.forEach(scriptPath => {
+      scriptTags += `  <script type="module" src="${scriptPath}"></script>\n`;
+    });
   }
 
   // HTML Template wrapper
@@ -54,9 +102,8 @@ function compilePage(config) {
   <!-- Bootstrap 5 JS Bundle (Always included prior to app logic) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   
-  <!-- App Entry Script -->
-  <script type="module" src="${config.script}"></script>
-</body>
+  <!-- App Entry Scripts -->
+${scriptTags}</body>
 </html>`;
 
   // Ensure output directory exists before writing
@@ -77,5 +124,4 @@ function buildAll() {
   pageConfigurations.forEach(compilePage);
   console.log('\n✨ Build complete!');
 }
-
 buildAll();

@@ -20,7 +20,7 @@ router.get('/superuser', authenticateToken, requireSuperuser, (req, res) => {
 
 // Developer View
 router.get('/developer', authenticateToken, requireSuperuser, (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/superuserDashboard.html'));
+  res.sendFile(path.join(__dirname, '../../frontend/dist/developerPanel.html'));
 });
 
 module.exports = router;

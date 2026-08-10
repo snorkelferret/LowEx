@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "start:backend": "node backend/server.js",
-    "start:frontend": "vite frontend",
+    "start:frontend": "vite",
     "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
   },
   "dependencies": {
@@ -17,6 +17,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.5",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "qrcode": "^1.5.3",
