@@ -15,6 +15,23 @@ function authenticateToken(req, res, next) {
   });
 }
 
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user?.role) {
+      return res.status(403).json({
+        error: 'Unauthorized: no role assigned.'
+      });
+    }
+
+    if (allowedRoles.includes(req.user.role)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      error: 'Unauthorized: insufficient permissions.'
+    });
+  };
+}
 function requireSuperuser(req, res, next) {
   // Check the single-source role
   if (req.user?.role === 'superuser') {
@@ -32,7 +49,8 @@ function requireAdmin(req, res, next) {
 }
 
 module.exports = {
-  authenticateToken,
-  requireSuperuser,
-  requireAdmin
+    authenticateToken,
+    requireSuperuser,
+    requireAdmin,
+    requireRole
 };

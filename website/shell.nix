@@ -4,6 +4,7 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     nodejs_22       # Provides node, npm, and npx
     nginx           # Web server for proxying/testing static builds
+    sqlite
   ];
 
   shellHook = ''

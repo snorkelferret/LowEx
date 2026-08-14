@@ -41,20 +41,22 @@ const pageConfigurations = [
     
 {
     output: 'frontend/devDashboard.html',
-    title: 'Dev Utilities',
-     scripts: [
-      './src/header.js',          // Fill in login details	  	 
-      './src/developerInviteExp.js',    // Admin Core logic
-      './src/devloperPanel.js'    // Exact same single-instance file compiled here!
+    title: 'Developer Dashboard',
+    scripts: [
+	'./src/header.js',          // Fill in login details	  	 
+	'./src/developerInviteExp.js',    // Admin Core logic
+	'./src/developerPanel.js',    // Exact same single-instance file compiled here!
+	'./src/developerWorkspace.js'
     ],
     styles: '/styles.css',
     modules: [
-      'frontend/src/components/header.html',
-      'frontend/src/components/developerPanel.html',
-      'frontend/src/components/developerInviteExp.html', // <--- Added here!
-      'frontend/src/components/loginModal.html',
+	'frontend/src/components/header.html',
+	'frontend/src/components/developerPanel.html',
+	'frontend/src/components/developerAssets.html',
+	'frontend/src/components/developerInviteExp.html', // <--- Added here!
+	'frontend/src/components/loginModal.html',
     ],
- },
+},
 
     
 ];
@@ -85,7 +87,7 @@ function compilePage(config) {
 
   // HTML Template wrapper
   const htmlTemplate = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

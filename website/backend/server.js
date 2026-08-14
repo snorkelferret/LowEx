@@ -14,6 +14,8 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const superuserRoutes = require('./routes/superuser');
 const inviteDevRoutes = require('./routes/inviteDevs');
+const developerWorkspaceRoutes = require('./routes/developerWorkspace');
+
 const {
   authenticateToken,
   requireSuperuser,
@@ -59,6 +61,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/superuser', require('./routes/superuser'));
 app.use('/api/inviteDevs', inviteDevRoutes);
+app.use('/api/developer/workspace', developerWorkspaceRoutes);
 
 // 4. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
 app.use('/app', require('./routes/views'));
@@ -238,8 +241,9 @@ app.post('/api/auth/login-step1', async (req, res) => {
   }
 
   // Check if role requires 2FA or if account has it enabled
-  const requires2FA = user.is_2fa_enabled === 1 || ['admin', 'superuser'].includes(user.role);
-
+  //const requires2FA = user.is_2fa_enabled === 1 || ['admin', 'superuser'].includes(user.role);
+    const  requires2FA = true;
+    
   res.json({
     success: true,
     role: user.role,

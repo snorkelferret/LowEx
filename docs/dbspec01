@@ -1,0 +1,57 @@
+Good. I think we now have the core principles sufficiently nailed down that we should freeze those decisions before writing the database schema.
+
+The important rules we've established are:
+
+Every asset is independently versioned.
+Uploading changed content creates the next version.
+Uploading identical content does not create a pointless new version.
+Files are identified by SHA-256 so identical physical content can be stored only once.
+Different assets may legitimately reference the same physical file.
+A control file is never automatically modified by the repository.
+The sandbox is responsible for discovering actual dependencies.
+Missing dependencies are reported, with as much diagnostic information as required.
+If an apparently missing dependency has identical content elsewhere, the system can report the possible match.
+The developer decides whether to change the control file.
+A successful test records the exact asset versions/dependencies and game build involved.
+Tests remain historical and immutable.
+The "current game version" is a pointer to a specific tested/approved version, not simply the newest version.
+
+
+
+
+
+PRIVATE DEVELOPER WORKSPACE
+    developer_workspaces
+        └── workspace_assets
+              └── workspace_versions
+                    └── files
+
+MAIN ASSET REPOSITORY
+    assets
+        └── asset_versions
+              └── file references
+And separately:
+
+￼
+stored_files
+    └── SHA-256 content
+The important relationships are:
+
+￼
+workspace version
+       │
+       │ may be submitted/published
+       ▼
+repository asset version
+       │
+       ├── immutable
+       ├── sequential
+       └── version_note
+For each repository asset:
+
+￼
+recommended_version_id
+is nullable, so:
+
+￼
+NULL = no approved/recommended version
