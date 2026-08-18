@@ -16,6 +16,22 @@ const path = require('path');
 
 
 // ============================================================
+// Temporary upload storage
+// ============================================================
+
+const tempUploadDir = path.join(__dirname, '../uploads/tmp');
+
+fs.mkdirSync(tempUploadDir, { recursive: true });
+
+const upload = multer({
+    dest: tempUploadDir
+});
+
+
+
+
+
+// ============================================================
 // GET /api/developer/workspace/assets
 // ============================================================
 //
@@ -128,10 +144,11 @@ router.get(
 
 
 // ============================================================
-// TEST UPLOAD ENDPOINT
+// TEST FILE UPLOAD
 // ============================================================
 //
-// This deliberately does NOT create:
+// This stage deliberately does NOT create:
+//
 //   workspace_assets
 //   workspace_versions
 //   workspace_version_files
@@ -142,9 +159,15 @@ router.get(
 //      ↓
 //   SHA-256
 //      ↓
-//   stored_files lookup
-//      ↓
-//   reuse existing file OR store new physical file
+//   already in stored_files?
+//      /       \
+//    yes        no
+//     │          │
+//     │      store physical file
+//     │          │
+//     └────┬─────┘
+//          ↓
+//      return result
 //
 // ============================================================
 
@@ -166,7 +189,7 @@ router.post(
         try {
 
             // ----------------------------------------------------
-            // Calculate SHA-256
+            // Calculate SHA-256 from the actual file bytes
             // ----------------------------------------------------
 
             const hash = crypto.createHash('sha256');
@@ -179,17 +202,16 @@ router.post(
 
 
             // ----------------------------------------------------
-            // Check whether this physical file already exists
+            // Check whether these exact bytes already exist
             // ----------------------------------------------------
 
             const existingFile = db.prepare(`
                 SELECT
                     id,
                     sha256,
-                    original_filename,
+                    file_size,
+                    storage_key,
                     mime_type,
-                    size_bytes,
-                    storage_path,
                     created_at
                 FROM stored_files
                 WHERE sha256 = ?
@@ -197,7 +219,7 @@ router.post(
 
 
             // ----------------------------------------------------
-            // File already exists
+            // Already exists
             // ----------------------------------------------------
 
             if (existingFile) {
@@ -215,24 +237,28 @@ router.post(
             // New physical file
             // ----------------------------------------------------
 
-            const storageDir = path.join(__dirname, '../uploads/files');
+            const storageDir = path.join(
+                __dirname,
+                '../uploads/files'
+            );
 
             await fs.promises.mkdir(storageDir, {
                 recursive: true
             });
 
 
-            // Use the SHA-256 as the physical filename.
+            // The SHA-256 becomes the storage key.
             //
-            // This guarantees that identical content maps to
-            // the same physical filename.
+            // The original filename is deliberately NOT used as
+            // the physical filename because filenames are metadata,
+            // whereas the SHA-256 identifies the actual content.
             //
 
-            const storageFilename = sha256;
+            const storageKey = sha256;
 
             const storagePath = path.join(
                 storageDir,
-                storageFilename
+                storageKey
             );
 
 
@@ -243,39 +269,36 @@ router.post(
 
 
             // ----------------------------------------------------
-            // Record the physical file in stored_files
+            // Record the physical file
             // ----------------------------------------------------
 
             const result = db.prepare(`
                 INSERT INTO stored_files (
                     sha256,
-                    original_filename,
-                    mime_type,
-                    size_bytes,
-                    storage_path
+                    file_size,
+                    storage_key,
+                    mime_type
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?)
             `).run(
                 sha256,
-                req.file.originalname,
-                req.file.mimetype,
                 req.file.size,
-                storagePath
+                storageKey,
+                req.file.mimetype
             );
 
 
             // ----------------------------------------------------
-            // Return result
+            // Return the stored file record
             // ----------------------------------------------------
 
             const storedFile = db.prepare(`
                 SELECT
                     id,
                     sha256,
-                    original_filename,
+                    file_size,
+                    storage_key,
                     mime_type,
-                    size_bytes,
-                    storage_path,
                     created_at
                 FROM stored_files
                 WHERE id = ?
@@ -289,7 +312,10 @@ router.post(
 
         } catch (err) {
 
-            console.error('Developer asset upload error:', err);
+            console.error(
+                'Developer asset upload error:',
+                err
+            );
 
 
             // ----------------------------------------------------
@@ -297,21 +323,16 @@ router.post(
             // ----------------------------------------------------
 
             try {
-                await fs.promises.unlink(tempPath);
-            } catch (_) {
-                // File may already have been moved/deleted.
-            }
+		await fs.promises.unlink(tempPath);
+	    } catch (err_) {
+		// It may already have been moved or deleted.
+	    }
 
-
-            return res.status(500).json({
-                error: 'Failed to process uploaded file'
-            });
+	    return res.status(500).json({
+		error: 'Failed to process uploaded file'
+	    });
         }
     }
 );
-
-
-
-
 
 module.exports = router;
