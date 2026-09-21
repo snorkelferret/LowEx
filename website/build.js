@@ -11,7 +11,7 @@ const pageConfigurations = [
       './src/superuser.js',       // Superuser Core Panel logic
       './src/sharedInvites.js'    // Single-instance shared developer invite code
     ],
-    styles: '/styles.css',
+    styles: '/styles/styles.css',
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',
@@ -30,7 +30,7 @@ const pageConfigurations = [
       './src/admin.js',    // Admin Core logic
       './src/sharedInvites.js'    // Exact same single-instance file compiled here!
     ],
-    styles: '/styles.css',
+    styles: '/styles//styles.css',
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',
@@ -48,7 +48,7 @@ const pageConfigurations = [
 	'./src/developerPanel.js',    // Exact same single-instance file compiled here!
 	'./src/developerWorkspace.js'
     ],
-    styles: '/styles.css',
+    styles: '/styles/styles.css',
     modules: [
 	'frontend/src/components/header.html',
 	'frontend/src/components/developerPanel.html',
@@ -97,7 +97,7 @@ function compilePage(config) {
   <link rel="stylesheet" href="${config.styles}">
 </head>
 <body class="bg-dark text-light min-vh-100 d-flex flex-column">
-  <div id="superuser-app" class="dashboard-container">
+  <div  class="dashboard-container">
     ${bodyContent}
   </div>
 

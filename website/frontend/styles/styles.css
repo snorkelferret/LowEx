@@ -1,3 +1,8 @@
+
+
+
+
+
 /* Custom Global Dark Theme Enhancements */
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -93,4 +98,51 @@ body {
 
 .letter-spacing-2 {
     letter-spacing: 0.2em;
+}
+
+/* ==========================================================================
+   Application Header
+   ========================================================================== */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 64px;
+  padding: 0.75rem 1.5rem;
+  margin-bottom: 1.5rem;
+  background: #12141c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+}
+
+.header-brand h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.header-user-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-left: auto;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.header-user-actions #logoutBtn {
+  white-space: nowrap;
 }

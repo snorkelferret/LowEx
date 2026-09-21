@@ -1,0 +1,11 @@
+UPDATE users
+SET password_hash = '$2b$12$sonsMeZ1mb.2yNp8BNU/Fe0G3s7SjsVEBxwjmF7F5fVnuar93JR.u'
+WHERE id = 3;
+
+
+
+node -e 'const bcrypt=require("bcryptjs"); 
+
+console.log(bcrypt.hashSync("password123", 12))'node -e 'const bcrypt=require("bcryptjs"); 
+
+console.log(bcrypt.compareSync("YOUR_NEW_PASSWORD", "PASTE_THE_NEW_HASH_HERE"))'

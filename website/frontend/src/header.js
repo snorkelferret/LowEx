@@ -1,4 +1,6 @@
 // frontend/src/header.js
+import { executeGlobalLogout } from './authUtils.js';
+
 
 // 1. Immediate Page Protection / Workspace Guard
 (() => {
@@ -66,29 +68,17 @@ export function updateNavbarState() {
       titleEl.textContent = `${prefix} ${formattedRole} Dashboard`;
     }
   } else {
-    // User is logged out: show Guest state
-    if (loginSection) loginSection.classList.remove('d-none');
-    if (profileSection) profileSection.classList.add('d-none');
-    if (titleEl) titleEl.textContent = 'Project Console';
+      // User is logged out: show Guest state
+      if (loginSection) loginSection.classList.remove('d-none');
+      if (profileSection) profileSection.classList.add('d-none');
+      if (titleEl) titleEl.textContent = 'Project Console';
   }
 
-  // Bind the global Logout / Switch User action button cleanly
-  if (logoutBtn && !logoutBtn.dataset.bound) {
-    logoutBtn.dataset.bound = "true";
-    logoutBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      try {
-        // Securely drop backend session cookie
-        await fetch('/api/auth/logout', { method: 'POST' });
-      } catch (err) {
-        console.error('Network failure during session teardown:', err);
-      } finally {
-        // Clean local state and bounce to auth window
-        localStorage.clear();
-        window.location.href = '/index.html';
-      }
-    });
-  }
+    // Bind the global Logout / Switch User action button cleanly
+    if (logoutBtn && !logoutBtn.dataset.bound) {
+	logoutBtn.dataset.bound = "true";
+	logoutBtn.addEventListener('click', executeGlobalLogout);
+    }
 }
 
 // Make globally accessible if invoked inline by legacy view templates

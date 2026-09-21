@@ -179,8 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  document.getElementById('logoutBtn')?.addEventListener('click', executeGlobalLogout);
-
+ 
   setupIdentityModal();
   setupAdminStats();
   setupDiagnostics();
