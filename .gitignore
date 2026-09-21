@@ -90,3 +90,15 @@ backend/*.db-shm
 backend/database.db*
 
 
+# Database temporary/WAL files
+website/backend/database.db-shm
+website/backend/database.db-wal
+
+# Uploaded files and binaries
+website/backend/uploads/files/
+
+# Archive files
+source_assets/environment/images/*.zip
+
+# Optional: Text notes or local logs you might want to exclude
+website/logiNNotes.txt
