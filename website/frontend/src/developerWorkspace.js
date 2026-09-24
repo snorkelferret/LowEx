@@ -1,5 +1,5 @@
 // frontend/src/developerWorkspace.js
-// frontend/src/developerWorkspace.js
+
 
 const API_URL = '/api/developer/workspace';
 
@@ -783,103 +783,160 @@ async function loadDeveloperWorkspace() {
 // ============================================================
 // Workspace asset display
 // ============================================================
-
 function renderWorkspaceAssets(assets) {
-
-    const list =
-        $('workspaceAssetsList');
-
-
-    if (!list) {
-        return;
-    }
-
+    const list = $('workspaceAssetsList');
+    if (!list) return;
 
     if (assets.length === 0) {
-
-        list.innerHTML = `
-            <p class="mb-0">
-                No assets have been uploaded yet.
-            </p>
-        `;
-
+        list.innerHTML = `<p class="mb-0">No assets have been uploaded yet.</p>`;
         return;
     }
 
-
-    const container =
-        document.createElement('div');
-
-    container.className =
-        'list-group';
-
+    const container = document.createElement('div');
+    container.className = 'accordion';
 
     for (const asset of assets) {
+        const item = document.createElement('div');
+        item.className = 'accordion-item bg-dark text-light border-secondary';
 
-        const item =
-            document.createElement('div');
+        const header = document.createElement('h2');
+        header.className = 'accordion-header';
 
-        item.className =
-            'list-group-item list-group-item-dark';
+        const button = document.createElement('button');
+        button.className = 'accordion-button collapsed bg-dark text-light';
+        button.type = 'button';
+        button.dataset.bsToggle = 'collapse';
 
+        const collapseId = `asset-collapse-${asset.id}`;
+        button.dataset.bsTarget = `#${collapseId}`;
 
-        const heading =
-            document.createElement('div');
+        const assetTitle = document.createElement('span');
+        assetTitle.className = 'fw-semibold';
+        assetTitle.textContent = asset.name;
 
-        heading.className =
-            'd-flex justify-content-between align-items-center';
+        button.appendChild(assetTitle);
 
-
-        const name =
-            document.createElement('strong');
-
-        name.textContent =
-            asset.name;
-
-
-        const type =
-            document.createElement('span');
-
-        type.className =
-            'badge text-bg-secondary';
-
-        type.textContent =
-            asset.asset_type || 'Uncategorised';
-
-
-        heading.appendChild(name);
-        heading.appendChild(type);
-
-
-        item.appendChild(heading);
-
-
-        if (asset.description) {
-
-            const description =
-                document.createElement('div');
-
-            description.className =
-                'small text-secondary mt-1';
-
-            description.textContent =
-                asset.description;
-
-            item.appendChild(
-                description
-            );
+        if (asset.asset_type) {
+            const badge = document.createElement('span');
+            badge.className = 'badge text-bg-secondary ms-2';
+            badge.textContent = asset.asset_type;
+            button.appendChild(badge);
         }
 
+        header.appendChild(button);
 
+        const collapse = document.createElement('div');
+        collapse.id = collapseId;
+        collapse.className = 'accordion-collapse collapse';
+
+        const body = document.createElement('div');
+        body.className = 'accordion-body';
+
+        if (asset.description) {
+            const description = document.createElement('p');
+            description.className = 'small text-secondary mb-3';
+            description.textContent = asset.description;
+            body.appendChild(description);
+        }
+
+        if (!asset.versions || asset.versions.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'text-secondary mb-0';
+            empty.textContent = 'No versions uploaded.';
+            body.appendChild(empty);
+        } else {
+            for (const version of asset.versions) {
+                const versionBlock = document.createElement('div');
+                versionBlock.className = 'border border-secondary rounded p-3 mb-3';
+
+                const versionHeader = document.createElement('div');
+                versionHeader.className =
+                    'd-flex justify-content-between align-items-center mb-2';
+
+                const versionTitle = document.createElement('strong');
+                versionTitle.textContent =
+                    `Version ${version.version_number}`;
+
+                const versionDate = document.createElement('span');
+                versionDate.className = 'small text-secondary';
+                versionDate.textContent =
+                    formatWorkspaceDate(version.created_at);
+
+                versionHeader.appendChild(versionTitle);
+                versionHeader.appendChild(versionDate);
+
+                versionBlock.appendChild(versionHeader);
+
+                if (version.version_note) {
+                    const note = document.createElement('div');
+                    note.className = 'small text-secondary mb-3';
+                    note.textContent = version.version_note;
+                    versionBlock.appendChild(note);
+                }
+
+                if (!version.files || version.files.length === 0) {
+                    const noFiles = document.createElement('div');
+                    noFiles.className = 'small text-secondary';
+                    noFiles.textContent = 'No files in this version.';
+                    versionBlock.appendChild(noFiles);
+                } else {
+                    const fileList = document.createElement('div');
+                    fileList.className = 'list-group list-group-flush';
+
+                    for (const file of version.files) {
+                        const row = document.createElement('div');
+                        row.className =
+                            'list-group-item bg-dark text-light border-secondary px-0';
+
+                        const path = file.relative_path
+                            ? `${file.relative_path}/${file.filename}`
+                            : file.filename;
+
+                        const pathElement = document.createElement('div');
+                        pathElement.className = 'font-monospace small';
+                        pathElement.textContent = path;
+
+                        const details = document.createElement('div');
+                        details.className = 'small text-secondary mt-1';
+
+                        const size = formatFileSize(file.file_size);
+
+                        details.textContent =
+                            `${size}${file.mime_type ? ` • ${file.mime_type}` : ''}`;
+
+                        row.appendChild(pathElement);
+                        row.appendChild(details);
+                        fileList.appendChild(row);
+                    }
+
+                    versionBlock.appendChild(fileList);
+                }
+
+                body.appendChild(versionBlock);
+            }
+        }
+
+        collapse.appendChild(body);
+        item.appendChild(header);
+        item.appendChild(collapse);
         container.appendChild(item);
     }
 
-
     list.innerHTML = '';
-
     list.appendChild(container);
 }
 
+function formatWorkspaceDate(value) {
+    if (!value) return '';
+
+    const date = new Date(value.replace(' ', 'T') + 'Z');
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString();
+}
 
 // ============================================================
 // Formatting

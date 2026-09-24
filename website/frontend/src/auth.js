@@ -43,10 +43,11 @@ document.getElementById('step1Form')?.addEventListener('submit', async (e) => {
   console.log("app frontend fetch from ", `${API_URL}`);
     
   try {
-    const res = await fetch(`${API_URL}/login-step1`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass })
+      const res = await fetch(`${API_URL}/login-step1`, {
+	  method: 'POST',
+	  headers: { 'Content-Type': 'application/json' },
+	  body: JSON.stringify({ username: user, password: pass }),
+	  credentials: 'include'
     });
 
     const data = await res.json();
@@ -74,14 +75,15 @@ document.getElementById('step2Form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   clearError();
 
-  const code = document.getElementById('2fa-code').value.trim();
+    const code = document.getElementById('2fa-code').value.trim();
 
   try {
-    const res = await fetch(`${API_URL}/login-step2`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: activeUsername, code: code })
-    });
+      const res = await fetch(`${API_URL}/login-step2`, {
+	  method: 'POST',
+	  headers: { 'Content-Type': 'application/json' },
+	  body: JSON.stringify({ username: activeUsername, code: code }),
+	  credentials: 'include'
+      });
 
     const data = await res.json();
 

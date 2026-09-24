@@ -1,37 +1,30 @@
 // backend/db.js
 
+
 const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-// ============================================================
-// DATABASE CONNECTION
-// ============================================================
-
 const dbPath = path.join(__dirname, 'database.db');
-
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 
-// ============================================================
-// EXISTING DATABASE SCHEMA PATCHES
-// ============================================================
+/*
+ * ------------------------------------------------------------
+ * Invitation schema patches
+ * ------------------------------------------------------------
+ */
 
 const applySchemaPatches = () => {
-
   const columns = db
     .prepare("PRAGMA table_info(invitations)")
     .all()
     .map(c => c.name);
 
-
-  // Add 28-day expiration
-
   if (!columns.includes('expires_at')) {
-
     db.exec(`
       ALTER TABLE invitations
       ADD COLUMN expires_at
@@ -45,22 +38,14 @@ const applySchemaPatches = () => {
     `);
   }
 
-
-  // Add reissue_count tracking
-
   if (!columns.includes('reissue_count')) {
-
     db.exec(`
       ALTER TABLE invitations
       ADD COLUMN reissue_count INTEGER DEFAULT 0;
     `);
   }
 
-
-  // Add last_reissued_at timestamp
-
   if (!columns.includes('last_reissued_at')) {
-
     db.exec(`
       ALTER TABLE invitations
       ADD COLUMN last_reissued_at DATETIME;
@@ -69,251 +54,95 @@ const applySchemaPatches = () => {
 };
 
 
-// ============================================================
-// ASSET REPOSITORY SCHEMA
-// ============================================================
-//
-// The asset system has two distinct areas:
-//
-// PRIVATE DEVELOPER WORKSPACE
-//
-//   Developer's own working area.
-//   Other developers cannot see it.
-//
-// MAIN ASSET REPOSITORY
-//
-//   Everything here is published/public to developers.
-//   Published versions cannot be changed by developers.
-//
-// Physical files are stored separately and identified by
-// SHA-256 so identical files do not have to be stored twice.
-//
-// ============================================================
+/*
+ * ------------------------------------------------------------
+ * Asset repository schema
+ * ------------------------------------------------------------
+ */
 
 const applyAssetRepositorySchema = () => {
-
-  // ==========================================================
-  // DEVELOPER WORKSPACES
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS developer_workspaces (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       developer_id INTEGER NOT NULL UNIQUE,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       FOREIGN KEY (developer_id)
         REFERENCES users(id)
         ON DELETE CASCADE
     );
   `);
 
-
-  // ==========================================================
-  // PRIVATE WORKSPACE ASSETS
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS workspace_assets (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       workspace_id INTEGER NOT NULL,
-
       name TEXT NOT NULL,
-
       asset_type TEXT,
-
       description TEXT,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       is_active INTEGER NOT NULL DEFAULT 1,
-
       FOREIGN KEY (workspace_id)
         REFERENCES developer_workspaces(id)
         ON DELETE CASCADE,
-
-      UNIQUE (
-        workspace_id,
-        name
-      )
+      UNIQUE (workspace_id, name)
     );
   `);
-
-
-  // ==========================================================
-  // PRIVATE WORKSPACE VERSIONS
-  // ==========================================================
-  //
-  // Every upload/change creates a new version.
-  //
-  // These versions remain private to the developer's
-  // workspace until the developer publishes one.
-  //
-  // ==========================================================
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS workspace_versions (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       workspace_asset_id INTEGER NOT NULL,
-
       version_number INTEGER NOT NULL,
-
       created_by INTEGER NOT NULL,
-
       version_note TEXT NOT NULL,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       FOREIGN KEY (workspace_asset_id)
         REFERENCES workspace_assets(id)
         ON DELETE CASCADE,
-
       FOREIGN KEY (created_by)
         REFERENCES users(id),
-
-      UNIQUE (
-        workspace_asset_id,
-        version_number
-      )
+      UNIQUE (workspace_asset_id, version_number)
     );
   `);
 
-
-  // ==========================================================
-  // MAIN ASSET REPOSITORY
-  // ==========================================================
-  //
-  // This represents the logical identity of an asset.
-  //
-  // Example:
-  //
-  //     oak_tree
-  //
-  // may have:
-  //
-  //     v1
-  //     v2
-  //     v3
-  //
-  // The asset can have zero or one recommended version.
-  //
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS assets (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       name TEXT NOT NULL,
-
       asset_type TEXT,
-
       owner_id INTEGER NOT NULL,
-
       description TEXT,
-
       recommended_version_id INTEGER,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       is_active INTEGER NOT NULL DEFAULT 1,
-
       FOREIGN KEY (owner_id)
         REFERENCES users(id),
-
       UNIQUE (name)
     );
   `);
 
-
-  // ==========================================================
-  // PUBLISHED ASSET VERSIONS
-  // ==========================================================
-  //
-  // Once published, a version is immutable.
-  //
-  // Every published version has:
-  //
-  //     asset
-  //     version number
-  //     creator
-  //     creation date
-  //     version note
-  //
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS asset_versions (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       asset_id INTEGER NOT NULL,
-
       version_number INTEGER NOT NULL,
-
       created_by INTEGER NOT NULL,
-
       version_note TEXT NOT NULL,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       FOREIGN KEY (asset_id)
         REFERENCES assets(id),
-
-      FOREIGN KEY (created_by)
-        REFERENCES users(id),
-
-      UNIQUE (
-        asset_id,
-        version_number
-      ),
-
-      UNIQUE (
-        id,
-        asset_id
-      )
+      UNIQUE (asset_id, version_number),
+      UNIQUE (id, asset_id)
     );
   `);
 
-
-  // ==========================================================
-  // RECOMMENDED VERSION RELATIONSHIP
-  // ==========================================================
-  //
-  // This is deliberately a composite foreign key.
-  //
-  // It prevents:
-  //
-  //     Asset A
-  //
-  // from accidentally pointing at:
-  //
-  //     Asset B version 3
-  //
-  // as its recommended version.
-  //
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS asset_recommended_versions (
-
       asset_id INTEGER PRIMARY KEY,
-
       version_id INTEGER NOT NULL,
-
       FOREIGN KEY (
         asset_id,
         version_id
@@ -325,72 +154,30 @@ const applyAssetRepositorySchema = () => {
     );
   `);
 
-
-  // ==========================================================
-  // PHYSICAL FILE STORE
-  // ==========================================================
-  //
-  // One row represents one unique set of bytes.
-  //
-  // SHA-256 is calculated from the actual uploaded file.
-  //
-  // Example:
-  //
-  // oak.png
-  //
-  // and
-  //
-  // oak_texture.png
-  //
-  // containing identical bytes will reference the same
-  // stored_files row.
-  //
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS stored_files (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       sha256 TEXT NOT NULL UNIQUE,
-
       file_size INTEGER NOT NULL,
-
       storage_key TEXT NOT NULL UNIQUE,
-
       mime_type TEXT,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
-
-  // ==========================================================
-  // FILES IN PRIVATE WORKSPACE VERSIONS
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS workspace_version_files (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       workspace_version_id INTEGER NOT NULL,
-
       stored_file_id INTEGER NOT NULL,
-
       filename TEXT NOT NULL,
-
       relative_path TEXT,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       FOREIGN KEY (workspace_version_id)
         REFERENCES workspace_versions(id)
         ON DELETE CASCADE,
-
       FOREIGN KEY (stored_file_id)
         REFERENCES stored_files(id),
-
       UNIQUE (
         workspace_version_id,
         relative_path,
@@ -399,32 +186,18 @@ const applyAssetRepositorySchema = () => {
     );
   `);
 
-
-  // ==========================================================
-  // FILES IN PUBLISHED ASSET VERSIONS
-  // ==========================================================
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS asset_version_files (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-
       asset_version_id INTEGER NOT NULL,
-
       stored_file_id INTEGER NOT NULL,
-
       filename TEXT NOT NULL,
-
       relative_path TEXT,
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
       FOREIGN KEY (asset_version_id)
         REFERENCES asset_versions(id),
-
       FOREIGN KEY (stored_file_id)
         REFERENCES stored_files(id),
-
       UNIQUE (
         asset_version_id,
         relative_path,
@@ -432,11 +205,6 @@ const applyAssetRepositorySchema = () => {
       )
     );
   `);
-
-
-  // ==========================================================
-  // INDEXES
-  // ==========================================================
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS
@@ -472,24 +240,383 @@ const applyAssetRepositorySchema = () => {
       ON asset_recommended_versions(version_id);
   `);
 
-
   console.log('📦 Asset Repository tables ready.');
 };
 
 
-// ============================================================
-// INITIALISE DATABASE
-// ============================================================
+/*
+ * ------------------------------------------------------------
+ * Asset workflow schema
+ * ------------------------------------------------------------
+ *
+ * Important:
+ *
+ * workspace_assets represents the developer's continuing
+ * sandbox asset.
+ *
+ * Acceptance / rejection / locking applies to individual
+ * workspace_versions, NOT workspace_assets.
+ *
+ * A workspace asset can therefore continue to have new
+ * versions after an earlier version has been accepted.
+ * ------------------------------------------------------------
+ */
+
+const applyAssetWorkflowSchemaPatches = () => {
+
+  /*
+   * ----------------------------------------------------------
+   * workspace_assets additions
+   *
+   * These identify the repository asset/version from which
+   * the workspace asset was derived.
+   * ----------------------------------------------------------
+   */
+
+  const workspaceAssetColumns = db
+    .prepare("PRAGMA table_info(workspace_assets)")
+    .all()
+    .map(c => c.name);
+
+  if (!workspaceAssetColumns.includes('repository_asset_id')) {
+    db.exec(`
+      ALTER TABLE workspace_assets
+      ADD COLUMN repository_asset_id INTEGER;
+    `);
+  }
+
+  if (!workspaceAssetColumns.includes('repository_base_version_id')) {
+    db.exec(`
+      ALTER TABLE workspace_assets
+      ADD COLUMN repository_base_version_id INTEGER;
+    `);
+  }
+
+
+  /*
+   * ----------------------------------------------------------
+   * workspace_versions additions
+   *
+   * creative_locked:
+   *   0 = editable
+   *   1 = locked for Creative Approval / accepted version
+   *
+   * repository_version_id:
+   *   Set when this workspace version has been accepted into
+   *   the main repository.
+   * ----------------------------------------------------------
+   */
+
+  const workspaceVersionColumns = db
+    .prepare("PRAGMA table_info(workspace_versions)")
+    .all()
+    .map(c => c.name);
+
+  if (!workspaceVersionColumns.includes('creative_locked')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN creative_locked INTEGER NOT NULL DEFAULT 0;
+    `);
+  }
+
+  if (!workspaceVersionColumns.includes('locked_at')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN locked_at DATETIME;
+    `);
+  }
+
+  if (!workspaceVersionColumns.includes('repository_version_id')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN repository_version_id INTEGER;
+    `);
+  }
+
+
+  /*
+   * ----------------------------------------------------------
+   * Creative Approval
+   *
+   * Each approval relates to ONE specific workspace version.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS creative_approvals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      workspace_asset_id INTEGER NOT NULL,
+      workspace_version_id INTEGER NOT NULL,
+
+      requested_by INTEGER NOT NULL,
+
+      status TEXT NOT NULL
+        CHECK (
+          status IN (
+            'pending',
+            'rejected',
+            'approved',
+            'cancelled'
+          )
+        ),
+
+      request_comment TEXT,
+
+      decided_by INTEGER,
+      decision_comment TEXT,
+
+      requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      decided_at DATETIME,
+
+      repository_asset_id INTEGER,
+      repository_version_id INTEGER,
+
+      FOREIGN KEY (workspace_asset_id)
+        REFERENCES workspace_assets(id),
+
+      FOREIGN KEY (workspace_version_id)
+        REFERENCES workspace_versions(id),
+
+      FOREIGN KEY (requested_by)
+        REFERENCES users(id),
+
+      FOREIGN KEY (decided_by)
+        REFERENCES users(id),
+
+      FOREIGN KEY (repository_asset_id)
+        REFERENCES assets(id),
+
+      FOREIGN KEY (repository_version_id)
+        REFERENCES asset_versions(id)
+    );
+  `);
+
+
+  /*
+   * Only one pending Creative Approval may exist for a
+   * particular workspace version.
+   */
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS
+      idx_one_pending_creative_approval_per_version
+      ON creative_approvals(workspace_version_id)
+      WHERE status = 'pending';
+  `);
+
+
+  /*
+   * ----------------------------------------------------------
+   * Technical validation runs
+   *
+   * These are private developer/system records.
+   * They do NOT represent Creative Approval.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS technical_check_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      workspace_asset_id INTEGER NOT NULL,
+      workspace_version_id INTEGER NOT NULL,
+
+      started_by INTEGER,
+
+      status TEXT NOT NULL
+        CHECK (
+          status IN (
+            'running',
+            'passed',
+            'failed',
+            'cancelled',
+            'error'
+          )
+        ),
+
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME,
+
+      summary TEXT,
+
+      FOREIGN KEY (workspace_asset_id)
+        REFERENCES workspace_assets(id),
+
+      FOREIGN KEY (workspace_version_id)
+        REFERENCES workspace_versions(id),
+
+      FOREIGN KEY (started_by)
+        REFERENCES users(id)
+    );
+  `);
+
+
+  /*
+   * Individual technical checks belonging to a run.
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS technical_check_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      technical_check_run_id INTEGER NOT NULL,
+
+      check_name TEXT NOT NULL,
+
+      status TEXT NOT NULL
+        CHECK (
+          status IN (
+            'passed',
+            'failed',
+            'warning',
+            'skipped',
+            'error'
+          )
+        ),
+
+      message TEXT,
+      details TEXT,
+
+      started_at DATETIME,
+      completed_at DATETIME,
+
+      FOREIGN KEY (technical_check_run_id)
+        REFERENCES technical_check_runs(id)
+        ON DELETE CASCADE
+    );
+  `);
+
+
+  /*
+   * ----------------------------------------------------------
+   * Comments
+   *
+   * Comments can belong to workspace versions, repository
+   * versions, or Creative Approval requests.
+   *
+   * Private workspace comments remain private.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS asset_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      author_id INTEGER NOT NULL,
+
+      workspace_asset_id INTEGER,
+      workspace_version_id INTEGER,
+
+      repository_asset_id INTEGER,
+      repository_version_id INTEGER,
+
+      creative_approval_id INTEGER,
+
+      parent_comment_id INTEGER,
+
+      visibility TEXT NOT NULL DEFAULT 'private'
+        CHECK (
+          visibility IN (
+            'private',
+            'approval',
+            'repository'
+          )
+        ),
+
+      comment_text TEXT NOT NULL,
+
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (author_id)
+        REFERENCES users(id),
+
+      FOREIGN KEY (workspace_asset_id)
+        REFERENCES workspace_assets(id),
+
+      FOREIGN KEY (workspace_version_id)
+        REFERENCES workspace_versions(id),
+
+      FOREIGN KEY (repository_asset_id)
+        REFERENCES assets(id),
+
+      FOREIGN KEY (repository_version_id)
+        REFERENCES asset_versions(id),
+
+      FOREIGN KEY (creative_approval_id)
+        REFERENCES creative_approvals(id),
+
+      FOREIGN KEY (parent_comment_id)
+        REFERENCES asset_comments(id)
+    );
+  `);
+
+
+  /*
+   * ----------------------------------------------------------
+   * Workflow indexes
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS
+      idx_workspace_assets_repository
+      ON workspace_assets(repository_asset_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_workspace_versions_repository
+      ON workspace_versions(repository_version_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_creative_approvals_asset
+      ON creative_approvals(workspace_asset_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_creative_approvals_version
+      ON creative_approvals(workspace_version_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_creative_approvals_status
+      ON creative_approvals(status);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_technical_check_runs_version
+      ON technical_check_runs(workspace_version_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_technical_check_results_run
+      ON technical_check_results(technical_check_run_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_asset_comments_workspace_version
+      ON asset_comments(workspace_version_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_asset_comments_repository_version
+      ON asset_comments(repository_version_id);
+  `);
+
+  console.log('🔄 Asset workflow tables and migrations ready.');
+};
+
+
+/*
+ * ------------------------------------------------------------
+ * Database initialisation
+ * ------------------------------------------------------------
+ */
 
 const initDb = () => {
 
-  // ==========================================================
-  // INVITATIONS
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * Invitations
+   * ----------------------------------------------------------
+   */
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS invitations (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
       email TEXT UNIQUE NOT NULL,
@@ -520,17 +647,17 @@ const initDb = () => {
     );
   `);
 
-
   applySchemaPatches();
 
 
-  // ==========================================================
-  // USERS
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * Users
+   * ----------------------------------------------------------
+   */
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
       username TEXT UNIQUE NOT NULL,
@@ -574,13 +701,14 @@ const initDb = () => {
   `);
 
 
-  // ==========================================================
-  // AUDIT LOGS
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * Audit logs
+   * ----------------------------------------------------------
+   */
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audit_logs (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
       actor_id INTEGER,
@@ -596,13 +724,14 @@ const initDb = () => {
   `);
 
 
-  // ==========================================================
-  // SESSIONS
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * Sessions
+   * ----------------------------------------------------------
+   */
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
       user_id INTEGER NOT NULL,
@@ -624,13 +753,14 @@ const initDb = () => {
   `);
 
 
-  // ==========================================================
-  // API KEYS
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * API keys
+   * ----------------------------------------------------------
+   */
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS api_keys (
-
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
       name TEXT NOT NULL,
@@ -646,25 +776,42 @@ const initDb = () => {
   `);
 
 
-  // ==========================================================
-  // ASSET REPOSITORY
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * Asset repository
+   *
+   * Must happen after users because the asset tables have
+   * foreign keys to users.
+   * ----------------------------------------------------------
+   */
 
   applyAssetRepositorySchema();
 
 
-  // ==========================================================
-  // INITIAL SUPERUSER
-  // ==========================================================
+  /*
+   * ----------------------------------------------------------
+   * Asset workflow
+   *
+   * Must happen after the repository tables exist because
+   * these tables/columns refer to them.
+   * ----------------------------------------------------------
+   */
+
+  applyAssetWorkflowSchemaPatches();
+
+
+  /*
+   * ----------------------------------------------------------
+   * Initial superuser
+   * ----------------------------------------------------------
+   */
 
   const userCount = db
     .prepare('SELECT COUNT(*) as count FROM users')
     .get()
     .count;
 
-
   if (userCount === 0) {
-
     const salt = bcrypt.genSaltSync(12);
 
     const hashedPassword = bcrypt.hashSync(
@@ -691,22 +838,12 @@ const initDb = () => {
     );
   }
 
-
   console.log(
     '⚡ SQLite Database & Auth Tables Ready.'
   );
 };
 
 
-// ============================================================
-// START DATABASE
-// ============================================================
-
 initDb();
-
-
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = db;

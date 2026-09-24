@@ -41,107 +41,108 @@ const upload = multer({
 // ============================================================
 
 router.get(
-  '/assets',
-  authenticateToken,
-  requireRole('developer', 'admin', 'superuser'),
-  (req, res) => {
+    '/assets',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+    async (req, res) => {
+        try {
+            const developerId = req.user?.userId ?? req.user?.id;
 
-    // This comes from the JWT created by your login system.
-    const developerId = req.user?.userId;
+            if (!developerId) {
+                return res.status(401).json({
+                    error: 'Authenticated user ID not found'
+                });
+            }
 
-    if (!developerId) {
-      return res.status(401).json({
-        error: 'Invalid authentication context'
-      });
+            let workspace = db.prepare(`
+                SELECT *
+                FROM developer_workspaces
+                WHERE developer_id = ?
+            `).get(developerId);
+
+            if (!workspace) {
+                const result = db.prepare(`
+                    INSERT INTO developer_workspaces (developer_id)
+                    VALUES (?)
+                `).run(developerId);
+
+                workspace = db.prepare(`
+                    SELECT *
+                    FROM developer_workspaces
+                    WHERE id = ?
+                `).get(result.lastInsertRowid);
+            }
+
+            const assets = db.prepare(`
+                SELECT
+                    id,
+                    name,
+                    asset_type,
+                    description,
+                    created_at,
+                    updated_at,
+                    is_active
+                FROM workspace_assets
+                WHERE workspace_id = ?
+                  AND is_active = 1
+                ORDER BY name COLLATE NOCASE
+            `).all(workspace.id);
+
+            const getVersions = db.prepare(`
+                SELECT
+                    id,
+                    version_number,
+                    version_note,
+                    created_by,
+                    created_at
+                FROM workspace_versions
+                WHERE workspace_asset_id = ?
+                ORDER BY version_number DESC
+            `);
+
+            const getFiles = db.prepare(`
+                SELECT
+                    wvf.id,
+                    wvf.filename,
+                    wvf.relative_path,
+                    wvf.created_at,
+                    sf.file_size,
+                    sf.mime_type,
+                    sf.sha256
+                FROM workspace_version_files wvf
+                JOIN stored_files sf
+                    ON sf.id = wvf.stored_file_id
+                WHERE wvf.workspace_version_id = ?
+                ORDER BY
+                    COALESCE(wvf.relative_path, '') COLLATE NOCASE,
+                    wvf.filename COLLATE NOCASE
+            `);
+
+            for (const asset of assets) {
+                asset.versions = getVersions.all(asset.id);
+
+                for (const version of asset.versions) {
+                    version.files = getFiles.all(version.id);
+                }
+            }
+
+            console.log('Developer workspace:', workspace);
+            console.log('Developer assets:', assets);
+
+            return res.json({
+                workspace,
+                assets
+            });
+
+        } catch (err) {
+            console.error('Failed to load developer workspace:', err);
+
+            return res.status(500).json({
+                error: 'Failed to load developer workspace'
+            });
+        }
     }
-
-    try {
-
-      // --------------------------------------------------------
-      // Find the developer's private workspace
-      // --------------------------------------------------------
-
-      let workspace = db.prepare(`
-        SELECT
-          id,
-          developer_id,
-          created_at,
-          updated_at
-        FROM developer_workspaces
-        WHERE developer_id = ?
-      `).get(developerId);
-
-
-      // --------------------------------------------------------
-      // A developer must have one and only one workspace.
-      // Create it automatically if it doesn't exist.
-      // --------------------------------------------------------
-
-      if (!workspace) {
-
-        const result = db.prepare(`
-          INSERT INTO developer_workspaces (developer_id)
-          VALUES (?)
-        `).run(developerId);
-
-        workspace = db.prepare(`
-          SELECT
-            id,
-            developer_id,
-            created_at,
-            updated_at
-          FROM developer_workspaces
-          WHERE id = ?
-        `).get(result.lastInsertRowid);
-      }
-
-
-      // --------------------------------------------------------
-      // Get the assets belonging to this workspace
-      // --------------------------------------------------------
-
-      const assets = db.prepare(`
-        SELECT
-          id,
-          name,
-          asset_type,
-          description,
-          created_at,
-          updated_at,
-          is_active
-        FROM workspace_assets
-        WHERE workspace_id = ?
-          AND is_active = 1
-        ORDER BY name COLLATE NOCASE
-      `).all(workspace.id);
-	
-	console.log('Developer workspace:', workspace);
-	console.log('Developer assets:', assets);
-
-
-
-
-	
-      // --------------------------------------------------------
-      // Return workspace + assets
-      // --------------------------------------------------------
-
-      res.json({
-        workspace,
-        assets
-      });
-
-    } catch (err) {
-
-      console.error('Developer assets lookup error:', err);
-
-      res.status(500).json({
-        error: 'Failed to retrieve developer assets'
-      });
-    }
-  }
 );
-
 
 // ============================================================
 // TEST FILE UPLOAD
@@ -985,5 +986,1172 @@ router.post(
         }
     }
 );
+
+
+
+
+
+// ============================================================
+// TECHNICAL VALIDATION
+// ============================================================
+//
+// Runs automated technical checks against ONE workspace
+// version.
+//
+// Technical validation is private to the developer.
+//
+// It does NOT:
+//   - lock the version
+//   - request Creative Approval
+//   - publish anything
+//
+// The developer may run it repeatedly.
+// ============================================================
+
+router.post(
+    '/assets/:assetId/versions/:versionId/technical-check',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+
+        const developerId =
+            req.user?.userId ?? req.user?.id;
+
+        if (!developerId) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        const assetId =
+            Number(req.params.assetId);
+
+        const versionId =
+            Number(req.params.versionId);
+
+        if (
+            !Number.isInteger(assetId) ||
+            !Number.isInteger(versionId)
+        ) {
+            return res.status(400).json({
+                error: 'Invalid asset or version ID'
+            });
+        }
+
+        try {
+
+            // ----------------------------------------------------
+            // Find the developer's workspace
+            // ----------------------------------------------------
+
+            const workspace = db.prepare(`
+                SELECT id
+                FROM developer_workspaces
+                WHERE developer_id = ?
+            `).get(developerId);
+
+            if (!workspace) {
+                return res.status(404).json({
+                    error: 'Developer workspace not found'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Find the requested version and make sure it belongs
+            // to this developer's workspace.
+            // ----------------------------------------------------
+
+            const version = db.prepare(`
+                SELECT
+                    wv.id,
+                    wv.workspace_asset_id,
+                    wv.version_number,
+                    wv.version_note,
+                    wv.created_by,
+                    wv.created_at,
+                    wv.creative_locked,
+                    wa.name AS asset_name,
+                    wa.workspace_id
+                FROM workspace_versions wv
+                JOIN workspace_assets wa
+                    ON wa.id = wv.workspace_asset_id
+                WHERE wv.id = ?
+                  AND wv.workspace_asset_id = ?
+                  AND wa.id = ?
+                  AND wa.workspace_id = ?
+                  AND wa.is_active = 1
+            `).get(
+                versionId,
+                assetId,
+                assetId,
+                workspace.id
+            );
+
+            if (!version) {
+                return res.status(404).json({
+                    error: 'Workspace version not found'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // A locked version is immutable.
+            //
+            // There is no reason to run a new technical check
+            // against an immutable accepted version.
+            // ----------------------------------------------------
+
+            if (version.creative_locked) {
+                return res.status(409).json({
+                    error:
+                        'This workspace version is locked and cannot be validated again.'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Create technical check run.
+            // ----------------------------------------------------
+
+            const runResult = db.prepare(`
+                INSERT INTO technical_check_runs (
+                    workspace_asset_id,
+                    workspace_version_id,
+                    started_by,
+                    status
+                )
+                VALUES (?, ?, ?, 'running')
+            `).run(
+                assetId,
+                versionId,
+                developerId
+            );
+
+            const runId =
+                runResult.lastInsertRowid;
+
+
+            // ----------------------------------------------------
+            // Technical checks
+            //
+            // These are deliberately basic for the first
+            // implementation. The validation framework can be
+            // expanded later with asset-specific validators.
+            // ----------------------------------------------------
+
+            const files = db.prepare(`
+                SELECT
+                    wvf.id,
+                    wvf.filename,
+                    wvf.relative_path,
+                    wvf.stored_file_id,
+                    sf.sha256,
+                    sf.file_size,
+                    sf.storage_key,
+                    sf.mime_type
+                FROM workspace_version_files wvf
+                JOIN stored_files sf
+                    ON sf.id = wvf.stored_file_id
+                WHERE wvf.workspace_version_id = ?
+                ORDER BY
+                    COALESCE(wvf.relative_path, ''),
+                    wvf.filename
+            `).all(versionId);
+
+
+            const results = [];
+
+
+            // ----------------------------------------------------
+            // Check: version contains files
+            // ----------------------------------------------------
+
+            if (files.length === 0) {
+
+                results.push({
+                    name: 'files_present',
+                    status: 'failed',
+                    message:
+                        'The workspace version contains no files.'
+                });
+
+            } else {
+
+                results.push({
+                    name: 'files_present',
+                    status: 'passed',
+                    message:
+                        `${files.length} file(s) found.`
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Check each stored file.
+            // ----------------------------------------------------
+
+            for (const file of files) {
+
+                const storagePath =
+                    path.join(
+                        __dirname,
+                        '../uploads/files',
+                        file.storage_key
+                    );
+
+
+                let exists = false;
+
+                try {
+
+                    const stat =
+                        await fs.promises.stat(
+                            storagePath
+                        );
+
+                    exists =
+                        stat.isFile() &&
+                        stat.size === file.file_size;
+
+                } catch (err) {
+
+                    exists = false;
+                }
+
+
+                results.push({
+                    name:
+                        `stored_file:${file.id}`,
+
+                    status:
+                        exists
+                            ? 'passed'
+                            : 'failed',
+
+                    message:
+                        exists
+                            ? `Physical file exists and size matches: ${file.filename}`
+                            : `Physical file is missing or its size does not match: ${file.filename}`
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Check logical paths.
+            // ----------------------------------------------------
+
+            const logicalPaths =
+                new Set();
+
+            let duplicatePaths = false;
+
+
+            for (const file of files) {
+
+                const logicalPath =
+                    file.relative_path
+                        ? `${file.relative_path}/${file.filename}`
+                        : file.filename;
+
+
+                if (logicalPaths.has(logicalPath)) {
+                    duplicatePaths = true;
+                    break;
+                }
+
+                logicalPaths.add(logicalPath);
+            }
+
+
+            results.push({
+                name: 'logical_paths_unique',
+
+                status:
+                    duplicatePaths
+                        ? 'failed'
+                        : 'passed',
+
+                message:
+                    duplicatePaths
+                        ? 'Duplicate logical file paths detected.'
+                        : 'All logical file paths are unique.'
+            });
+
+
+            // ----------------------------------------------------
+            // Determine overall result.
+            // ----------------------------------------------------
+
+            const failed =
+                results.some(
+                    result =>
+                        result.status === 'failed'
+                );
+
+            const finalStatus =
+                failed
+                    ? 'failed'
+                    : 'passed';
+
+
+            // ----------------------------------------------------
+            // Store individual results.
+            // ----------------------------------------------------
+
+            const insertResult =
+                db.prepare(`
+                    INSERT INTO technical_check_results (
+                        technical_check_run_id,
+                        check_name,
+                        status,
+                        message
+                    )
+                    VALUES (?, ?, ?, ?)
+                `);
+
+
+            const storeResults =
+                db.transaction(() => {
+
+                    for (const result of results) {
+
+                        insertResult.run(
+                            runId,
+                            result.name,
+                            result.status,
+                            result.message
+                        );
+                    }
+
+
+                    db.prepare(`
+                        UPDATE technical_check_runs
+                        SET
+                            status = ?,
+                            completed_at = CURRENT_TIMESTAMP,
+                            summary = ?
+                        WHERE id = ?
+                    `).run(
+                        finalStatus,
+
+                        failed
+                            ? 'Technical validation failed.'
+                            : 'Technical validation passed.',
+
+                        runId
+                    );
+                });
+
+
+            storeResults();
+
+
+            const completedRun =
+                db.prepare(`
+                    SELECT
+                        id,
+                        workspace_asset_id,
+                        workspace_version_id,
+                        started_by,
+                        status,
+                        started_at,
+                        completed_at,
+                        summary
+                    FROM technical_check_runs
+                    WHERE id = ?
+                `).get(runId);
+
+
+            const checkResults =
+                db.prepare(`
+                    SELECT
+                        id,
+                        check_name,
+                        status,
+                        message,
+                        details,
+                        started_at,
+                        completed_at
+                    FROM technical_check_results
+                    WHERE technical_check_run_id = ?
+                    ORDER BY id
+                `).all(runId);
+
+
+            return res.json({
+                status: finalStatus,
+                run: completedRun,
+                results: checkResults
+            });
+
+
+        } catch (err) {
+
+            console.error(
+                'Technical validation failed:',
+                err
+            );
+
+
+            return res.status(500).json({
+                error:
+                    'Technical validation failed'
+            });
+        }
+    }
+);
+
+
+// ============================================================
+// REQUEST CREATIVE APPROVAL
+// ============================================================
+//
+// The developer explicitly submits ONE workspace version.
+//
+// Requirements:
+//
+//   - version belongs to this developer
+//   - version is not already locked
+//   - technical validation has passed
+//   - no existing pending approval
+//
+// The specific version is then locked.
+//
+// The workspace asset itself remains completely editable.
+// ============================================================
+
+router.post(
+    '/assets/:assetId/versions/:versionId/creative-approval',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+
+        const developerId =
+            req.user?.userId ?? req.user?.id;
+
+        if (!developerId) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        const assetId =
+            Number(req.params.assetId);
+
+        const versionId =
+            Number(req.params.versionId);
+
+        if (
+            !Number.isInteger(assetId) ||
+            !Number.isInteger(versionId)
+        ) {
+            return res.status(400).json({
+                error: 'Invalid asset or version ID'
+            });
+        }
+
+
+        const requestComment =
+            String(
+                req.body?.request_comment || ''
+            ).trim();
+
+
+        try {
+
+            const workspace = db.prepare(`
+                SELECT id
+                FROM developer_workspaces
+                WHERE developer_id = ?
+            `).get(developerId);
+
+            if (!workspace) {
+                return res.status(404).json({
+                    error: 'Developer workspace not found'
+                });
+            }
+
+
+            const version = db.prepare(`
+                SELECT
+                    wv.id,
+                    wv.workspace_asset_id,
+                    wv.version_number,
+                    wv.creative_locked,
+                    wa.name AS asset_name
+                FROM workspace_versions wv
+                JOIN workspace_assets wa
+                    ON wa.id = wv.workspace_asset_id
+                WHERE wv.id = ?
+                  AND wv.workspace_asset_id = ?
+                  AND wa.workspace_id = ?
+                  AND wa.is_active = 1
+            `).get(
+                versionId,
+                assetId,
+                workspace.id
+            );
+
+
+            if (!version) {
+                return res.status(404).json({
+                    error: 'Workspace version not found'
+                });
+            }
+
+
+            if (version.creative_locked) {
+                return res.status(409).json({
+                    error:
+                        'This workspace version is already locked.'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Require a successful technical validation for this
+            // exact version.
+            // ----------------------------------------------------
+
+            const technicalPass =
+                db.prepare(`
+                    SELECT id
+                    FROM technical_check_runs
+                    WHERE workspace_version_id = ?
+                      AND status = 'passed'
+                    ORDER BY completed_at DESC, id DESC
+                    LIMIT 1
+                `).get(versionId);
+
+
+            if (!technicalPass) {
+                return res.status(409).json({
+                    error:
+                        'This version must pass Technical Validation before Creative Approval can be requested.'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Make sure another approval is not already pending.
+            // ----------------------------------------------------
+
+            const pendingApproval =
+                db.prepare(`
+                    SELECT id
+                    FROM creative_approvals
+                    WHERE workspace_version_id = ?
+                      AND status = 'pending'
+                    LIMIT 1
+                `).get(versionId);
+
+
+            if (pendingApproval) {
+                return res.status(409).json({
+                    error:
+                        'Creative Approval has already been requested for this version.'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // Lock this specific version and create approval
+            // request atomically.
+            // ----------------------------------------------------
+
+            const submit =
+                db.transaction(() => {
+
+                    db.prepare(`
+                        UPDATE workspace_versions
+                        SET
+                            creative_locked = 1,
+                            locked_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    `).run(versionId);
+
+
+                    const result =
+                        db.prepare(`
+                            INSERT INTO creative_approvals (
+                                workspace_asset_id,
+                                workspace_version_id,
+                                requested_by,
+                                status,
+                                request_comment
+                            )
+                            VALUES (?, ?, ?, 'pending', ?)
+                        `).run(
+                            assetId,
+                            versionId,
+                            developerId,
+                            requestComment || null
+                        );
+
+
+                    return result.lastInsertRowid;
+                });
+
+
+            const approval =
+                db.prepare(`
+                    SELECT *
+                    FROM creative_approvals
+                    WHERE id = ?
+                `).get(submit);
+
+
+            return res.status(201).json({
+                status: 'pending',
+                approval
+            });
+
+
+        } catch (err) {
+
+            console.error(
+                'Creative Approval request failed:',
+                err
+            );
+
+
+            return res.status(500).json({
+                error:
+                    'Failed to request Creative Approval'
+            });
+        }
+    }
+);
+
+
+// ============================================================
+// REJECT CREATIVE APPROVAL
+// ============================================================
+//
+// Director/admin/superuser rejects the specific submitted
+// workspace version.
+//
+// That version becomes editable again.
+//
+// Other versions of the same workspace asset are unaffected.
+// ============================================================
+
+router.post(
+    '/creative-approvals/:approvalId/reject',
+    authenticateToken,
+    requireRole('admin', 'superuser'),
+
+    async (req, res) => {
+
+        const approvalId =
+            Number(req.params.approvalId);
+
+        const decidedBy =
+            req.user?.userId ?? req.user?.id;
+
+        if (!decidedBy) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        if (!Number.isInteger(approvalId)) {
+            return res.status(400).json({
+                error: 'Invalid approval ID'
+            });
+        }
+
+
+        const decisionComment =
+            String(
+                req.body?.decision_comment || ''
+            ).trim();
+
+
+        try {
+
+            const approval =
+                db.prepare(`
+                    SELECT *
+                    FROM creative_approvals
+                    WHERE id = ?
+                `).get(approvalId);
+
+
+            if (!approval) {
+                return res.status(404).json({
+                    error: 'Creative Approval not found'
+                });
+            }
+
+
+            if (approval.status !== 'pending') {
+                return res.status(409).json({
+                    error:
+                        `Creative Approval is already ${approval.status}.`
+                });
+            }
+
+
+            const reject =
+                db.transaction(() => {
+
+                    db.prepare(`
+                        UPDATE creative_approvals
+                        SET
+                            status = 'rejected',
+                            decided_by = ?,
+                            decision_comment = ?,
+                            decided_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    `).run(
+                        decidedBy,
+                        decisionComment || null,
+                        approvalId
+                    );
+
+
+                    db.prepare(`
+                        UPDATE workspace_versions
+                        SET
+                            creative_locked = 0,
+                            locked_at = NULL
+                        WHERE id = ?
+                    `).run(
+                        approval.workspace_version_id
+                    );
+                });
+
+
+            reject();
+
+
+            const updated =
+                db.prepare(`
+                    SELECT *
+                    FROM creative_approvals
+                    WHERE id = ?
+                `).get(approvalId);
+
+
+            return res.json({
+                status: 'rejected',
+                approval: updated
+            });
+
+
+        } catch (err) {
+
+            console.error(
+                'Creative Approval rejection failed:',
+                err
+            );
+
+
+            return res.status(500).json({
+                error:
+                    'Failed to reject Creative Approval'
+            });
+        }
+    }
+);
+
+
+// ============================================================
+// APPROVE CREATIVE APPROVAL
+// ============================================================
+//
+// Director/admin/superuser approves ONE specific workspace
+// version.
+//
+// This creates an immutable repository version.
+//
+// The workspace version remains locked.
+//
+// IMPORTANT:
+// If the workspace asset is not already associated with a
+// repository asset, this creates a NEW repository asset.
+//
+// If a repository asset already exists with the same name but
+// there is no explicit association, approval is rejected rather
+// than accidentally attaching the work to the wrong asset.
+//
+// Collision handling will be added separately.
+// ============================================================
+
+router.post(
+    '/creative-approvals/:approvalId/approve',
+    authenticateToken,
+    requireRole('admin', 'superuser'),
+
+    async (req, res) => {
+
+        const approvalId =
+            Number(req.params.approvalId);
+
+        const decidedBy =
+            req.user?.userId ?? req.user?.id;
+
+        if (!decidedBy) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        if (!Number.isInteger(approvalId)) {
+            return res.status(400).json({
+                error: 'Invalid approval ID'
+            });
+        }
+
+
+        const decisionComment =
+            String(
+                req.body?.decision_comment || ''
+            ).trim();
+
+
+        try {
+
+            const approval =
+                db.prepare(`
+                    SELECT
+                        ca.*,
+
+                        wa.name AS workspace_asset_name,
+                        wa.asset_type AS workspace_asset_type,
+                        wa.description AS workspace_asset_description,
+
+                        wv.version_number,
+                        wv.version_note,
+                        wv.creative_locked,
+                        wv.repository_version_id
+
+                    FROM creative_approvals ca
+
+                    JOIN workspace_assets wa
+                        ON wa.id = ca.workspace_asset_id
+
+                    JOIN workspace_versions wv
+                        ON wv.id = ca.workspace_version_id
+
+                    WHERE ca.id = ?
+                `).get(approvalId);
+
+
+            if (!approval) {
+                return res.status(404).json({
+                    error: 'Creative Approval not found'
+                });
+            }
+
+
+            if (approval.status !== 'pending') {
+                return res.status(409).json({
+                    error:
+                        `Creative Approval is already ${approval.status}.`
+                });
+            }
+
+
+            if (!approval.creative_locked) {
+                return res.status(409).json({
+                    error:
+                        'The submitted workspace version is not locked.'
+                });
+            }
+
+
+            const result =
+                db.transaction(() => {
+
+                    let repositoryAsset = null;
+
+
+                    // ------------------------------------------------
+                    // If this workspace asset was explicitly derived
+                    // from an existing repository asset, use it.
+                    // ------------------------------------------------
+
+                    const workspaceAsset =
+                        db.prepare(`
+                            SELECT
+                                repository_asset_id
+                            FROM workspace_assets
+                            WHERE id = ?
+                        `).get(
+                            approval.workspace_asset_id
+                        );
+
+
+                    if (
+                        workspaceAsset?.repository_asset_id
+                    ) {
+
+                        repositoryAsset =
+                            db.prepare(`
+                                SELECT *
+                                FROM assets
+                                WHERE id = ?
+                                  AND is_active = 1
+                            `).get(
+                                workspaceAsset.repository_asset_id
+                            );
+
+
+                        if (!repositoryAsset) {
+                            throw new Error(
+                                'The repository asset associated with this workspace asset no longer exists.'
+                            );
+                        }
+
+                    } else {
+
+                        // --------------------------------------------
+                        // This is a new repository asset.
+                        //
+                        // Do NOT silently attach it to an existing
+                        // asset merely because the names match.
+                        // --------------------------------------------
+
+                        const sameName =
+                            db.prepare(`
+                                SELECT id
+                                FROM assets
+                                WHERE name = ?
+                            `).get(
+                                approval.workspace_asset_name
+                            );
+
+
+                        if (sameName) {
+                            throw new Error(
+                                'A repository asset with this name already exists, but this workspace asset is not associated with it.'
+                            );
+                        }
+
+
+                        const assetResult =
+                            db.prepare(`
+                                INSERT INTO assets (
+                                    name,
+                                    asset_type,
+                                    owner_id,
+                                    description
+                                )
+                                VALUES (?, ?, ?, ?)
+                            `).run(
+                                approval.workspace_asset_name,
+                                approval.workspace_asset_type || null,
+                                decidedBy,
+                                approval.workspace_asset_description || null
+                            );
+
+
+                        repositoryAsset =
+                            db.prepare(`
+                                SELECT *
+                                FROM assets
+                                WHERE id = ?
+                            `).get(
+                                assetResult.lastInsertRowid
+                            );
+
+
+                        // --------------------------------------------
+                        // Record the permanent ancestry.
+                        // --------------------------------------------
+
+                        db.prepare(`
+                            UPDATE workspace_assets
+                            SET
+                                repository_asset_id = ?
+                            WHERE id = ?
+                        `).run(
+                            repositoryAsset.id,
+                            approval.workspace_asset_id
+                        );
+                    }
+
+
+                    // ------------------------------------------------
+                    // Find next repository version.
+                    // ------------------------------------------------
+
+                    const latestRepositoryVersion =
+                        db.prepare(`
+                            SELECT
+                                MAX(version_number)
+                                    AS version_number
+                            FROM asset_versions
+                            WHERE asset_id = ?
+                        `).get(
+                            repositoryAsset.id
+                        );
+
+
+                    const repositoryVersionNumber =
+                        (
+                            latestRepositoryVersion?.version_number ||
+                            0
+                        ) + 1;
+
+
+                    // ------------------------------------------------
+                    // Create immutable repository version.
+                    // ------------------------------------------------
+
+                    const repositoryVersionResult =
+                        db.prepare(`
+                            INSERT INTO asset_versions (
+                                asset_id,
+                                version_number,
+                                created_by,
+                                version_note
+                            )
+                            VALUES (?, ?, ?, ?)
+                        `).run(
+                            repositoryAsset.id,
+                            repositoryVersionNumber,
+                            decidedBy,
+                            approval.version_note
+                        );
+
+
+                    const repositoryVersionId =
+                        repositoryVersionResult.lastInsertRowid;
+
+
+                    // ------------------------------------------------
+                    // Copy the logical file references.
+                    //
+                    // The physical stored_files records are NOT
+                    // copied. They are shared by content hash.
+                    // ------------------------------------------------
+
+                    db.prepare(`
+                        INSERT INTO asset_version_files (
+                            asset_version_id,
+                            stored_file_id,
+                            filename,
+                            relative_path
+                        )
+                        SELECT
+                            ?,
+                            stored_file_id,
+                            filename,
+                            relative_path
+                        FROM workspace_version_files
+                        WHERE workspace_version_id = ?
+                    `).run(
+                        repositoryVersionId,
+                        approval.workspace_version_id
+                    );
+
+
+                    // ------------------------------------------------
+                    // Link the workspace version permanently to the
+                    // repository version.
+                    // ------------------------------------------------
+
+                    db.prepare(`
+                        UPDATE workspace_versions
+                        SET
+                            repository_version_id = ?,
+                            creative_locked = 1,
+                            locked_at = COALESCE(
+                                locked_at,
+                                CURRENT_TIMESTAMP
+                            )
+                        WHERE id = ?
+                    `).run(
+                        repositoryVersionId,
+                        approval.workspace_version_id
+                    );
+
+
+                    // ------------------------------------------------
+                    // Complete Creative Approval.
+                    // ------------------------------------------------
+
+                    db.prepare(`
+                        UPDATE creative_approvals
+                        SET
+                            status = 'approved',
+                            decided_by = ?,
+                            decision_comment = ?,
+                            decided_at = CURRENT_TIMESTAMP,
+                            repository_asset_id = ?,
+                            repository_version_id = ?
+                        WHERE id = ?
+                    `).run(
+                        decidedBy,
+                        decisionComment || null,
+                        repositoryAsset.id,
+                        repositoryVersionId,
+                        approvalId
+                    );
+
+
+                    return {
+                        repositoryAsset,
+                        repositoryVersionId,
+                        repositoryVersionNumber
+                    };
+                })();
+
+
+            const updatedApproval =
+                db.prepare(`
+                    SELECT *
+                    FROM creative_approvals
+                    WHERE id = ?
+                `).get(approvalId);
+
+
+            return res.json({
+                status: 'approved',
+
+                approval:
+                    updatedApproval,
+
+                repository: {
+                    asset:
+                        result.repositoryAsset,
+
+                    version_id:
+                        result.repositoryVersionId,
+
+                    version_number:
+                        result.repositoryVersionNumber
+                }
+            });
+
+
+        } catch (err) {
+
+            console.error(
+                'Creative Approval approval failed:',
+                err
+            );
+
+
+            return res.status(409).json({
+                error:
+                    err.message ||
+                    'Failed to approve Creative Approval'
+            });
+        }
+    }
+);
+
+
+
+
+
+
 
 module.exports = router;
