@@ -531,23 +531,23 @@ router.post(
             // Existing identical files are reused.
             // ----------------------------------------------------
 
+	    async function calculateSha256(filePath) {
+		return new Promise((resolve, reject) => {
+		    const hash = crypto.createHash('sha256');
+		    const stream = fs.createReadStream(filePath);
+
+		    stream.on('error', reject);
+		    stream.on('data', chunk => hash.update(chunk));
+		    stream.on('end', () => resolve(hash.digest('hex')));
+		});
+	    }
+
+	    
             for (const item of processedFiles) {
 
                 const file = item.file;
 
-
-                const fileBuffer =
-                    await fs.promises.readFile(
-                        file.path
-                    );
-
-
-                const sha256 =
-                    crypto
-                        .createHash('sha256')
-                        .update(fileBuffer)
-                        .digest('hex');
-
+		const sha256 = await calculateSha256(file.path);
 
                 // ------------------------------------------------
                 // Look for identical existing physical file.
@@ -590,24 +590,65 @@ router.post(
                         );
 
 
-                    await fs.promises.rename(
-                        file.path,
-                        storagePath
-                    );
+		    try {
+			// The temporary upload and content store are on the
+			// same filesystem, so link() gives us an atomic
+			// "create this exact path if it does not already exist".
+			await fs.promises.link(
+			    file.path,
+			    storagePath
+			);
 
+			// We successfully created the physical stored file.
+			newlyStoredPaths.push(storagePath);
 
-                    newlyStoredPaths.push(
-                        storagePath
-                    );
+			// The temporary upload is no longer needed.
+			await fs.promises.unlink(file.path);
 
+		    } catch (err) {
 
-                    item.newStoredFile = {
-                        sha256,
-                        fileSize: file.size,
-                        storageKey,
-                        mimeType: file.mimetype
-                    };
+			if (err.code === 'EEXIST') {
+			    // Another upload created the identical file first.
+			    // Reuse that physical file.
+			    await fs.promises.unlink(file.path);
 
+			} else {
+			    throw err;
+			}
+		    }             
+
+		    let createdPhysicalFile = false;
+
+		    try {
+			await fs.promises.link(
+			    file.path,
+			    storagePath
+			);
+
+			createdPhysicalFile = true;
+			newlyStoredPaths.push(storagePath);
+
+			await fs.promises.unlink(file.path);
+
+		    } catch (err) {
+
+			if (err.code === 'EEXIST') {
+			    await fs.promises.unlink(file.path);
+			} else {
+			    throw err;
+			}
+		    }
+
+		    if (createdPhysicalFile) {
+			item.newStoredFile = {
+			    sha256,
+			    fileSize: file.size,
+			    storageKey,
+			    mimeType: file.mimetype
+			};
+		    }
+
+		    
                 } else {
 
                     // No longer needed because the existing
@@ -784,7 +825,7 @@ router.post(
 
                     const insertStoredFile =
                         db.prepare(`
-                            INSERT INTO stored_files (
+                            INSERT OR IGNORE INTO stored_files (
                                 sha256,
                                 file_size,
                                 storage_key,
@@ -959,17 +1000,17 @@ router.post(
             //
             // Existing deduplicated files are never touched.
             // ----------------------------------------------------
-
-            for (const storagePath of newlyStoredPaths) {
-
-                try {
-                    await fs.promises.unlink(
-                        storagePath
-                    );
-                } catch (err_) {
+           //  this creates an orphan because of collision - needs to be resolved
+           // for (const storagePath of newlyStoredPaths) {
+//
+  //              try {
+    //                await fs.promises.unlink(
+      //                  storagePath
+        //            );
+          //      } catch (err_) {
                     // Already removed.
-                }
-            }
+            //    }
+          //  }
 
 
             console.error(
