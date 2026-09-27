@@ -23,12 +23,6 @@ const tempUploadDir = path.join(__dirname, '../uploads/tmp');
 
 fs.mkdirSync(tempUploadDir, { recursive: true });
 
-const upload = multer({
-    dest: tempUploadDir
-});
-
-
-
 
 
 // ============================================================
@@ -236,8 +230,6 @@ router.post(
         // --------------------------------------------------------
 
         const tempPaths = uploadedFiles.map(file => file.path);
-        const newlyStoredPaths = [];
-
 
         try {
 
@@ -531,192 +523,77 @@ router.post(
             // Existing identical files are reused.
             // ----------------------------------------------------
 
-	    async function calculateSha256(filePath) {
-		return new Promise((resolve, reject) => {
-		    const hash = crypto.createHash('sha256');
-		    const stream = fs.createReadStream(filePath);
+            // ----------------------------------------------------
+            // Calculate SHA-256 for every uploaded file before
+            // entering the database transaction.
+            // ----------------------------------------------------
 
-		    stream.on('error', reject);
-		    stream.on('data', chunk => hash.update(chunk));
-		    stream.on('end', () => resolve(hash.digest('hex')));
-		});
-	    }
+            async function calculateSha256(filePath) {
+                return new Promise((resolve, reject) => {
+                    const hash = crypto.createHash('sha256');
+                    const stream = fs.createReadStream(filePath);
 
-	    
+                    stream.on('error', reject);
+                    stream.on('data', chunk => hash.update(chunk));
+                    stream.on('end', () => {
+                        resolve(hash.digest('hex'));
+                    });
+                });
+            }
+
+
             for (const item of processedFiles) {
-
-                const file = item.file;
-
-		const sha256 = await calculateSha256(file.path);
-
-                // ------------------------------------------------
-                // Look for identical existing physical file.
-                // ------------------------------------------------
-
-                let storedFile = db.prepare(`
-                    SELECT
-                        id,
-                        sha256,
-                        file_size,
-                        storage_key,
-                        mime_type,
-                        created_at
-                    FROM stored_files
-                    WHERE sha256 = ?
-                `).get(sha256);
-
-
-                if (!storedFile) {
-
-                    const storageDir =
-                        path.join(
-                            __dirname,
-                            '../uploads/files'
-                        );
-
-
-                    await fs.promises.mkdir(
-                        storageDir,
-                        { recursive: true }
-                    );
-
-
-                    const storageKey = sha256;
-
-                    const storagePath =
-                        path.join(
-                            storageDir,
-                            storageKey
-                        );
-
-
-		    try {
-			// The temporary upload and content store are on the
-			// same filesystem, so link() gives us an atomic
-			// "create this exact path if it does not already exist".
-			await fs.promises.link(
-			    file.path,
-			    storagePath
-			);
-
-			// We successfully created the physical stored file.
-			newlyStoredPaths.push(storagePath);
-
-			// The temporary upload is no longer needed.
-			await fs.promises.unlink(file.path);
-
-		    } catch (err) {
-
-			if (err.code === 'EEXIST') {
-			    // Another upload created the identical file first.
-			    // Reuse that physical file.
-			    await fs.promises.unlink(file.path);
-
-			} else {
-			    throw err;
-			}
-		    }             
-
-		    let createdPhysicalFile = false;
-
-		    try {
-			await fs.promises.link(
-			    file.path,
-			    storagePath
-			);
-
-			createdPhysicalFile = true;
-			newlyStoredPaths.push(storagePath);
-
-			await fs.promises.unlink(file.path);
-
-		    } catch (err) {
-
-			if (err.code === 'EEXIST') {
-			    await fs.promises.unlink(file.path);
-			} else {
-			    throw err;
-			}
-		    }
-
-		    if (createdPhysicalFile) {
-			item.newStoredFile = {
-			    sha256,
-			    fileSize: file.size,
-			    storageKey,
-			    mimeType: file.mimetype
-			};
-		    }
-
-		    
-                } else {
-
-                    // No longer needed because the existing
-                    // physical file will be reused.
-
-                    await fs.promises.unlink(
-                        file.path
-                    );
-                }
-
-
-                item.storedFile = storedFile;
+                item.sha256 =
+                    await calculateSha256(item.file.path);
             }
 
 
             // ----------------------------------------------------
+            // Permanent content storage directory.
+            // ----------------------------------------------------
+
+            const storageDir =
+                path.join(
+                    __dirname,
+                    '../uploads/files'
+                );
+
+            fs.mkdirSync(
+                storageDir,
+                { recursive: true }
+            );
+
+
+            // ----------------------------------------------------
             // Everything below is one SQLite transaction.
+            //
+            // IMMEDIATE is important:
+            //
+            // Once this transaction starts, another writer cannot
+            // enter its own write transaction until this one has
+            // finished.
+            //
+            // The physical content-store operation therefore occurs
+            // while the database write lock is held.
             // ----------------------------------------------------
 
             const createAssetVersion =
                 db.transaction(() => {
 
+                    // Physical files created by THIS transaction.
+                    //
+                    // If anything below fails, these are removed
+                    // before the SQLite transaction is allowed to
+                    // roll back and release its write lock.
+                    const newlyStoredPaths = [];
 
-                    // --------------------------------------------
-                    // Find existing workspace asset
-                    // --------------------------------------------
+                    try {
 
-                    let asset = db.prepare(`
-                        SELECT
-                            id,
-                            name,
-                            asset_type,
-                            description,
-                            created_at,
-                            updated_at,
-                            is_active
-                        FROM workspace_assets
-                        WHERE workspace_id = ?
-                          AND name = ?
-                    `).get(
-                        workspace.id,
-                        assetName
-                    );
+                        // --------------------------------------------
+                        // Find existing workspace asset
+                        // --------------------------------------------
 
-
-                    // --------------------------------------------
-                    // Create asset if it doesn't exist.
-                    // --------------------------------------------
-
-                    if (!asset) {
-
-                        const result = db.prepare(`
-                            INSERT INTO workspace_assets (
-                                workspace_id,
-                                name,
-                                asset_type,
-                                description
-                            )
-                            VALUES (?, ?, ?, ?)
-                        `).run(
-                            workspace.id,
-                            assetName,
-                            assetType || null,
-                            description || null
-                        );
-
-
-                        asset = db.prepare(`
+                        let asset = db.prepare(`
                             SELECT
                                 id,
                                 name,
@@ -726,245 +603,384 @@ router.post(
                                 updated_at,
                                 is_active
                             FROM workspace_assets
-                            WHERE id = ?
+                            WHERE workspace_id = ?
+                              AND name = ?
                         `).get(
-                            result.lastInsertRowid
-                        );
-
-                    } else {
-
-                        // ----------------------------------------
-                        // Update supplied metadata.
-                        //
-                        // Empty description/type does not erase
-                        // existing metadata.
-                        // ----------------------------------------
-
-                        db.prepare(`
-                            UPDATE workspace_assets
-                            SET
-                                asset_type =
-                                    COALESCE(?, asset_type),
-
-                                description =
-                                    COALESCE(?, description),
-
-                                updated_at =
-                                    CURRENT_TIMESTAMP
-
-                            WHERE id = ?
-                        `).run(
-                            assetType || null,
-                            description || null,
-                            asset.id
+                            workspace.id,
+                            assetName
                         );
 
 
-                        asset = db.prepare(`
-                            SELECT
-                                id,
-                                name,
-                                asset_type,
-                                description,
-                                created_at,
-                                updated_at,
-                                is_active
-                            FROM workspace_assets
-                            WHERE id = ?
-                        `).get(asset.id);
-                    }
+                        // --------------------------------------------
+                        // Create asset if it doesn't exist.
+                        // --------------------------------------------
+
+                        if (!asset) {
+
+                            const result = db.prepare(`
+                                INSERT INTO workspace_assets (
+                                    workspace_id,
+                                    name,
+                                    asset_type,
+                                    description
+                                )
+                                VALUES (?, ?, ?, ?)
+                            `).run(
+                                workspace.id,
+                                assetName,
+                                assetType || null,
+                                description || null
+                            );
 
 
-                    // --------------------------------------------
-                    // Find next version number.
-                    // --------------------------------------------
+                            asset = db.prepare(`
+                                SELECT
+                                    id,
+                                    name,
+                                    asset_type,
+                                    description,
+                                    created_at,
+                                    updated_at,
+                                    is_active
+                                FROM workspace_assets
+                                WHERE id = ?
+                            `).get(
+                                result.lastInsertRowid
+                            );
 
-                    const latestVersion =
-                        db.prepare(`
-                            SELECT
-                                MAX(version_number)
-                                    AS version_number
-                            FROM workspace_versions
-                            WHERE workspace_asset_id = ?
-                        `).get(asset.id);
+                        } else {
 
+                            // ----------------------------------------
+                            // Update supplied metadata.
+                            // ----------------------------------------
 
-                    const versionNumber =
-                        (latestVersion?.version_number || 0) + 1;
+                            db.prepare(`
+                                UPDATE workspace_assets
+                                SET
+                                    asset_type =
+                                        COALESCE(?, asset_type),
 
+                                    description =
+                                        COALESCE(?, description),
 
-                    // --------------------------------------------
-                    // Create workspace version.
-                    // --------------------------------------------
+                                    updated_at =
+                                        CURRENT_TIMESTAMP
 
-                    const versionResult =
-                        db.prepare(`
-                            INSERT INTO workspace_versions (
-                                workspace_asset_id,
-                                version_number,
-                                created_by,
-                                version_note
-                            )
-                            VALUES (?, ?, ?, ?)
-                        `).run(
-                            asset.id,
-                            versionNumber,
-                            developerId,
-                            versionNote
-                        );
-
-
-                    const versionId =
-                        versionResult.lastInsertRowid;
+                                WHERE id = ?
+                            `).run(
+                                assetType || null,
+                                description || null,
+                                asset.id
+                            );
 
 
-                    // --------------------------------------------
-                    // Store/retrieve stored_files records and
-                    // connect them to the workspace version.
-                    // --------------------------------------------
-
-                    const insertStoredFile =
-                        db.prepare(`
-                            INSERT OR IGNORE INTO stored_files (
-                                sha256,
-                                file_size,
-                                storage_key,
-                                mime_type
-                            )
-                            VALUES (?, ?, ?, ?)
-                        `);
-
-
-                    const getStoredFile =
-                        db.prepare(`
-                            SELECT
-                                id,
-                                sha256,
-                                file_size,
-                                storage_key,
-                                mime_type,
-                                created_at
-                            FROM stored_files
-                            WHERE sha256 = ?
-                        `);
-
-
-                    const insertVersionFile =
-                        db.prepare(`
-                            INSERT INTO workspace_version_files (
-                                workspace_version_id,
-                                stored_file_id,
-                                filename,
-                                relative_path
-                            )
-                            VALUES (?, ?, ?, ?)
-                        `);
-
-
-                    for (const item of processedFiles) {
-
-                        let storedFile =
-                            item.storedFile;
-
-
-                        // ----------------------------------------
-                        // New physical file needs a stored_files
-                        // database record.
-                        // ----------------------------------------
-
-                        if (
-                            !storedFile &&
-                            item.newStoredFile
-                        ) {
-
-                            const newFile =
-                                item.newStoredFile;
-
-
-                            const result =
-                                insertStoredFile.run(
-                                    newFile.sha256,
-                                    newFile.fileSize,
-                                    newFile.storageKey,
-                                    newFile.mimeType
-                                );
-
-
-                            storedFile =
-                                getStoredFile.get(
-                                    newFile.sha256
-                                );
+                            asset = db.prepare(`
+                                SELECT
+                                    id,
+                                    name,
+                                    asset_type,
+                                    description,
+                                    created_at,
+                                    updated_at,
+                                    is_active
+                                FROM workspace_assets
+                                WHERE id = ?
+                            `).get(asset.id);
                         }
 
 
-                        if (!storedFile) {
-                            throw new Error(
-                                'Unable to create stored file record'
+                        // --------------------------------------------
+                        // Find next workspace version number.
+                        // --------------------------------------------
+
+                        const latestVersion =
+                            db.prepare(`
+                                SELECT
+                                    MAX(version_number)
+                                        AS version_number
+                                FROM workspace_versions
+                                WHERE workspace_asset_id = ?
+                            `).get(asset.id);
+
+
+                        const versionNumber =
+                            (latestVersion?.version_number || 0) + 1;
+
+
+                        // --------------------------------------------
+                        // Create workspace version.
+                        // --------------------------------------------
+
+                        const versionResult =
+                            db.prepare(`
+                                INSERT INTO workspace_versions (
+                                    workspace_asset_id,
+                                    version_number,
+                                    created_by,
+                                    version_note
+                                )
+                                VALUES (?, ?, ?, ?)
+                            `).run(
+                                asset.id,
+                                versionNumber,
+                                developerId,
+                                versionNote
+                            );
+
+
+                        const versionId =
+                            versionResult.lastInsertRowid;
+
+
+                        // --------------------------------------------
+                        // Prepare stored_files statements.
+                        // --------------------------------------------
+
+                        const getStoredFile =
+                            db.prepare(`
+                                SELECT
+                                    id,
+                                    sha256,
+                                    file_size,
+                                    storage_key,
+                                    mime_type,
+                                    created_at
+                                FROM stored_files
+                                WHERE sha256 = ?
+                            `);
+
+
+                        const insertStoredFile =
+                            db.prepare(`
+                                INSERT INTO stored_files (
+                                    sha256,
+                                    file_size,
+                                    storage_key,
+                                    mime_type
+                                )
+                                VALUES (?, ?, ?, ?)
+                            `);
+
+
+                        const insertVersionFile =
+                            db.prepare(`
+                                INSERT INTO workspace_version_files (
+                                    workspace_version_id,
+                                    stored_file_id,
+                                    filename,
+                                    relative_path
+                                )
+                                VALUES (?, ?, ?, ?)
+                            `);
+
+
+                        // --------------------------------------------
+                        // Process every uploaded file.
+                        //
+                        // The database write lock is already held.
+                        // --------------------------------------------
+
+                        for (const item of processedFiles) {
+
+                            const file = item.file;
+                            const sha256 = item.sha256;
+
+                            let storedFile =
+                                getStoredFile.get(sha256);
+
+
+                            // ----------------------------------------
+                            // Existing content.
+                            // ----------------------------------------
+
+                            if (storedFile) {
+
+                                const storagePath =
+                                    path.join(
+                                        storageDir,
+                                        storedFile.storage_key
+                                    );
+
+
+                                // The database says the file exists.
+                                // If the physical file is missing, repair
+                                // it from this upload.
+                                if (!fs.existsSync(storagePath)) {
+
+                                    fs.linkSync(
+                                        file.path,
+                                        storagePath
+                                    );
+                                }
+
+
+                            } else {
+
+                                // ------------------------------------
+                                // New content.
+                                // ------------------------------------
+
+                                const storageKey = sha256;
+
+                                const storagePath =
+                                    path.join(
+                                        storageDir,
+                                        storageKey
+                                    );
+
+
+                                // Normally this path cannot already
+                                // exist because the database transaction
+                                // serialises all upload writers.
+                                //
+                                // If it does exist, it is an untracked
+                                // physical file left by an earlier failed
+                                // operation. Replace it with the verified
+                                // temporary upload.
+                                if (fs.existsSync(storagePath)) {
+
+                                    fs.unlinkSync(storagePath);
+                                }
+
+
+                                // Create the canonical physical file.
+                                //
+                                // This is a hard link, not a file copy.
+                                // It is therefore effectively an atomic
+                                // creation of the content-store entry.
+                                fs.linkSync(
+                                    file.path,
+                                    storagePath
+                                );
+
+
+                                newlyStoredPaths.push(
+                                    storagePath
+                                );
+
+
+                                // Create its database identity.
+                                insertStoredFile.run(
+                                    sha256,
+                                    file.size,
+                                    storageKey,
+                                    file.mimetype
+                                );
+
+
+                                storedFile =
+                                    getStoredFile.get(sha256);
+                            }
+
+
+                            if (!storedFile) {
+                                throw new Error(
+                                    `Unable to create stored file record for ${sha256}`
+                                );
+                            }
+
+
+                            // ----------------------------------------
+                            // Connect the content to this workspace
+                            // version.
+                            // ----------------------------------------
+
+                            insertVersionFile.run(
+                                versionId,
+                                storedFile.id,
+                                item.filename,
+                                item.relativePath || null
                             );
                         }
 
 
-                        // ----------------------------------------
-                        // Connect it to this workspace version.
-                        // ----------------------------------------
+                        // --------------------------------------------
+                        // Return the newly-created records.
+                        // --------------------------------------------
 
-                        insertVersionFile.run(
-                            versionId,
-                            storedFile.id,
-                            item.filename,
-                            item.relativePath || null
-                        );
+                        const version =
+                            db.prepare(`
+                                SELECT
+                                    id,
+                                    workspace_asset_id,
+                                    version_number,
+                                    created_by,
+                                    version_note,
+                                    created_at
+                                FROM workspace_versions
+                                WHERE id = ?
+                            `).get(versionId);
+
+
+                        const files =
+                            db.prepare(`
+                                SELECT
+                                    wvf.id,
+                                    wvf.stored_file_id,
+                                    wvf.filename,
+                                    wvf.relative_path
+                                FROM workspace_version_files wvf
+                                WHERE wvf.workspace_version_id = ?
+                                ORDER BY
+                                    wvf.relative_path,
+                                    wvf.filename
+                            `).all(versionId);
+
+
+                        return {
+                            asset,
+                            version,
+                            files
+                        };
+
+
+                    } catch (err) {
+
+                        // --------------------------------------------
+                        // IMPORTANT:
+                        //
+                        // We are still inside the SQLite transaction
+                        // here. No other upload transaction can have
+                        // started using these content-store paths.
+                        // --------------------------------------------
+
+                        for (
+                            const storagePath of
+                            newlyStoredPaths
+                        ) {
+
+                            try {
+                                fs.unlinkSync(storagePath);
+                            } catch (cleanupError) {
+                                console.error(
+                                    'Failed to remove newly-created content file:',
+                                    storagePath,
+                                    cleanupError
+                                );
+                            }
+                        }
+
+                        throw err;
                     }
-
-
-                    // --------------------------------------------
-                    // Return the newly-created records.
-                    // --------------------------------------------
-
-                    const version =
-                        db.prepare(`
-                            SELECT
-                                id,
-                                workspace_asset_id,
-                                version_number,
-                                created_by,
-                                version_note,
-                                created_at
-                            FROM workspace_versions
-                            WHERE id = ?
-                        `).get(versionId);
-
-
-                    const files =
-                        db.prepare(`
-                            SELECT
-                                wvf.id,
-                                wvf.stored_file_id,
-                                wvf.filename,
-                                wvf.relative_path
-                            FROM workspace_version_files wvf
-                            WHERE wvf.workspace_version_id = ?
-                            ORDER BY
-                                wvf.relative_path,
-                                wvf.filename
-                        `).all(versionId);
-
-
-                    return {
-                        asset,
-                        version,
-                        files
-                    };
                 });
 
 
             // ----------------------------------------------------
-            // Commit the complete database operation.
+            // Start the transaction as an IMMEDIATE transaction.
             // ----------------------------------------------------
 
             const result =
-                createAssetVersion();
+                  createAssetVersion.immediate();
 
+           for (const tempPath of tempPaths) {
+
+                try {
+                    await fs.promises.unlink(tempPath);
+                } catch (err_) {
+                    // Temporary file may already have been removed.
+                    // This does not invalidate the successful upload.
+                }
+            }
 
             return res.status(201).json({
                 status: 'created',
@@ -992,26 +1008,6 @@ router.post(
                     // Already deleted or moved.
                 }
             }
-
-
-            // ----------------------------------------------------
-            // If the transaction failed, remove only physical
-            // files that THIS request newly created.
-            //
-            // Existing deduplicated files are never touched.
-            // ----------------------------------------------------
-           //  this creates an orphan because of collision - needs to be resolved
-           // for (const storagePath of newlyStoredPaths) {
-//
-  //              try {
-    //                await fs.promises.unlink(
-      //                  storagePath
-        //            );
-          //      } catch (err_) {
-                    // Already removed.
-            //    }
-          //  }
-
 
             console.error(
                 'Developer asset upload failed:',
