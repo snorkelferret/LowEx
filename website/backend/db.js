@@ -112,14 +112,11 @@ const applyAssetRepositorySchema = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       asset_type TEXT,
-      owner_id INTEGER NOT NULL,
       description TEXT,
       recommended_version_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_active INTEGER NOT NULL DEFAULT 1,
-      FOREIGN KEY (owner_id)
-        REFERENCES users(id),
       UNIQUE (name)
     );
   `);
@@ -215,9 +212,6 @@ const applyAssetRepositorySchema = () => {
       idx_workspace_versions_asset
       ON workspace_versions(workspace_asset_id);
 
-    CREATE INDEX IF NOT EXISTS
-      idx_assets_owner
-      ON assets(owner_id);
 
     CREATE INDEX IF NOT EXISTS
       idx_asset_versions_asset

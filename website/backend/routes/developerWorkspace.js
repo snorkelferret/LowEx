@@ -1976,14 +1976,12 @@ router.post(
                                 INSERT INTO assets (
                                     name,
                                     asset_type,
-                                    owner_id,
                                     description
                                 )
                                 VALUES (?, ?, ?, ?)
                             `).run(
                                 approval.workspace_asset_name,
                                 approval.workspace_asset_type || null,
-                                decidedBy,
                                 approval.workspace_asset_description || null
                             );
 
