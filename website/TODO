@@ -43,34 +43,35 @@ COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
     JWT, so an already-copied token stays valid until it expires. See item 10.
 
 
-THE TWO DEPENDENCY TREES (read this before touching routes)
-----------------------------------------------------------
-The backend runs on an Express version that the manifest does not describe.
-There is no backend/package.json, but there IS a backend/node_modules, and
-Node resolves from the requiring file upward, so:
+ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
+--------------------------------------------
+There used to be a second, unmanaged tree at backend/node_modules with no
+backend/package.json behind it. Node resolved from backend/server.js upward,
+so the server ran Express 5.2.1 from that tree while the root manifest claimed
+express ^4.19.2, and part of the backend's dependencies (bcryptjs,
+better-sqlite3, multer, passport) came from the root tree and part from the
+nested one.
 
-    backend/server.js  ->  backend/node_modules/express      = 5.2.1
-                           backend/node_modules/path-to-regexp = 8.4.2
-                       ->  ../node_modules/express           = 4.22.2  (unused)
-                           ../node_modules/bcryptjs          = used!
+backend/node_modules has been deleted and the root manifest now states the
+versions that were actually in use:
 
-The backend therefore depends on BOTH trees. Consequences:
+    express    ^4.19.2  ->  ^5.2.1
+    dotenv     ^16.4.5  ->  ^17.4.2
 
-  * Root package.json pins express ^4.19.2, but the server runs Express 5.
-    Anything version-sensitive behaves per Express 5, not per the manifest.
-  * Express 5 wildcards need a name: app.get('/*splat'), not app.get('*').
-    A bare '*' throws "Missing parameter name at index 1" at startup.
-  * bcryptjs, better-sqlite3, jsonwebtoken etc. come from the root tree, so
-    deleting either tree breaks the server in a way that looks unrelated.
-  * backend/node_modules cannot be reproduced from anything committed — a
-    fresh `npm install` at the root produces Express 4 and the server will
-    not start.
+Every backend dependency now resolves from the root tree. Verified: 0 modules
+resolve to backend/node_modules, the server starts, and the full behaviour
+battery passes (SPA fallback, /api 404, auth, sub-claim tokens, rejection of
+old and forged tokens, is_active, login round-trip, developer upload, logout).
 
-Recommended: pick ONE tree and make the manifest match it. Either give the
-backend its own package.json (express ^5) and install there, or remove
-backend/node_modules and list every backend dependency in the root manifest
-with the versions actually in use. Until then, do not trust package.json when
-reasoning about runtime behaviour — check backend/node_modules.
+Consequences to remember:
+
+  * The backend IS Express 5. Express 5 wildcards need a name:
+    app.get('/*splat'), NOT app.get('*'), which throws
+    "Missing parameter name at index 1" at startup.
+  * dotenv 17 prints the "◇ injected env ... // tip:" banner. Cosmetic.
+  * Do not run `npm install` inside backend/ — it will recreate the second
+    tree and shadow the root one again.
+  * Express 5 sets req.body to undefined where Express 4 gave {}. See item 21.
 
 OUTSTANDING FROM CODE REVIEW
 ----------------------------
@@ -208,3 +209,22 @@ They MUST be dealt with before any real user data exists.
     Fix is mechanical: `const { x } = req.body ?? {};`, or use `req.body?.x`.
     backend/routes/developerWorkspace.js already does this correctly.
     Low severity (malformed requests only) but trivially avoided.
+
+22) npm audit: 2 high-severity advisories in direct dependencies.
+    Surfaced by the dependency consolidation; both pre-date it.
+
+      multer 2.2.0   -> 2.4.0 available (same major)
+        DoS via crafted multipart field names, file-descriptor leak and
+        orphaned disk writes on aborted uploads, and a file-size-limit bypass
+        via an async fileFilter race. This is the module behind the upload
+        route, so these apply to real usage even though fileFilter is not
+        used yet. Fixes overlap with item 9 -- do them together.
+
+      nodemailer 9.0.5 -> 10.0.12 (major bump)
+        Multiple advisories including cross-tenant SMTP credential disclosure.
+        nodemailer is not actually used yet (the SMTP integration is still a
+        TODO stub in inviteDevs.js), so the bump is low risk.
+
+    `npm audit fix` handles both. Deferred rather than bundled into the
+    dependency consolidation, since it is a separate change with its own
+    risk profile.
