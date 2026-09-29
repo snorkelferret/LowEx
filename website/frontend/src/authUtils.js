@@ -27,14 +27,35 @@ export function checkAuthGuard(requiredRole) {
  * and structural state synchronization.
  */
 export async function executeGlobalLogout() {
+  // The session cookie is httpOnly, so only the server can clear it. If that
+  // call fails we must not pretend the user is signed out.
+  let serverLogoutFailed = false;
+
   try {
-    // Terminate session state token context on backend server (removes httpOnly cookie)
-    await fetch('/api/auth/logout', { method: 'POST' });
+    const res = await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      serverLogoutFailed = true;
+      console.error('Server refused to terminate the session:', res.status);
+    }
   } catch (err) {
+    serverLogoutFailed = true;
     console.error('Network failure during server session teardown:', err);
-  } finally {
-    // Always wipe local identity profiles and redirect to main gate
-    localStorage.clear();
-    window.location.href = '/index.html';
   }
+
+  // Wipe local identity profiles regardless — the user asked to leave.
+  localStorage.clear();
+
+  if (serverLogoutFailed) {
+    alert(
+      'You have been signed out of this browser, but the server could not be ' +
+      'reached to end the session. On a shared machine, close the browser.'
+    );
+  }
+
+  window.location.href = '/index.html';
 }

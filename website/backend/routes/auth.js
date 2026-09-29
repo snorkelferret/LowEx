@@ -36,25 +36,31 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // 6. Sign JWT with Single-Source Role
+    // 6. Sign JWT with Single-Source Role.
+    //
+    // `sub` is the standard JWT subject claim and is the only identity claim
+    // authenticateToken reads. Keep this in step with the issuers in server.js.
     const payload = {
-      id: user.id,
+      sub: user.id,
       username: user.username,
-      role: user.role // Only store 'superuser', 'admin', or 'user'
+      role: user.role // Only store 'superuser', 'admin', 'developer' or 'user'
     };
 
     const token = jwt.sign(
       payload,
-      process.env.JWT_SECRET || 'fallback_secret',
+      process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
     // 7. Return Clean Response (Never return password_hash!)
 
-    // Bake the secure HTTP-only cookie
+    // Bake the secure HTTP-only cookie.
+    // These attributes must match res.clearCookie() in /logout below.
     res.cookie('token', token, {
       httpOnly: true, // Prevents cross-site scripting (XSS) attacks
       secure: process.env.NODE_ENV === 'production', // true in production
+      sameSite: 'lax',
+      path: '/',
       maxAge: 8 * 60 * 60 * 1000 // 8 hours matching the JWT expiration
     });
       
@@ -72,6 +78,27 @@ router.post('/login', async (req, res) => {
     console.error('Login error:', err);
     return res.status(500).json({ error: 'Internal server authentication error' });
   }
+});
+
+// POST /api/auth/logout
+//
+// The session cookie is httpOnly, so the browser cannot remove it — only the
+// server can. Without this route "log out" merely wiped localStorage and left
+// a working session behind.
+//
+// Note: this is a stateless JWT, so this clears the cookie for THIS browser
+// only. A token that was already copied elsewhere stays valid until it expires.
+// Real revocation needs a server-side session record (see the unused
+// `sessions` table in db.js).
+router.post('/logout', (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/'
+  });
+
+  return res.json({ success: true });
 });
 
 module.exports = router;

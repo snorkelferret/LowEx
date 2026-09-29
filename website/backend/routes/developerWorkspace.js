@@ -40,7 +40,7 @@ router.get(
     requireRole('developer', 'admin', 'superuser'),
     async (req, res) => {
         try {
-            const developerId = req.user?.userId ?? req.user?.id;
+            const developerId = req.user?.id;
 
             if (!developerId) {
                 return res.status(401).json({
@@ -216,7 +216,7 @@ router.post(
             });
         }
 
-        const developerId = req.user?.userId;
+        const developerId = req.user?.id;
 
         if (!developerId) {
             return res.status(401).json({
@@ -1053,7 +1053,7 @@ router.post(
     async (req, res) => {
 
         const developerId =
-            req.user?.userId ?? req.user?.id;
+            req.user?.id;
 
         if (!developerId) {
             return res.status(401).json({
@@ -1467,7 +1467,7 @@ router.post(
     async (req, res) => {
 
         const developerId =
-            req.user?.userId ?? req.user?.id;
+            req.user?.id;
 
         if (!developerId) {
             return res.status(401).json({
@@ -1687,7 +1687,7 @@ router.post(
             Number(req.params.approvalId);
 
         const decidedBy =
-            req.user?.userId ?? req.user?.id;
+            req.user?.id;
 
         if (!decidedBy) {
             return res.status(401).json({
@@ -1830,7 +1830,7 @@ router.post(
             Number(req.params.approvalId);
 
         const decidedBy =
-            req.user?.userId ?? req.user?.id;
+            req.user?.id;
 
         if (!decidedBy) {
             return res.status(401).json({

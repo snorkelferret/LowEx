@@ -40,7 +40,17 @@ const HOST = process.env.HOST;
 const CLIENT_URL = process.env.CLIENT_URL ;
 const JWT_SECRET = process.env.JWT_SECRET ;
 
-console.log("ENV CONFIG PORT ", PORT, "HOST ", HOST, "CLIENT URL ", CLIENT_URL); 
+// Fail fast. Without a secret every session would be signed with a value that
+// lives in this repo, so a missing JWT_SECRET must stop the server rather than
+// silently degrade into forgeable tokens.
+if (!JWT_SECRET) {
+  console.error(
+    'FATAL: JWT_SECRET is missing from the environment. Refusing to start.'
+  );
+  process.exit(1);
+}
+
+console.log("ENV CONFIG PORT ", PORT, "HOST ", HOST, "CLIENT URL ", CLIENT_URL);
 
 
 // Enable CORS dynamically for client URL
@@ -66,8 +76,19 @@ app.use('/api/developer/workspace', developerWorkspaceRoutes);
 // 4. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
 app.use('/app', require('./routes/views'));
 
-// 5. Fallback: Any unknown public route goes back to the splash page
-app.get('/*splat', (req, res) => {
+// 5. Unknown API routes must stay JSON. Without this they would fall through
+// to the SPA fallback below and return index.html with a 200, which is a
+// miserable failure mode for anything calling the API.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// 6. Fallback: Any other unknown public route goes back to the splash page.
+//
+// Express 4 syntax. '/*splat' is Express 5 / path-to-regexp v8 only; under
+// Express 4's path-to-regexp 0.1.x it compiles to /^\/(.*)splat\/?$/i and
+// matches nothing except URLs literally ending in "splat".
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
@@ -136,7 +157,7 @@ app.get('/api/auth/google/callback', (req, res, next) => {
     }
 
     const sessionToken = jwt.sign(
-      { userId: user.id, username: user.username, role: user.role },
+      { sub: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: '2h' }
     );
@@ -197,7 +218,7 @@ app.post('/api/auth/register-invited', async (req, res) => {
 // 6. 2FA SETUP (FOR LOGGED IN HIGH-PRIVILEGE USERS)
 // -------------------------------------------------------------
 app.get('/api/auth/setup-2fa', authenticateToken, async (req, res) => {
-  const user = queries.getUserById.get(req.user.userId);
+  const user = queries.getUserById.get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const secret = speakeasy.generateSecret({
@@ -283,7 +304,7 @@ app.post('/api/auth/login-step2', (req, res) => {
 
   const sessionToken = jwt.sign(
     {
-      userId: user.id,
+      sub: user.id,
       username: user.username,
       role: user.role
     },
@@ -291,10 +312,13 @@ app.post('/api/auth/login-step2', (req, res) => {
     { expiresIn: '2h' }
   );
 
+ // Cookie attributes must match res.clearCookie() in routes/auth.js or the
+ // logout route cannot reliably remove this cookie.
  res.cookie('token', sessionToken, {
   httpOnly: true,
-  secure: false,       // true in production over HTTPS
+  secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',
+  path: '/',
   maxAge: 2 * 60 * 60 * 1000
 });
 

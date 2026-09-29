@@ -19,8 +19,10 @@ router.get('/superuser', authenticateToken, requireSuperuser, (req, res) => {
 });
 
 // Developer View
+// NB: the page is devDashboard.html. Vite emits it from frontend/devDashboard.html
+// (vite.config.js `input.developer`); there is no developerPanel.html page.
 router.get('/developer', authenticateToken, requireSuperuser, (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/developerPanel.html'));
+  res.sendFile(path.join(__dirname, '../../frontend/dist/devDashboard.html'));
 });
 
 module.exports = router;
