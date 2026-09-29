@@ -90,6 +90,6 @@ console.log('  catch-all is last ......... ' + (splatIsLast ? 'yes  OK' : 'NO  P
 console.log('  routes after fallbacks .... ' +
   (stragglers.length === 0 ? 'none  OK' : stragglers.join('\n                              ')));
 console.log('');
-console.log(ok ? '  PASS' : '  FAIL — move the fallbacks below every route (see server.js section 9)');
+console.log(ok ? '  PASS' : '  FAIL — move the fallbacks below every route (see server.js section 8)');
 
 process.exit(ok ? 0 : 1);

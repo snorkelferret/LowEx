@@ -68,8 +68,14 @@ app.use(express.static(path.join(__dirname, '../frontend/public')));
 app.use('/api/auth', require('./routes/auth'));
 
 // 3. Admin & Superuser API routes
+//
+// /api/superuser is mounted ONCE, here, with authenticateToken applied at the
+// mount so the protection is visible at the point of definition.
+// routes/superuser.js:6 additionally does
+// `router.use(authenticateToken, requireSuperuser)` internally, so the routes
+// stay protected even if this outer guard is ever dropped.
 app.use('/api/admin', require('./routes/admin'));
-app.use('/api/superuser', require('./routes/superuser'));
+app.use('/api/superuser', authenticateToken, superuserRoutes);
 app.use('/api/inviteDevs', inviteDevRoutes);
 app.use('/api/developer/workspace', developerWorkspaceRoutes);
 
@@ -318,22 +324,18 @@ res.json({
 
 
 // -------------------------------------------------------------
-// 8. SUPERUSER ROUTES
-// -------------------------------------------------------------
-// This replaces your old single app.get('/api/superuser/dashboard') route!
-app.use('/api/superuser', authenticateToken, superuserRoutes);
-
-
-// -------------------------------------------------------------
-// 9. FALLBACKS — MUST REMAIN LAST
+// 8. FALLBACKS — MUST REMAIN LAST
 // -------------------------------------------------------------
 //
 // Express matches in registration order, so a catch-all registered earlier
 // silently swallows every route declared below it. That is not theoretical:
 // with these two handlers sitting up at section 4, login-step1, login-step2,
-// the Google OAuth routes, create-invite, register-invited, setup-2fa and the
-// authenticated /api/superuser mount were all unreachable — /api/* returned
-// this 404 body and GET routes got handed index.html.
+// the Google OAuth routes, create-invite, register-invited and setup-2fa were
+// all unreachable — /api/* returned this 404 body and GET routes got handed
+// index.html.
+//
+// Run `npm run check:routes` after touching this file; it fails if anything
+// ends up registered below this block.
 //
 // Add new routes ABOVE this block, never below it.
 

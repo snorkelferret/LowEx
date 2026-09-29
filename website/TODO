@@ -40,8 +40,20 @@ COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
     login-step1/step2, OAuth, invite, registration, 2FA and authenticated
     /api/superuser routes. Every one of them became unreachable, and login
     failed with a "Not found" body — the catch-all's own 404. Both handlers now
-    sit in section 9, last in the file, with scripts/check-route-order.js
+    sit in section 8, last in the file, with scripts/check-route-order.js
     (npm run check:routes) as a guard.
+  * /api/superuser was mounted twice — once without an outer guard at the top
+    of the route list, once with authenticateToken further down where it was
+    shadowed and therefore dead. Now mounted once, with authenticateToken
+    applied at the mount. routes/superuser.js keeps its own internal
+    router.use() guard as well, so the routes are protected either way.
+  * multer 2.2.0 -> 2.4.0, clearing its advisories (DoS via crafted multipart
+    field names, file-descriptor leak and orphaned disk writes on aborted
+    uploads, plus a file-size-limit bypass via an async fileFilter race). This
+    is the module behind the upload route, so it affected live code. Verified
+    after the bump: single-file upload, multi-file upload across directories,
+    an empty upload (400 from the handler, no crash), and SHA-256 dedup (one
+    stored_files row shared by three version references).
 
   CONSEQUENCES TO EXPECT:
   * Every existing session is invalidated — old tokens carry `userId`/`id`, not
@@ -217,48 +229,25 @@ They MUST be dealt with before any real user data exists.
     backend/routes/developerWorkspace.js already does this correctly.
     Low severity (malformed requests only) but trivially avoided.
 
-22) npm audit: 2 high-severity advisories in direct dependencies.
-    Surfaced by the dependency consolidation; both pre-date it.
-
-      multer 2.2.0   -> 2.4.0 available (same major)
-        DoS via crafted multipart field names, file-descriptor leak and
-        orphaned disk writes on aborted uploads, and a file-size-limit bypass
-        via an async fileFilter race. This is the module behind the upload
-        route, so these apply to real usage even though fileFilter is not
-        used yet. Fixes overlap with item 9 -- do them together.
+22) npm audit: 1 remaining high-severity advisory (nodemailer).
+    Multer was fixed on 2026-09-29 by bumping 2.2.0 -> 2.4.0; see COMPLETED.
+    What is left:
 
       nodemailer 9.0.5 -> 10.0.12 (major bump)
         Multiple advisories including cross-tenant SMTP credential disclosure.
         nodemailer is not actually used yet (the SMTP integration is still a
         TODO stub in inviteDevs.js), so the bump is low risk.
 
-    `npm audit fix` handles both. Deferred rather than bundled into the
-    dependency consolidation, since it is a separate change with its own
-    risk profile.
+    `npm audit fix` handles it. Left out of the multer change because it is a
+    major-version bump and multer was the one that affected live code.
 
-23) Remove the duplicate /api/superuser mount in backend/server.js.
-    It is mounted twice:
-
-      line  72  app.use('/api/superuser', require('./routes/superuser'));
-      line 324  app.use('/api/superuser', authenticateToken, superuserRoutes);
-
-    The first one wins, so line 324 has never executed. This is harmless --
-    routes/superuser.js:6 does `router.use(authenticateToken, requireSuperuser)`
-    internally, so the live mount is fully protected -- but the redundant
-    second mount hides which definition is real, and it is registered below
-    the fallback block, so it would be shadowed anyway.
-
-    Delete line 324 (and its comment), or delete line 72 and hoist the
-    authenticateToken call. Either way, one mount.
-
-24) REGRESSION GUARD: keep the fallbacks last, and test it.
-    backend/server.js section 9 holds the /api JSON 404 and the SPA catch-all.
+23) REGRESSION GUARD: keep the fallbacks last, and test it.
+    backend/server.js section 8 holds the /api JSON 404 and the SPA catch-all.
     Express matches in registration order, so a catch-all registered too early
     silently swallows every route declared below it. That is not theoretical --
     it is exactly how login-step1, login-step2, the Google OAuth routes,
-    create-invite, register-invited, setup-2fa and the authenticated
-    /api/superuser mount all became unreachable and login broke with a
-    "Not found" body.
+    create-invite, register-invited and setup-2fa all became unreachable and
+    login broke with a "Not found" body.
 
     Nothing else in the test suite catches this, so there is now a check:
 
