@@ -26,11 +26,11 @@ const pageConfigurations = [
     output: 'frontend/adminDashboard.html',
     title: 'Admin Management',
      scripts: [
-      './src/header.js',          // Fill in login details	  	 
+      './src/header.js',          // Fill in login details
       './src/admin.js',    // Admin Core logic
       './src/sharedInvites.js'    // Exact same single-instance file compiled here!
     ],
-    styles: '/styles//styles.css',
+    styles: '/styles/styles.css',
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',

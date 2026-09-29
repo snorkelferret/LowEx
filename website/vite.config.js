@@ -28,7 +28,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      outDir: '../dist',
+      // Relative to `root`, which is <repo>/frontend — so this must be 'dist',
+      // not '../dist'. backend/server.js:54 serves <repo>/frontend/dist, and
+      // '../dist' wrote to <repo>/dist where nothing ever read it.
+      outDir: 'dist',
       emptyOutDir: true,
       rollupOptions: {
         input: {

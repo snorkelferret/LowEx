@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "type": "commonjs",
   "scripts": {
+    "generate:pages": "node build.js",
+    "predev": "npm run generate:pages",
+    "prebuild": "npm run generate:pages",
+    "build": "vite build",
     "start:backend": "node backend/server.js",
     "start:frontend": "vite",
     "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
