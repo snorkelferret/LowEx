@@ -1,2 +1,161 @@
-1) cleanup the auth.js rontend backend middleware and authTools......
-2) get SMTP server setup
+LOW EXPECTATIONS — TODO
+=======================
+
+PRE-EXISTING
+------------
+1) cleanup the auth.js frontend backend middleware and authUtils......
+2) get SMTP server setup (unblocks the two "TODO: Connect Nodemailer" stubs in
+   backend/routes/inviteDevs.js)
+
+
+COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
+------------------------------------------------------
+  * SPA fallback fixed. `app.get('/*splat')` is Express 5 syntax and matched
+    nothing useful under Express 4; now `app.get('*')`, plus a JSON 404 handler
+    on /api so unknown API routes no longer return index.html with a 200.
+  * JWT identity standardised on the `sub` claim, and authenticateToken now
+    re-reads role + is_active from the DB on every request, so deactivating or
+    demoting an account takes effect immediately. All `userId ?? id` fallbacks
+    removed from backend/routes/developerWorkspace.js.
+  * JWT fallback secret removed; server.js refuses to start without JWT_SECRET.
+    Verified: a token forged with the old 'fallback_secret' is now rejected.
+  * POST /api/auth/logout added; cookie flags aligned between set and clear.
+  * Build/serve path fixed: vite outDir is now 'dist' (was '../dist', which
+    wrote to <repo>/dist where nothing read it). routes/views.js /app/developer
+    pointed at a non-existent developerPanel.html; now devDashboard.html.
+    build.js double-slash in the admin stylesheet href fixed; shopfront.html had
+    '/styles.css' instead of '/styles/styles.css'.
+  * Generated pages are now build artifacts: .gitignore covers
+    frontend/dist/, frontend/{admin,superuser,dev}Dashboard.html, and the DB.
+    `npm run dev` / `npm run build` regenerate them via predev/prebuild.
+  * backend/database.db untracked (still on disk). NOTE: history is not purged —
+    commit 240f34c still contains a copy. Passwords are dummy, so this is
+    probably acceptable, but rotating history needs git filter-repo/BFG.
+
+  CONSEQUENCES TO EXPECT:
+  * Every existing session is invalidated — old tokens carry `userId`/`id`, not
+    `sub`. Everyone must log in again. This is intentional.
+  * Logout only clears the cookie for the current browser. It is a stateless
+    JWT, so an already-copied token stays valid until it expires. See item 10.
+
+
+OUTSTANDING FROM CODE REVIEW
+----------------------------
+These are accepted for now because this is a dummy/test site.
+They MUST be dealt with before any real user data exists.
+
+[AUTH]
+
+3) Remove the hardcoded 2FA bypass in the login flow.
+   backend/server.js:271-274 — `else if (code === '000000') { verified = true; }`
+   Combined with two_factor_secret defaulting to NULL for every account, this
+   lets anyone mint a superuser JWT with no password.
+   Also make login-step1 issue a single-use challenge token that login-step2
+   must present; right now step 2 trusts the username in the request body.
+
+4) Decide the fate of POST /api/auth/login (backend/routes/auth.js:9-83).
+   It is a second login door that skips 2FA completely and is what the
+   "sign in as another user" modal uses (frontend/src/superuser.js:40).
+   Either gate it through the same 2FA flow or delete it.
+   Also: no rate limiting anywhere — 6-digit TOTP with `window: 1` and
+   unlimited attempts is brute-forceable.
+
+[ASSET WORKFLOW]
+
+5) Creative approval cannot approve a NEW repository asset.
+   backend/routes/developerWorkspace.js:~1980 — the INSERT has 3 columns but
+   4 placeholders:
+       INSERT INTO assets (name, asset_type, description) VALUES (?, ?, ?, ?)
+   better-sqlite3 throws "4 values for 3 columns", and the surrounding catch
+   turns it into a misleading 409. (Feature is still in progress.)
+
+6) The approval workflow has no frontend and no admin-side reads.
+   Nothing in frontend/ calls technical-check, creative-approval, approve or
+   reject. There is also no endpoint to LIST pending approvals and no endpoint
+   to download the submitted files, so an admin would have to guess integer IDs.
+   GET /assets also does not return creative_locked / repository_version_id,
+   so the client could not render lock state even with buttons added.
+
+7) Set assets.recommended_version_id (or drop the columns).
+   `assets.recommended_version_id`, `asset_recommended_versions`,
+   `asset_comments`, `sessions`, `api_keys` and `audit_logs` are all created in
+   backend/db.js but never written or read. audit_logs is the notable gap for an
+   approval workflow that should record who approved what.
+
+[SECURITY / HARDENING]
+
+8) Stored XSS in the invite table.
+   frontend/src/sharedInvites.js:84-105, 169, 178 interpolate invite.email /
+   invite.role into innerHTML. POST /api/inviteDevs/generate-invite
+   (backend/routes/inviteDevs.js:41) only checks `if (!email)`, so an invite
+   to `<img src=x onerror=...>` executes in the admin session.
+   frontend/src/developerWorkspace.js already does this correctly with
+   escapeHtml — copy that approach.
+
+9) Add upload limits.
+   backend/routes/developerWorkspace.js:196-207 — multer is configured with
+   only `maxCount: 1000`: no `limits.fileSize`, no `fileFilter`, and no
+   client-side size check. Any developer account can fill the disk via
+   backend/uploads/tmp. Also add a client-side MAX_TOTAL_SIZE guard and, if
+   progress feedback is wanted, switch the upload to XMLHttpRequest.
+
+10) Real session revocation.
+    Logout now clears the cookie, but tokens are stateless, so a copied token
+    survives until it expires. The unused `sessions` table (backend/db.js:728)
+    could hold a jti per login, checked in authenticateToken.
+
+11) Add CSRF protection.
+    Cookie flags are now consistent (httpOnly, sameSite=lax, secure in
+    production), but there is still no CSRF token.
+
+12) Stop returning err.message verbatim to clients.
+    backend/routes/developerWorkspace.js ~:1018 and ~:2179 leak
+    SQLite/filesystem internals.
+
+13) OAuth token is passed in a URL query string.
+    backend/server.js:143 — `/portal.html?token=<jwt>` leaks via referrer,
+    browser history and server logs. Use a short-lived one-time code instead.
+
+14) Treat dashboard role checks as cosmetic.
+    frontend/src/header.js:6-33, admin.js, superuser.js:174 gate on
+    localStorage.user_info. The /api routes are properly guarded, but the
+    dashboard shells are served by express.static with no auth
+    (backend/server.js:54). admin.js additionally performs no role check at all.
+
+[CLEANUP]
+
+15) Fix backend/reset/resetAssetData.js:~7.
+    `storageDir = path.join(__dirname, '../../uploads/files')` resolves to
+    <repo>/uploads/files, but files live in <repo>/backend/uploads/files.
+    The script therefore wipes the stored_files table and then reports
+    "nothing to delete", orphaning every physical file permanently.
+
+16) Use '' instead of NULL for root-level relative_path.
+    backend/db.js:178-182 — UNIQUE(workspace_version_id, relative_path,
+    filename) does not constrain root files because SQLite treats NULLs as
+    distinct. Only the in-process `logicalPaths` set prevents duplicates today.
+
+17) Drop or fix the filename_overrides feature.
+    backend/routes/developerWorkspace.js:~434 looks the override up by the
+    already-edited final path, while frontend/src/developerWorkspace.js:572
+    keys it by the original path — the lookup can never hit, so the feature is
+    dead code.
+
+18) Missing GET endpoints for developer workspace storage.
+
+19) Dead code / minor frontend fixes.
+    - frontend/src/superuser.js:20-27 (`signInAsBtn` exists in no HTML)
+    - frontend/src/admin.js:21 (element id `invites-table-body` is wrong;
+      the real id is `invite-list-body`) and admin.js never renders stats
+    - cloudflareControl.html has no JS handlers bound (unlike repoControl.html)
+    - frontend/src/sandboxEngine.js:64-74 splices inside forEach, skipping
+      collectibles
+    - frontend/src/developerWorkspace.js:649-655 wipes the success message it
+      just set, because clearUpload() clears #uploadStatus
+    - frontend/src/sharedInvites.js:23-42 — reissue calls a non-existent
+      route, and the expiry badge uses createdAt instead of the API's
+      expiresAt; `new Date('2026-09-29 14:00:00')` is Invalid Date in Safari
+
+20) Repo hygiene — remaining tracked junk.
+    logiNNotes.txt (contains a bcrypt hash) and ~40 editor backup files
+    (*~, #file#) are tracked. assets/images/mud01.nk is an 11MB Nuke script.

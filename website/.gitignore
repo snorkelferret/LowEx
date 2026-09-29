@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+node_modules/
+backend/node_modules/
+
+# ---------------------------------------------------------------------------
+# Environment / secrets
+# ---------------------------------------------------------------------------
+# .env holds JWT_SECRET and the Google OAuth client secret.
+# Add a committed .env.example with placeholder values instead.
+.env
+.env.*
+.env~
+#.env#
+#.env#
+
+# ---------------------------------------------------------------------------
+# Database — contains user records, bcrypt password hashes and TOTP secrets.
+# Never commit this.
+# ---------------------------------------------------------------------------
+backend/database.db
+backend/database.db-wal
+backend/database.db-shm
+backend/reset/database.db*
+
+# ---------------------------------------------------------------------------
+# User-uploaded content (developer asset store + multer temp dir)
+# ---------------------------------------------------------------------------
+backend/uploads/
+
+# ---------------------------------------------------------------------------
+# Editor / OS junk
+# ---------------------------------------------------------------------------
+*~
+\#*\#
+.\#*
+*.swp
+*.swo
+*.log
+.DS_Store
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+# Vite bundles into frontend/dist, which is what backend/server.js serves.
+frontend/dist/
+
+# Pages assembled by build.js from frontend/src/components/*.html.
+# These are generated — edit the components, not these. Committing them is how
+# devDashboard.html and components/developerAssets.html drifted apart.
+# Regenerated automatically by `npm run dev` / `npm run build` (predev/prebuild).
+frontend/adminDashboard.html
+frontend/superuserDashboard.html
+frontend/devDashboard.html
+
+# Stray empty directory at the repo root, superseded by frontend/dist.
+/dist/
