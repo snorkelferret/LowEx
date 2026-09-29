@@ -85,10 +85,12 @@ app.use('/api', (req, res) => {
 
 // 6. Fallback: Any other unknown public route goes back to the splash page.
 //
-// Express 4 syntax. '/*splat' is Express 5 / path-to-regexp v8 only; under
-// Express 4's path-to-regexp 0.1.x it compiles to /^\/(.*)splat\/?$/i and
-// matches nothing except URLs literally ending in "splat".
-app.get('*', (req, res) => {
+// '/*splat' is the Express 5 wildcard syntax. This backend resolves
+// backend/node_modules, which is Express 5 (path-to-regexp v8) -- NOT the
+// Express 4 pinned in the root package.json. Under Express 5 a bare '*' is a
+// hard error: "Missing parameter name at index 1". If the two dependency
+// trees are ever consolidated onto Express 4, this must become '*'.
+app.get('/*splat', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 

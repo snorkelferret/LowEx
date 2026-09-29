@@ -10,9 +10,13 @@ PRE-EXISTING
 
 COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
 ------------------------------------------------------
-  * SPA fallback fixed. `app.get('/*splat')` is Express 5 syntax and matched
-    nothing useful under Express 4; now `app.get('*')`, plus a JSON 404 handler
-    on /api so unknown API routes no longer return index.html with a 200.
+  * JSON 404 handler added on /api, so an unknown API route no longer falls
+    through to the SPA fallback and returns index.html with a 200.
+    CORRECTION: the SPA fallback itself was NOT broken. '/*splat' is correct
+    for the Express 5 that backend/node_modules actually provides, and the
+    review's claim that it "never matches" was reached by testing against the
+    ROOT node_modules (Express 4), which the server never loads. That change
+    was reverted; see the dependency section below.
   * JWT identity standardised on the `sub` claim, and authenticateToken now
     re-reads role + is_active from the DB on every request, so deactivating or
     demoting an account takes effect immediately. All `userId ?? id` fallbacks
@@ -38,6 +42,35 @@ COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
   * Logout only clears the cookie for the current browser. It is a stateless
     JWT, so an already-copied token stays valid until it expires. See item 10.
 
+
+THE TWO DEPENDENCY TREES (read this before touching routes)
+----------------------------------------------------------
+The backend runs on an Express version that the manifest does not describe.
+There is no backend/package.json, but there IS a backend/node_modules, and
+Node resolves from the requiring file upward, so:
+
+    backend/server.js  ->  backend/node_modules/express      = 5.2.1
+                           backend/node_modules/path-to-regexp = 8.4.2
+                       ->  ../node_modules/express           = 4.22.2  (unused)
+                           ../node_modules/bcryptjs          = used!
+
+The backend therefore depends on BOTH trees. Consequences:
+
+  * Root package.json pins express ^4.19.2, but the server runs Express 5.
+    Anything version-sensitive behaves per Express 5, not per the manifest.
+  * Express 5 wildcards need a name: app.get('/*splat'), not app.get('*').
+    A bare '*' throws "Missing parameter name at index 1" at startup.
+  * bcryptjs, better-sqlite3, jsonwebtoken etc. come from the root tree, so
+    deleting either tree breaks the server in a way that looks unrelated.
+  * backend/node_modules cannot be reproduced from anything committed — a
+    fresh `npm install` at the root produces Express 4 and the server will
+    not start.
+
+Recommended: pick ONE tree and make the manifest match it. Either give the
+backend its own package.json (express ^5) and install there, or remove
+backend/node_modules and list every backend dependency in the root manifest
+with the versions actually in use. Until then, do not trust package.json when
+reasoning about runtime behaviour — check backend/node_modules.
 
 OUTSTANDING FROM CODE REVIEW
 ----------------------------
@@ -159,3 +192,19 @@ They MUST be dealt with before any real user data exists.
 20) Repo hygiene — remaining tracked junk.
     logiNNotes.txt (contains a bcrypt hash) and ~40 editor backup files
     (*~, #file#) are tracked. assets/images/mud01.nk is an 11MB Nuke script.
+
+21) Guard req.body destructuring (Express 5 behaviour change).
+    Express 5 sets req.body to undefined when no body parser matched, where
+    Express 4 gave {}. So any unguarded `const { x } = req.body` throws a
+    TypeError and returns a 500 instead of a clean 400 when a client posts
+    without a JSON content-type. Affected, all outside a try block:
+
+        backend/routes/auth.js:10           (username, password)
+        backend/routes/superuser.js         (github/keys, cloudflare/keys)
+        backend/routes/inviteDevs.js:42     (email, role)
+        backend/server.js                   login-step1, login-step2,
+                                            create-invite, register-invited
+
+    Fix is mechanical: `const { x } = req.body ?? {};`, or use `req.body?.x`.
+    backend/routes/developerWorkspace.js already does this correctly.
+    Low severity (malformed requests only) but trivially avoided.
