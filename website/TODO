@@ -4,8 +4,24 @@ LOW EXPECTATIONS — TODO
 PRE-EXISTING
 ------------
 1) cleanup the auth.js frontend backend middleware and authUtils......
-2) get SMTP server setup (unblocks the two "TODO: Connect Nodemailer" stubs in
-   backend/routes/inviteDevs.js)
+2) Write the inviteDevs email flow: SMTP server setup plus the two stubs in
+   backend/routes/inviteDevs.js
+
+     line  55  // TODO: Connect Nodemailer transportation wrapper here
+     line 114  // TODO: Trigger email service with `newRawToken` to developer's email
+
+   Do the nodemailer 9 -> 10 upgrade (item 22) as part of this, not before.
+   Nodemailer is not imported anywhere yet, so bumping it now would mean
+   testing a major-version change against nothing. It is one `npm audit fix`
+   once there is real code to exercise it.
+
+   Worth noting while in here: without email there is currently no way for a
+   developer to receive either link. generate-invite returns the invite URL in
+   its own API response (line 57) rather than sending it, and request-reissue
+   returns only success/reissuesRemaining/expiresAt (line 116) — it never
+   returns the new token it just minted at line 109, so the call succeeds and
+   the developer gets nothing usable. Also generate-invite hardcodes
+   http://localhost:5173 (line 53), which needs to come from config.
 
 
 COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
@@ -97,7 +113,15 @@ OUTSTANDING FROM CODE REVIEW
 These are accepted for now because this is a dummy/test site.
 They MUST be dealt with before any real user data exists.
 
-[AUTH]
+[AUTH]  — DEFERRED BY DECISION (2026-09-29), not overlooked
+  Items 3 and 4 are a real authentication bypass: anyone can mint a superuser
+  session with no password. They are knowingly left in place because proper
+  logins are not needed yet and there is other work queued first.
+
+  Treat these as the gate for going beyond a dummy site, not as outstanding
+  bugs. The moment this site holds anything real, or is reachable by anyone
+  who is not you, items 3 and 4 are the first thing to fix — before any other
+  item in this file.
 
 3) Remove the hardcoded 2FA bypass in the login flow.
    backend/server.js:271-274 — `else if (code === '000000') { verified = true; }`
@@ -235,11 +259,15 @@ They MUST be dealt with before any real user data exists.
 
       nodemailer 9.0.5 -> 10.0.12 (major bump)
         Multiple advisories including cross-tenant SMTP credential disclosure.
-        nodemailer is not actually used yet (the SMTP integration is still a
-        TODO stub in inviteDevs.js), so the bump is low risk.
 
-    `npm audit fix` handles it. Left out of the multer change because it is a
-    major-version bump and multer was the one that affected live code.
+    DEFERRED BY DECISION: do this as part of item 2, when the inviteDevs email
+    flow is written. Nodemailer is not imported anywhere yet, so upgrading it
+    now would mean validating a major-version change against no call sites.
+    `npm audit fix` is the whole fix once there is code to exercise it.
+
+    This is the only remaining audit finding. It is not urgent because nothing
+    imports the module, and it is not a security exposure until the SMTP code
+    exists.
 
 23) REGRESSION GUARD: keep the fallbacks last, and test it.
     backend/server.js section 8 holds the /api JSON 404 and the SPA catch-all.
