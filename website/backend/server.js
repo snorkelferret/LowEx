@@ -76,24 +76,6 @@ app.use('/api/developer/workspace', developerWorkspaceRoutes);
 // 4. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
 app.use('/app', require('./routes/views'));
 
-// 5. Unknown API routes must stay JSON. Without this they would fall through
-// to the SPA fallback below and return index.html with a 200, which is a
-// miserable failure mode for anything calling the API.
-app.use('/api', (req, res) => {
-  res.status(404).json({ error: 'Not found' });
-});
-
-// 6. Fallback: Any other unknown public route goes back to the splash page.
-//
-// '/*splat' is the Express 5 wildcard syntax. This backend resolves
-// backend/node_modules, which is Express 5 (path-to-regexp v8) -- NOT the
-// Express 4 pinned in the root package.json. Under Express 5 a bare '*' is a
-// hard error: "Missing parameter name at index 1". If the two dependency
-// trees are ever consolidated onto Express 4, this must become '*'.
-app.get('/*splat', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
-
 
 
 // Prepared DB Queries
@@ -341,6 +323,35 @@ res.json({
 // This replaces your old single app.get('/api/superuser/dashboard') route!
 app.use('/api/superuser', authenticateToken, superuserRoutes);
 
+
+// -------------------------------------------------------------
+// 9. FALLBACKS — MUST REMAIN LAST
+// -------------------------------------------------------------
+//
+// Express matches in registration order, so a catch-all registered earlier
+// silently swallows every route declared below it. That is not theoretical:
+// with these two handlers sitting up at section 4, login-step1, login-step2,
+// the Google OAuth routes, create-invite, register-invited, setup-2fa and the
+// authenticated /api/superuser mount were all unreachable — /api/* returned
+// this 404 body and GET routes got handed index.html.
+//
+// Add new routes ABOVE this block, never below it.
+
+// Unknown API routes must stay JSON. Without this they would fall through to
+// the SPA fallback and return index.html with a 200, which is a miserable
+// failure mode for anything calling the API.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Any other unknown public route goes back to the splash page.
+//
+// '/*splat' is the Express 5 wildcard syntax. A bare '*' is a hard error under
+// Express 5 ("Missing parameter name at index 1") — it was valid under the
+// Express 4 the root manifest used to claim.
+app.get('/*splat', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
 
 
 app.listen(PORT, () => {

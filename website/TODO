@@ -35,6 +35,13 @@ COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
   * backend/database.db untracked (still on disk). NOTE: history is not purged —
     commit 240f34c still contains a copy. Passwords are dummy, so this is
     probably acceptable, but rotating history needs git filter-repo/BFG.
+  * REGRESSION (introduced and fixed same day): the /api JSON 404 and the SPA
+    catch-all were registered in the middle of server.js, above the
+    login-step1/step2, OAuth, invite, registration, 2FA and authenticated
+    /api/superuser routes. Every one of them became unreachable, and login
+    failed with a "Not found" body — the catch-all's own 404. Both handlers now
+    sit in section 9, last in the file, with scripts/check-route-order.js
+    (npm run check:routes) as a guard.
 
   CONSEQUENCES TO EXPECT:
   * Every existing session is invalidated — old tokens carry `userId`/`id`, not
@@ -228,3 +235,36 @@ They MUST be dealt with before any real user data exists.
     `npm audit fix` handles both. Deferred rather than bundled into the
     dependency consolidation, since it is a separate change with its own
     risk profile.
+
+23) Remove the duplicate /api/superuser mount in backend/server.js.
+    It is mounted twice:
+
+      line  72  app.use('/api/superuser', require('./routes/superuser'));
+      line 324  app.use('/api/superuser', authenticateToken, superuserRoutes);
+
+    The first one wins, so line 324 has never executed. This is harmless --
+    routes/superuser.js:6 does `router.use(authenticateToken, requireSuperuser)`
+    internally, so the live mount is fully protected -- but the redundant
+    second mount hides which definition is real, and it is registered below
+    the fallback block, so it would be shadowed anyway.
+
+    Delete line 324 (and its comment), or delete line 72 and hoist the
+    authenticateToken call. Either way, one mount.
+
+24) REGRESSION GUARD: keep the fallbacks last, and test it.
+    backend/server.js section 9 holds the /api JSON 404 and the SPA catch-all.
+    Express matches in registration order, so a catch-all registered too early
+    silently swallows every route declared below it. That is not theoretical --
+    it is exactly how login-step1, login-step2, the Google OAuth routes,
+    create-invite, register-invited, setup-2fa and the authenticated
+    /api/superuser mount all became unreachable and login broke with a
+    "Not found" body.
+
+    Nothing else in the test suite catches this, so there is now a check:
+
+        npm run check:routes      # scripts/check-route-order.js
+
+    It stubs listen(), walks app.router.stack and fails if any route or
+    mounted router sits after the catch-all. Verified in both directions: it
+    reports all 8 shadowed handlers against 50baa00 and passes on the current
+    tree. Run it before committing any change to server.js.
