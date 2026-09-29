@@ -153,6 +153,57 @@ Both are now gone — the reconciliation recreated those tables from db.js — b
 they are worth recording, because they show how much a column-only comparison
 misses. Treat "the schema looks fine" as unverified until check:schema says so.
 
+PHASE 1 COMPLETE 2026-09-29 (make the state visible)
+---------------------------------------------------
+Everything Phase 1 added reads data that was already in the database and had
+never been read back. No schema change, so check:schema stayed green throughout.
+
+  * GET /assets now returns, per version: creative_locked, locked_at,
+    repository_version_id, latest_check (with reasons) and latest_approval
+    (with the reviewer's comment). Per asset: has_pending_approval.
+    It also no longer console.logs the entire workspace on every request.
+
+  * GET /assets/:assetId/versions/:versionId/checks — full technical-check
+    history, newest first, each run with its individual results.
+
+  * GET /creative-approvals?status=pending — admin/superuser review queue,
+    defaulting to pending, ?status=all for everything. Returns the requesting
+    developer and the submitted files. Until this existed there was no way to
+    discover a pending approval — approve/reject take an id and nothing listed
+    them, so the workflow could not be driven at all.
+
+  * The freeze rule: while a creative approval is pending, the asset accepts no
+    changes at all — no new version, no metadata edit — enforced inside the
+    upload write transaction so it cannot race a concurrent request, and
+    returning 409 with a message naming the asset. The submitted version was
+    already locked via creative_locked; this extends the freeze to the asset
+    around it. Surfaced in the panel as "Under review — frozen".
+
+  * Developer panel renders per-version state: approval badge (Awaiting review /
+    Approved / Rejected / Cancelled), technical check pass/fail, Locked, In game
+    store, the failure reasons, and the reviewer's comment. Built with
+    createElement/textContent like the rest of that renderer.
+
+Verified: 32 assertions against a copy, covering the happy path, the freeze
+(including that it lifts once decided), the queue's role gating and status
+validation, and the "why" — deleting a file's bytes and confirming the panel
+data reads "Physical file is missing or its size does not match: X".
+
+STILL MISSING, and it limits how useful the review queue is: there is still no
+download endpoint, so an approver sees the asset name, version note and file
+list but cannot look at the actual bytes. Reviewing a submission is therefore
+still blind. That is Phase 3.1 — the download route, which is the first code
+that would serve user-uploaded bytes and needs care (octet-stream and
+Content-Disposition: attachment, never the stored mime_type, or an uploaded
+.svg/.html becomes stored XSS on this origin).
+
+Also still missing: no UI buttons to request an approval or to approve/reject —
+the endpoints exist and are now discoverable, but both actions are API-only.
+
+NOTE on verification: the frontend changes are confirmed by a clean vite build
+and by review, not by clicking. The rendering has not been viewed in a browser.
+
+
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
 --------------------------------------------
 There used to be a second, unmanaged tree at backend/node_modules with no
@@ -221,12 +272,21 @@ They MUST be dealt with before any real user data exists.
    better-sqlite3 throws "4 values for 3 columns", and the surrounding catch
    turns it into a misleading 409. (Feature is still in progress.)
 
-6) The approval workflow has no frontend and no admin-side reads.
-   Nothing in frontend/ calls technical-check, creative-approval, approve or
-   reject. There is also no endpoint to LIST pending approvals and no endpoint
-   to download the submitted files, so an admin would have to guess integer IDs.
-   GET /assets also does not return creative_locked / repository_version_id,
-   so the client could not render lock state even with buttons added.
+6) The approval workflow is still API-only above the read layer.
+   PARTLY ADDRESSED in Phase 1 (see PHASE 1 COMPLETE above): the admin review
+   queue now exists (GET /creative-approvals), GET /assets returns
+   creative_locked / repository_version_id / latest_check / latest_approval,
+   and the developer panel renders all of it.
+
+   What remains:
+     - no download endpoint, so an approver can see the file LIST but not the
+       bytes. Reviewing a submission is still blind. This is Phase 3.1 and it
+       needs care: it is the first code that serves user-uploaded bytes, so it
+       must use application/octet-stream and Content-Disposition: attachment
+       rather than the stored mime_type, or an uploaded .svg/.html becomes
+       stored XSS on this origin.
+     - no UI to request an approval, approve or reject. The endpoints exist and
+       are now discoverable, but both actions require calling the API by hand.
 
 7) Set assets.recommended_version_id (or drop the columns).
    `assets.recommended_version_id`, `asset_recommended_versions`,

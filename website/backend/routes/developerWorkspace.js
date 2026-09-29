@@ -88,10 +88,68 @@ router.get(
                     version_number,
                     version_note,
                     created_by,
-                    created_at
+                    created_at,
+                    creative_locked,
+                    locked_at,
+                    repository_version_id
                 FROM workspace_versions
                 WHERE workspace_asset_id = ?
                 ORDER BY version_number DESC
+            `);
+
+            // State that already existed in the database but was never readable
+            // from anywhere: a developer could submit for review and had no way
+            // to learn the outcome. See the review's Phase 1 notes.
+
+            const getLatestCheck = db.prepare(`
+                SELECT
+                    id,
+                    status,
+                    summary,
+                    started_at,
+                    completed_at
+                FROM technical_check_runs
+                WHERE workspace_version_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            `);
+
+            // The reason a check failed lives here, not in runs.summary —
+            // that is only ever "Technical validation failed.".
+            const getCheckReasons = db.prepare(`
+                SELECT
+                    check_name,
+                    status,
+                    message
+                FROM technical_check_results
+                WHERE technical_check_run_id = ?
+                  AND status <> 'passed'
+                ORDER BY id
+            `);
+
+            const getLatestApproval = db.prepare(`
+                SELECT
+                    id,
+                    status,
+                    request_comment,
+                    decision_comment,
+                    requested_at,
+                    decided_at
+                FROM creative_approvals
+                WHERE workspace_version_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            `);
+
+            // An asset with a pending approval is frozen: no new versions and no
+            // metadata changes until it is decided. Surfaced per asset so the
+            // panel can explain why, rather than only failing on submit.
+            const getPendingApproval = db.prepare(`
+                SELECT id
+                FROM creative_approvals
+                WHERE workspace_asset_id = ?
+                  AND status = 'pending'
+                LIMIT 1
             `);
 
             const getFiles = db.prepare(`
@@ -114,14 +172,23 @@ router.get(
 
             for (const asset of assets) {
                 asset.versions = getVersions.all(asset.id);
+                asset.has_pending_approval =
+                    Boolean(getPendingApproval.get(asset.id));
 
                 for (const version of asset.versions) {
                     version.files = getFiles.all(version.id);
+
+                    const check = getLatestCheck.get(version.id) || null;
+
+                    if (check) {
+                        check.reasons = getCheckReasons.all(check.id);
+                    }
+
+                    version.latest_check = check;
+                    version.latest_approval =
+                        getLatestApproval.get(version.id) || null;
                 }
             }
-
-            console.log('Developer workspace:', workspace);
-            console.log('Developer assets:', assets);
 
             return res.json({
                 workspace,
@@ -137,6 +204,240 @@ router.get(
         }
     }
 );
+
+// ============================================================
+// GET /api/developer/workspace/assets/:assetId/versions/:versionId/checks
+// ============================================================
+//
+// The full technical-check history for ONE of the caller's versions.
+//
+// Every run is kept (the developer may re-run checks freely), so this returns
+// all of them, newest first, each with its individual results. The reason a
+// check failed is in results[].message.
+//
+// Scoped through the caller's workspace, so a developer can only read their own.
+// ============================================================
+
+router.get(
+    '/assets/:assetId/versions/:versionId/checks',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!developerId) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({
+                error: 'Invalid asset or version ID'
+            });
+        }
+
+        try {
+            const version = db.prepare(`
+                SELECT wv.id
+                FROM workspace_versions wv
+                JOIN workspace_assets wa
+                    ON wa.id = wv.workspace_asset_id
+                JOIN developer_workspaces dw
+                    ON dw.id = wa.workspace_id
+                WHERE wv.id = ?
+                  AND wa.id = ?
+                  AND dw.developer_id = ?
+                  AND wa.is_active = 1
+            `).get(versionId, assetId, developerId);
+
+            if (!version) {
+                return res.status(404).json({
+                    error: 'Workspace version not found'
+                });
+            }
+
+            const runs = db.prepare(`
+                SELECT
+                    id,
+                    status,
+                    summary,
+                    started_at,
+                    completed_at
+                FROM technical_check_runs
+                WHERE workspace_version_id = ?
+                ORDER BY id DESC
+            `).all(versionId);
+
+            const getResults = db.prepare(`
+                SELECT
+                    id,
+                    check_name,
+                    status,
+                    message,
+                    details,
+                    started_at,
+                    completed_at
+                FROM technical_check_results
+                WHERE technical_check_run_id = ?
+                ORDER BY id
+            `);
+
+            for (const run of runs) {
+                run.results = getResults.all(run.id);
+                run.failed = run.results.filter(
+                    r => r.status === 'failed' || r.status === 'error'
+                ).length;
+            }
+
+            return res.json({
+                versionId,
+                runs
+            });
+
+        } catch (err) {
+            console.error('Failed to load technical checks:', err);
+
+            return res.status(500).json({
+                error: 'Failed to load technical checks'
+            });
+        }
+    }
+);
+
+
+// ============================================================
+// GET /api/developer/workspace/creative-approvals
+// ============================================================
+//
+// The review queue. Admin/superuser only.
+//
+// Without this there was no way to discover a pending approval: the approve and
+// reject routes take an approval id, and nothing listed them, so the workflow
+// could not actually be driven. Optional ?status= filter, defaulting to
+// pending.
+//
+// Returns the requesting developer and the submitted files, so a decision can
+// be made without a second round trip.
+// ============================================================
+
+const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
+
+router.get(
+    '/creative-approvals',
+    authenticateToken,
+    requireRole('admin', 'superuser'),
+
+    async (req, res) => {
+        const status = req.query?.status === undefined
+            ? 'pending'
+            : String(req.query.status);
+
+        if (status !== 'all' && !APPROVAL_STATUSES.includes(status)) {
+            return res.status(400).json({
+                error: `Invalid status. Expected one of: ${APPROVAL_STATUSES.join(', ')}, all`
+            });
+        }
+
+        try {
+            const rows = status === 'all'
+                ? db.prepare(`
+                    SELECT
+                        ca.id,
+                        ca.status,
+                        ca.workspace_asset_id,
+                        ca.workspace_version_id,
+                        ca.request_comment,
+                        ca.requested_at,
+                        ca.requested_by,
+                        ca.decision_comment,
+                        ca.decided_at,
+                        ca.decided_by,
+                        ca.repository_asset_id,
+                        ca.repository_version_id,
+                        wa.name            AS asset_name,
+                        wa.asset_type      AS asset_type,
+                        wv.version_number  AS version_number,
+                        wv.version_note    AS version_note,
+                        wv.creative_locked AS version_locked,
+                        u.username         AS requested_by_username
+                    FROM creative_approvals ca
+                    JOIN workspace_assets wa  ON wa.id = ca.workspace_asset_id
+                    JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
+                    LEFT JOIN users u          ON u.id  = ca.requested_by
+                    ORDER BY ca.requested_at DESC, ca.id DESC
+                `).all()
+                : db.prepare(`
+                    SELECT
+                        ca.id,
+                        ca.status,
+                        ca.workspace_asset_id,
+                        ca.workspace_version_id,
+                        ca.request_comment,
+                        ca.requested_at,
+                        ca.requested_by,
+                        ca.decision_comment,
+                        ca.decided_at,
+                        ca.decided_by,
+                        ca.repository_asset_id,
+                        ca.repository_version_id,
+                        wa.name            AS asset_name,
+                        wa.asset_type      AS asset_type,
+                        wv.version_number  AS version_number,
+                        wv.version_note    AS version_note,
+                        wv.creative_locked AS version_locked,
+                        u.username         AS requested_by_username
+                    FROM creative_approvals ca
+                    JOIN workspace_assets wa  ON wa.id = ca.workspace_asset_id
+                    JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
+                    LEFT JOIN users u          ON u.id  = ca.requested_by
+                    WHERE ca.status = ?
+                    ORDER BY ca.requested_at DESC, ca.id DESC
+                `).all(status);
+
+            // The files the approver is being asked to sign off. Note there is
+            // still no download endpoint, so these are metadata only — see
+            // TODO item 6.
+            const getFiles = db.prepare(`
+                SELECT
+                    wvf.id,
+                    wvf.filename,
+                    wvf.relative_path,
+                    sf.file_size,
+                    sf.mime_type,
+                    sf.sha256
+                FROM workspace_version_files wvf
+                JOIN stored_files sf
+                    ON sf.id = wvf.stored_file_id
+                WHERE wvf.workspace_version_id = ?
+                ORDER BY
+                    COALESCE(wvf.relative_path, '') COLLATE NOCASE,
+                    wvf.filename COLLATE NOCASE
+            `);
+
+            for (const row of rows) {
+                row.files = getFiles.all(row.workspace_version_id);
+            }
+
+            return res.json({
+                status,
+                count: rows.length,
+                approvals: rows
+            });
+
+        } catch (err) {
+            console.error('Failed to load creative approvals:', err);
+
+            return res.status(500).json({
+                error: 'Failed to load creative approvals'
+            });
+        }
+    }
+);
+
 
 // ============================================================
 // TEST FILE UPLOAD
@@ -651,6 +952,39 @@ router.post(
                         } else {
 
                             // ----------------------------------------
+                            // An asset under review is frozen.
+                            //
+                            // While a creative approval is pending the asset
+                            // accepts no changes at all — not a new version and
+                            // not a metadata edit. The submitted version is
+                            // already locked by creative_locked; this extends
+                            // the freeze to the asset around it, so what the
+                            // approver is looking at cannot shift underneath
+                            // them.
+                            //
+                            // This runs inside the write transaction, so it
+                            // cannot race a concurrent approval request.
+                            // ----------------------------------------
+
+                            const pending = db.prepare(`
+                                SELECT id
+                                FROM creative_approvals
+                                WHERE workspace_asset_id = ?
+                                  AND status = 'pending'
+                                LIMIT 1
+                            `).get(asset.id);
+
+                            if (pending) {
+                                const freezerError = new Error(
+                                    `"${asset.name}" is under review and cannot be ` +
+                                    `changed until the pending approval is decided.`
+                                );
+                                freezerError.status = 409;
+                                throw freezerError;
+                            }
+
+
+                            // ----------------------------------------
                             // Update supplied metadata.
                             // ----------------------------------------
 
@@ -1015,7 +1349,9 @@ router.post(
             );
 
 
-            return res.status(400).json({
+            // Errors raised deliberately (the freeze check) carry their own
+            // status; everything else stays a 400 as before.
+            return res.status(err.status || 400).json({
                 error:
                     err.message ||
                     'Failed to process uploaded files'

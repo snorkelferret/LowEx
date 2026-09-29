@@ -783,6 +783,103 @@ async function loadDeveloperWorkspace() {
 // ============================================================
 // Workspace asset display
 // ============================================================
+// ---------------------------------------------------------------------------
+// Version state
+//
+// A developer submits a version for Creative Approval and, until now, had no
+// way to learn the outcome: the approval and technical-check records existed in
+// the database but nothing ever read them back. These render that state.
+//
+// Everything is built with createElement/textContent, matching the rest of this
+// renderer — none of it is user-controlled HTML.
+// ---------------------------------------------------------------------------
+
+function statusBadge(text, variant) {
+    const badge = document.createElement('span');
+    badge.className = `badge text-bg-${variant} me-2 mb-1`;
+    badge.textContent = text;
+    return badge;
+}
+
+function approvalBadge(approval) {
+    switch (approval.status) {
+        case 'pending':   return statusBadge('Awaiting review', 'warning');
+        case 'approved':  return statusBadge('Approved', 'success');
+        case 'rejected':  return statusBadge('Rejected', 'danger');
+        case 'cancelled': return statusBadge('Cancelled', 'secondary');
+        default:          return statusBadge(approval.status, 'secondary');
+    }
+}
+
+function renderVersionState(version) {
+    const wrapper = document.createElement('div');
+
+    const badges = document.createElement('div');
+    badges.className = 'd-flex flex-wrap align-items-center mb-1';
+
+    if (version.creative_locked) {
+        badges.appendChild(statusBadge('Locked', 'secondary'));
+    }
+
+    if (version.latest_approval) {
+        badges.appendChild(approvalBadge(version.latest_approval));
+    }
+
+    if (version.latest_check) {
+        const passed = version.latest_check.status === 'passed';
+        badges.appendChild(statusBadge(
+            passed ? 'Technical check passed' : 'Technical check failed',
+            passed ? 'success' : 'danger'
+        ));
+    } else {
+        badges.appendChild(statusBadge('Not yet checked', 'secondary'));
+    }
+
+    if (version.repository_version_id) {
+        badges.appendChild(statusBadge('In game store', 'primary'));
+    }
+
+    if (badges.childElementCount) {
+        wrapper.appendChild(badges);
+    }
+
+    // Why a check failed. technical_check_runs.summary is only ever
+    // "Technical validation failed." — the actual reason is in the results,
+    // one message per failing check.
+    const reasons = version.latest_check?.reasons || [];
+
+    if (reasons.length) {
+        const list = document.createElement('ul');
+        list.className = 'small text-danger mb-2';
+
+        for (const reason of reasons) {
+            const item = document.createElement('li');
+            item.textContent = reason.message || reason.check_name;
+            list.appendChild(item);
+        }
+
+        wrapper.appendChild(list);
+    }
+
+    // What the reviewer said, so a rejection carries its reason.
+    const approval = version.latest_approval;
+
+    if (approval?.decision_comment) {
+        const decision = document.createElement('div');
+        decision.className = 'small mb-2';
+
+        const label = document.createElement('span');
+        label.className = 'text-secondary';
+        label.textContent = 'Reviewer: ';
+
+        decision.appendChild(label);
+        decision.appendChild(document.createTextNode(approval.decision_comment));
+        wrapper.appendChild(decision);
+    }
+
+    return wrapper.childElementCount ? wrapper : null;
+}
+
 function renderWorkspaceAssets(assets) {
     const list = $('workspaceAssetsList');
     if (!list) return;
@@ -821,6 +918,16 @@ function renderWorkspaceAssets(assets) {
             badge.className = 'badge text-bg-secondary ms-2';
             badge.textContent = asset.asset_type;
             button.appendChild(badge);
+        }
+
+        // The whole asset is frozen while an approval is pending, so say so on
+        // the collapsed row rather than only failing when a developer tries to
+        // upload against it.
+        if (asset.has_pending_approval) {
+            const frozenBadge = document.createElement('span');
+            frozenBadge.className = 'badge text-bg-warning ms-2';
+            frozenBadge.textContent = 'Under review — frozen';
+            button.appendChild(frozenBadge);
         }
 
         header.appendChild(button);
@@ -866,6 +973,11 @@ function renderWorkspaceAssets(assets) {
                 versionHeader.appendChild(versionDate);
 
                 versionBlock.appendChild(versionHeader);
+
+                const versionState = renderVersionState(version);
+                if (versionState) {
+                    versionBlock.appendChild(versionState);
+                }
 
                 if (version.version_note) {
                     const note = document.createElement('div');
