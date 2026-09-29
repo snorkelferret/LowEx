@@ -1,0 +1,255 @@
+ASSET TYPES, PREVIEW AND LOCAL DISTRIBUTION
+Design note — v0.1 — 2026-09-29
+Status: NOT STARTED. Discussion captured, decisions open.
+
+================================================================================
+1. WHAT THIS SECTION COVERS
+================================================================================
+
+Three related capabilities, raised together but separable:
+
+  A. Upload types — Blender, Nuke, Unreal, Maya, images. Per-type rules,
+     validation and handling. Today `asset_type` is free text and nothing
+     inspects file contents.
+
+  B. Preview — seeing the asset on the website, so an approver can judge it
+     without downloading.
+
+  C. Download to the approver's machine — where they have a working copy of
+     the game in development, so they can review the asset in situ.
+
+The immediate driver: the approval workflow is now reachable (Phase 1) but
+still BLIND. An approver sees an asset name, a version note, a file list with
+sizes and hashes — and cannot look at the actual bytes. Reviewing a submission
+is currently an act of faith. See TODO item 6.
+
+================================================================================
+2. THE SPEC ALREADY DESIGNS MOST OF THIS
+================================================================================
+
+Read docs/Specification_v04_web.html before designing anything here. Section 02
+("End-to-End Asset Generation & Sync Pipeline") maps almost one-to-one:
+
+  Request                          Spec section
+  -------------------------------  ------------------------------------------
+  "see assets on the website"      02.4 "Contributor previews the wireframe,
+                                         texture, and generated LOD chain
+                                         directly inside an interactive 3D
+                                         WebGL viewer within the portal."
+
+  "downloaded to the approver's    02.6 "Artists run git pull or launch the
+   machine, working copy of the          custom UE Python plugin. The asset
+   game in development"                  immediately populates in the Blender
+                                         project tree and Unreal Engine
+                                         Content Browser, fully rigged or
+                                         formatted for placement."
+
+  "upload types - Blender, Nuke,   04 vetting gate (marked TBD): "Automated
+   Unreal, Maya, images"                validation gate checking polygon
+                                        limits, texture dimensions, file
+                                        naming conventions, and format
+                                        compliance prior to committing
+                                        incoming assets to the main project
+                                        branch."
+
+So this section is: implement 02.4 and 02.6, plus the TBD vetting gate.
+
+Also relevant, from docs/dbspec01 (the schema design conversation):
+
+  * "Uploading identical content does not create a pointless new version."
+  * "A control file is never automatically modified by the repository."
+  * "The sandbox is responsible for discovering actual dependencies."
+  * "If an apparently missing dependency has identical content elsewhere, the
+     system can report the possible match."
+  * "A successful test records the exact asset versions/dependencies and game
+     build involved."
+  * "The 'current game version' is a pointer to a specific tested/approved
+     version, not simply the newest version."
+
+================================================================================
+3. TWO CORRECTIONS TO CARRY FORWARD
+================================================================================
+
+3.1  recommended_version_id WAS REMOVED IN ERROR AND MUST BE RESTORED
+--------------------------------------------------------------------------
+
+docs/dbspec01 states:
+
+    For each repository asset:
+
+        recommended_version_id
+
+    is nullable, so:
+
+        NULL = no approved/recommended version
+
+It was removed in Phase 0 (commit 5d3d24f). The reasoning given at the time was
+that a single pointer cannot express "an asset can hold several production
+versions at once", so release membership should carry the meaning instead.
+
+That reasoning was WRONG. "Recommended" and "release membership" are different
+things:
+
+    recommended_version_id   which version to build from NOW    (a pointer, one)
+    release membership       what shipped, and when             (history, many)
+
+Both coexist. Phase 0 also left `asset_recommended_versions` (the companion
+table) in place while deleting the column, so the live schema is currently in a
+state neither the spec nor the code describes.
+
+Current state, verified:
+
+    live assets columns : id, name, asset_type, description,
+                          created_at, updated_at, is_active
+    db.js declares it   : no
+    asset_recommended_versions table : exists (orphaned)
+
+Restoring is cheap — the asset tables are empty. It needs a db.js change plus a
+recreate, or it will come back whenever the tables are next rebuilt.
+
+3.2  YOU CANNOT RUN AN UNREAL GAME IN A BROWSER
+--------------------------------------------------------------------------
+
+"Run a cutdown version of the game so the assets can be seen on the website"
+is not achievable with Unreal Engine:
+
+  * UE's HTML5 target was dropped after UE4. The WASM/WebGPU work is
+    experimental with no shipping path.
+  * Arbitrary .uasset/.umap files cannot be hot-loaded into a browser build.
+    UE assets are cooked into the binary.
+
+Note the spec does NOT ask for this — 02.4 says "WebGL viewer", which is a
+different and reachable thing. Three real options:
+
+  Option                  What the approver sees            Cost
+  ----------------------  --------------------------------  -----------------
+  Pre-rendered turntables Highest fidelity; exactly the    Offline render job.
+  (UE Movie Render Queue  game's look. Not interactive.    No runtime infra.
+   -> image sequence)
+
+  glTF + three.js with    Interactive orbit/zoom.          Cheap once assets
+  art-directed lighting   Approximate look.                are exported to GLB.
+
+  Pixel Streaming         LITERALLY the game in a browser. PERSISTENT GPU
+  (real UE on a GPU host,                                  SERVER. Directly
+   streamed to browser)                                    contradicts 05.
+
+Pixel Streaming is the only thing that delivers the literal request, and it is
+the one the spec's own cost principle forbids. From 05:
+
+    "To preserve workstation GPU hardware for Unreal Engine development and
+     eliminate recurring idle server costs, all pipeline workloads are hosted
+     on decoupled, pay-per-execution cloud infrastructure."
+
+That is a direct trade-off and needs an explicit decision, not a default.
+
+================================================================================
+4. SPEC vs CODE DIVERGENCES THIS SECTION TOUCHES
+================================================================================
+
+  Spec says                                    Code does
+  -------------------------------------------  --------------------------------
+  Storage in Cloudflare R2                     Local disk backend/uploads/files/
+  Distribution via GitHub LFS + git pull       No git integration. There is a
+  or the custom UE Python plugin               GitHub stub in routes/superuser.js
+                                               (/github/sync, /github/deploy
+                                               dispatching repository_dispatch)
+  "Uploading identical content does not        EVERY upload creates a new
+   create a pointless new version"             version: versionNumber = MAX+1,
+                                               with no content comparison.
+                                               (developerWorkspace.js ~1040)
+  A control file the repository never          Not implemented
+  auto-modifies
+  Dependency discovery; missing deps           Not implemented
+  reported, with possible SHA matches
+  "The current game version is a pointer       Not implemented. This is what the
+   to a specific tested/approved version"      proposed `releases` table was
+                                               reaching for.
+  Format compliance gate (polygon limits,      Only 3 generic checks exist:
+  texture dimensions, naming conventions)      files_present, stored_file:<id>,
+                                               logical_paths_unique
+
+The identical-content row is a small bug worth fixing regardless of this
+section: re-uploading byte-identical content currently bumps the version number
+for nothing, which is exactly what dbspec01 says must not happen.
+
+================================================================================
+5. PROPOSED BREAKDOWN
+================================================================================
+
+Ordered cheapest-first. Each layer is independently useful.
+
+A. ASSET TYPE REGISTRY                                          SMALL
+   Replace free-text asset_type with a controlled vocabulary:
+   blend | nuke | unreal | maya | image | gltf.
+   Per type: allowed extensions, required companions, and validation rules.
+   Extend the technical-check suite with the spec's vetting-gate rules
+   (polygon limits, texture dimensions, naming conventions, format compliance).
+   This is where "upload types" actually lands.
+
+B. DOWNLOAD TO LOCAL WORKING COPY                               SMALL
+   ZIP preserving relative_path (which exists in the schema for exactly this)
+   plus a JSON manifest: per-file SHA-256, size, and target path. The approver
+   has a working copy of the game, so files must land in the right places.
+   A small CLI later lets an artist sync by hash instead of re-downloading.
+   HIGHEST VALUE, LOWEST RISK. Unblocks approval review immediately.
+   SECURITY: this is the first code that serves user-uploaded bytes.
+     - Use application/octet-stream + Content-Disposition: attachment.
+       NEVER the stored mime_type, or an uploaded .svg/.html becomes stored
+       XSS on this origin.
+     - Resolve bytes only from stored_files.storage_key; validate it is exactly
+       64 hex chars before touching the filesystem. Never build a path from
+       client input.
+     - Re-validate relative_path at zip time. It was normalised on upload, but
+       it originated client-side and is now being used to build entry names.
+
+C. PREVIEW, TIERED BY WHAT IS ACTUALLY RENDERABLE                MEDIUM
+     images (.png/.jpg/.exr/.tga)  inline. Verify magic bytes; serve with a
+                                   safe content type rather than the
+                                   client-supplied one.
+     .glb/.gltf                    three.js viewer. Real 3D, cheap.
+     .blend/.nk/.ma/.uasset        none render in a browser. Options:
+                                   artist-uploaded renders, offline conversion
+                                   to GLB (Blender does this headlessly), or
+                                   download-only for now.
+
+D. THE "SEE IT IN THE GAME" LAYER                               LARGE
+   Pick one of the three options in 3.2. If turntables: an OFFLINE render
+   pipeline, not a web feature.
+
+E. DISTRIBUTION VIA GIT                                         LARGE
+   The spec's actual answer for 02.6. Partial plumbing exists in
+   routes/superuser.js.
+
+================================================================================
+6. OPEN QUESTIONS
+================================================================================
+
+Q1. Cloud stack or local stack?
+    Is this section targeting the spec's architecture (Cloudflare R2, RunPod,
+    Qdrant, GitHub LFS) or the current local implementation (SQLite + local
+    disk)? This decides everything else. Working assumption: local-first, with
+    interfaces shaped so R2 can slot in later.
+
+Q2. Which preview approach?
+    Pixel Streaming, pre-rendered turntables, or three.js glTF? Genuinely
+    different projects. Pixel Streaming additionally requires accepting a
+    continuously running GPU server, against spec 05.
+
+Q3. Which asset types first?
+    Working assumption: images and GLB (both renderable), with .blend/.nk/
+    .uasset treated as download-only until a conversion pipeline exists.
+
+Q4. Restore recommended_version_id?
+    Recommendation: yes, as part of this section. See 3.1.
+
+================================================================================
+7. RECOMMENDED STARTING POINT
+================================================================================
+
+Layer B. It is unambiguous, small, needed under every answer to Q1 and Q2, and
+it is the one thing that immediately turns approval review from guesswork into
+something real. Layers C and D are the parts that depend on Q2.
+
+TODO item 6 (the approval workflow being API-only) should be read as belonging
+to this section.

@@ -234,6 +234,45 @@ Consequences to remember:
     tree and shadow the root one again.
   * Express 5 sets req.body to undefined where Express 4 gave {}. See item 21.
 
+NEXT SECTION — ASSET TYPES, PREVIEW, LOCAL DISTRIBUTION
+-------------------------------------------------------
+Designed but NOT STARTED. Full design note in docs/assettypes01, which covers:
+upload types (Blender / Nuke / Unreal / Maya / images), on-site preview, and
+downloading to an approver's local working copy of the game.
+
+Read that note before starting. It maps the work onto
+docs/Specification_v04_web.html sections 02.4, 02.6 and the TBD vetting gate,
+lists the spec-vs-code divergences this touches, and records four open
+questions (cloud stack vs local, which preview approach, which types first,
+whether to restore recommended_version_id).
+
+Two things in it are corrections to decisions already made, so they matter
+before any code is written:
+
+  * recommended_version_id was removed from db.js and the live database in
+    Phase 0 (5d3d24f), against docs/dbspec01 which explicitly requires it and
+    says it is nullable. The reasoning used at the time -- that a single
+    pointer cannot express several production versions -- was wrong, because
+    "recommended" (which version to build from now) and release membership
+    (what shipped when) are different concepts. asset_recommended_versions was
+    left behind, orphaned. Restoring it is cheap; the asset tables are empty.
+
+  * "Run a cutdown version of the game in the browser" is not achievable with
+    Unreal Engine -- the HTML5 target was dropped after UE4 and cooked .uasset
+    files cannot be hot-loaded. The spec does not ask for it either; 02.4 says
+    "WebGL viewer". The three real options (pre-rendered turntables, glTF +
+    three.js, or Pixel Streaming) are set out in the note, along with the fact
+    that Pixel Streaming is the only one delivering the literal request and the
+    only one spec section 05's zero-idle-cost principle rules out.
+
+Immediate driver: the approval workflow is reachable as of Phase 1 but still
+blind -- an approver sees file metadata and cannot look at the bytes. The
+recommended starting point (the note's layer B: ZIP + manifest download) fixes
+that and is needed under every answer to the open questions.
+
+TODO item 6 below belongs to this section.
+
+
 OUTSTANDING FROM CODE REVIEW
 ----------------------------
 These are accepted for now because this is a dummy/test site.
