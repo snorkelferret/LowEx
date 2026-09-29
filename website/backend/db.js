@@ -39,9 +39,14 @@ const applySchemaPatches = () => {
   }
 
   if (!columns.includes('reissue_count')) {
+    // The CHECK belongs here, not just in the CREATE TABLE above. Adding the
+    // column without it means a database that took this migration path gets a
+    // column that accepts any value, while db.js's declaration claims the
+    // limit is enforced. SQLite accepts and enforces a CHECK on ADD COLUMN.
     db.exec(`
       ALTER TABLE invitations
-      ADD COLUMN reissue_count INTEGER DEFAULT 0;
+      ADD COLUMN reissue_count INTEGER DEFAULT 0
+        CHECK (reissue_count <= 6);
     `);
   }
 
@@ -113,7 +118,6 @@ const applyAssetRepositorySchema = () => {
       name TEXT NOT NULL,
       asset_type TEXT,
       description TEXT,
-      recommended_version_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -150,6 +154,12 @@ const applyAssetRepositorySchema = () => {
       )
     );
   `);
+  // NOTE: this table is unused and slated for removal. A single "recommended
+  // version" pointer cannot express the intended model -- an asset can hold
+  // several production versions at once, and production status is derived from
+  // release membership, not from a pointer. Removed in the phase that
+  // introduces `releases`. Kept for now so the schema change is reviewable on
+  // its own.
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS stored_files (

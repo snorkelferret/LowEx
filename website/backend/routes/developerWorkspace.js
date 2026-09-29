@@ -1632,13 +1632,23 @@ router.post(
                     return result.lastInsertRowid;
                 });
 
+            // db.transaction() RETURNS a function; it does not run it. This
+            // result was passed straight to .get() below, so the insert never
+            // happened and the bind failed with "can only bind numbers,
+            // strings, bigints, buffers, and null" — the function itself was
+            // being offered as a parameter value.
+            //
+            // Every other transaction in this file is invoked:
+            // createAssetVersion.immediate(), storeResults(), reject(), and
+            // the immediately-invoked `})()` in the approve route.
+            const approvalId = submit();
 
             const approval =
                 db.prepare(`
                     SELECT *
                     FROM creative_approvals
                     WHERE id = ?
-                `).get(submit);
+                `).get(approvalId);
 
 
             return res.status(201).json({
@@ -1978,7 +1988,7 @@ router.post(
                                     asset_type,
                                     description
                                 )
-                                VALUES (?, ?, ?, ?)
+                                VALUES (?, ?, ?)
                             `).run(
                                 approval.workspace_asset_name,
                                 approval.workspace_asset_type || null,

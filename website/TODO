@@ -78,6 +78,58 @@ COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
     JWT, so an already-copied token stays valid until it expires. See item 10.
 
 
+PHASE 0 COMPLETE 2026-09-29 (asset repository: unblock + reconcile)
+------------------------------------------------------------------
+The creative-approval flow had THREE stacked bugs, so no asset had ever
+reached the game store — `assets`, `asset_versions` and `creative_approvals`
+were all empty. All three are fixed and the flow now runs end to end.
+
+  1. backend/routes/developerWorkspace.js — the request-approval route built a
+     transaction with db.transaction() and never invoked it. db.transaction()
+     RETURNS a function; the result was passed straight to .get(), so the insert
+     never ran and the bind failed with "can only bind numbers, strings,
+     bigints, buffers, and null". Every other transaction in the file is called
+     (createAssetVersion.immediate(), storeResults(), reject(), and the
+     immediately-invoked `})()` in approve). Now `const approvalId = submit();`.
+
+  2. backend/routes/developerWorkspace.js — `INSERT INTO assets (name,
+     asset_type, description) VALUES (?, ?, ?, ?)`: 3 columns, 4 placeholders.
+     Now 3.
+
+  3. Schema drift — the live `assets` table still had owner_id NOT NULL with an
+     FK to users(id), removed from db.js in 240f34c. Fixing (2) alone was not
+     enough: the corrected INSERT then failed with "NOT NULL constraint failed:
+     assets.owner_id". ALTER TABLE DROP COLUMN cannot repair it because SQLite
+     refuses to drop a column named in a foreign key definition.
+
+Also found and fixed: the live `invitations` table was missing
+CHECK(reissue_count <= 6). applySchemaPatches() adds that column via
+ADD COLUMN without the CHECK, while db.js's CREATE TABLE declares one — the
+database accepted reissue_count = 99. Not exploitable (inviteDevs.js enforces
+the limit in application code) but db.js was claiming a guarantee the database
+did not provide. Fixed in both places: the migration now includes the CHECK,
+and the live table was rebuilt in place (12-step rebuild, the single invite row
+preserved).
+
+How: backend/reset/reconcileAssetSchema.js — drops the 13 asset-domain tables
+and lets db.js recreate them (that data was disposable: one workspace, one
+version, one file), then rebuilds invitations with the constraint. It asserts
+before/after row counts, integrity_check, foreign_key_check, and proves each
+constraint actually rejects bad values rather than assuming it does.
+
+Verified: the live database now matches a fresh db.js build exactly — 18 tables,
+0 column or index differences, identical constraint enforcement. users (3) and
+invitations (1) preserved.
+
+Full flow proven end to end: upload -> technical check (passed) -> request
+approval -> admin approves -> game asset "OakTree" v1 in the store, its bytes
+shared with the workspace copy via one stored_files row rather than duplicated.
+
+NOTE for future schema changes: CREATE TABLE IF NOT EXISTS is a no-op on an
+existing table and migrations only ever ADD COLUMN, so a column removed from
+db.js does NOT disappear from a live database. Nothing detected that for
+months. Add a drift check before schema work.
+
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
 --------------------------------------------
 There used to be a second, unmanaged tree at backend/node_modules with no
