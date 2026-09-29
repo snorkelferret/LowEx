@@ -126,9 +126,32 @@ approval -> admin approves -> game asset "OakTree" v1 in the store, its bytes
 shared with the workspace copy via one stored_files row rather than duplicated.
 
 NOTE for future schema changes: CREATE TABLE IF NOT EXISTS is a no-op on an
-existing table and migrations only ever ADD COLUMN, so a column removed from
-db.js does NOT disappear from a live database. Nothing detected that for
-months. Add a drift check before schema work.
+existing table and migrations only ever ADD COLUMN. So a column removed from
+db.js does NOT disappear from a live database, and a constraint added to a
+CREATE TABLE never appears on a table created earlier. Nothing detected that.
+
+There is now a check:
+
+    npm run check:schema      # scripts/check-schema-drift.js
+
+It builds a scratch database from db.js and compares columns, foreign keys,
+CHECK constraints and indexes. Run it before and after any schema change. It
+compares STRUCTURE, not DDL text — SQLite rewrites stored DDL after ALTER TABLE
+or RENAME, so semantically identical tables differ by table-name quoting and by
+whitespace inside CHECK clauses, and a text comparison reports false positives.
+
+It found MORE drift than the first pass did, which is the point. The initial
+hand comparison looked at column names only and reported "one table, two
+columns". The full check reports 5 differences across 3 tables, because it also
+compares foreign keys and indexes. Two had never been spotted:
+
+  assets.idx_assets_owner                  an index on the stale owner_id
+                                           column, never declared in db.js
+  asset_versions.created_by -> users(id)   a foreign key db.js does not declare
+
+Both are now gone — the reconciliation recreated those tables from db.js — but
+they are worth recording, because they show how much a column-only comparison
+misses. Treat "the schema looks fine" as unverified until check:schema says so.
 
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
 --------------------------------------------

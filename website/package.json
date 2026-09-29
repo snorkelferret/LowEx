@@ -6,6 +6,7 @@
   "scripts": {
     "generate:pages": "node build.js",
     "check:routes": "node scripts/check-route-order.js",
+    "check:schema": "node scripts/check-schema-drift.js",
     "predev": "npm run generate:pages",
     "prebuild": "npm run generate:pages",
     "build": "vite build",
