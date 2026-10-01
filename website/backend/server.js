@@ -27,6 +27,10 @@ const {
 // Import Shared DB Instance
 const db = require('./db');
 
+// Shared invitation rules, so registration and creation cannot disagree about
+// what "still valid" means.
+const { isAcceptable } = require('./lib/invites');
+
 
 //const superuserRoutes = require('./routes/superuser');
 
@@ -92,8 +96,10 @@ const queries = {
   getUserByGoogleId: db.prepare('SELECT * FROM users WHERE google_id = ?'),
   update2FASecret: db.prepare('UPDATE users SET two_factor_secret = ? WHERE id = ?'),
   enable2FA: db.prepare('UPDATE users SET is_2fa_enabled = 1 WHERE id = ?'),
-  getInvitation: db.prepare('SELECT * FROM invitations WHERE token = ? AND is_used = 0'),
-  markInviteUsed: db.prepare('UPDATE invitations SET is_used = 1 WHERE id = ?'),
+  // Fetched by token alone, so registration can say WHY it refused — revoked,
+  // already used, or expired — instead of reporting all three as invalid.
+  getInvitation: db.prepare('SELECT * FROM invitations WHERE token = ?'),
+  markInviteUsed: db.prepare("UPDATE invitations SET status = 'used' WHERE id = ?"),
   createUser: db.prepare(`
     INSERT INTO users (username, email, password_hash, role)
     VALUES (@username, @email, @password_hash, @role)
@@ -160,35 +166,45 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 // 5. INVITATION & REGISTRATION
 // -------------------------------------------------------------
 
-// Admin/Superuser creates an invite token for developers/admins
-app.post('/api/auth/create-invite', authenticateToken, requireAdmin, (req, res) => {
-  const { email, assigned_role } = req.body;
-  const token = require('crypto').randomBytes(16).toString('hex');
-
-  try {
-    db.prepare(`
-      INSERT INTO invitations (email, assigned_role, token)
-      VALUES (?, ?, ?)
-    `).run(email, assigned_role, token);
-
-    res.json({ message: 'Invite created successfully', inviteToken: token });
-  } catch (err) {
-    res.status(400).json({ error: 'Invitation already exists for this email' });
-  }
-});
+// NOTE: invitations are created at POST /api/inviteDevs/generate-invite.
+//
+// There used to be a second endpoint here — /api/auth/create-invite — doing
+// the same job differently: it took assigned_role straight from the body
+// behind requireAdmin and returned the token, so any admin could mint and
+// redeem a superuser invitation. Removed rather than patched, so there is one
+// place that decides who may invite whom.
 
 // Register via Invitation Token
 app.post('/api/auth/register-invited', async (req, res) => {
   const { username, password, inviteToken } = req.body;
 
   const invite = queries.getInvitation.get(inviteToken);
+
   if (!invite) {
-    return res.status(403).json({ error: 'Invalid or expired invitation token' });
+    return res.status(403).json({ error: 'Invalid invitation token' });
+  }
+
+  // Refuse with a reason rather than lumping every failure into "invalid or
+  // expired" — a revoked invitation and an expired one need different
+  // responses from whoever is trying to use it.
+  const acceptable = isAcceptable(db, invite);
+
+  if (!acceptable.ok) {
+    const messages = {
+      revoked: 'This invitation has been withdrawn. Please contact your administrator.',
+      used: 'This invitation has already been accepted. Try logging in instead.',
+      expired: 'This invitation has expired. You can request a new link.',
+    };
+
+    return res.status(403).json({
+      error: messages[acceptable.reason] || 'This invitation cannot be used.',
+      reason: acceptable.reason,
+    });
   }
 
   try {
     const password_hash = await bcrypt.hash(password, 12);
-    
+
     queries.createUser.run({
       username,
       email: invite.email,
@@ -198,7 +214,11 @@ app.post('/api/auth/register-invited', async (req, res) => {
 
     queries.markInviteUsed.run(invite.id);
 
-    res.json({ success: true, message: 'Account created successfully. You may now log in.' });
+    res.json({
+      success: true,
+      role: invite.assigned_role,
+      message: 'Account created successfully. You may now log in.'
+    });
   } catch (err) {
     res.status(400).json({ error: 'Username or Email already registered' });
   }

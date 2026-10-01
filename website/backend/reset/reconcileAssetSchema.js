@@ -175,10 +175,11 @@ if (!invitationsSql) {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
             assigned_role TEXT
-              CHECK (assigned_role IN ('developer','admin','superuser'))
+              CHECK (assigned_role IN ('user','developer','admin','superuser'))
               NOT NULL,
             token TEXT UNIQUE NOT NULL,
-            is_used INTEGER DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending','used','revoked')),
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             expires_at DATETIME DEFAULT (datetime('now', '+28 days')),
             reissue_count INTEGER DEFAULT 0
@@ -189,10 +190,11 @@ if (!invitationsSql) {
 
         db.exec(`
           INSERT INTO invitations_rebuilt
-            (id, email, assigned_role, token, is_used,
+            (id, email, assigned_role, token, status,
              created_at, expires_at, reissue_count, last_reissued_at)
           SELECT
-             id, email, assigned_role, token, is_used,
+             id, email, assigned_role, token,
+             CASE WHEN is_used = 1 THEN 'used' ELSE 'pending' END,
              created_at, expires_at, reissue_count, last_reissued_at
           FROM invitations;
         `);

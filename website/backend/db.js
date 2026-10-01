@@ -19,10 +19,70 @@ db.pragma('foreign_keys = ON');
  */
 
 const applySchemaPatches = () => {
-  const columns = db
+  let columns = db
     .prepare("PRAGMA table_info(invitations)")
     .all()
     .map(c => c.name);
+
+  /*
+   * ----------------------------------------------------------
+   * Rebuild: is_used -> status, and 'user' becomes invitable
+   * ----------------------------------------------------------
+   *
+   * Two CHECK constraints changed: the role list gained 'user' (a tester is a
+   * plain user), and the is_used flag became a three-state status. SQLite
+   * cannot alter a CHECK, so this is a rebuild rather than ADD COLUMN.
+   *
+   * Safe to do at startup: invitations holds one row and nothing references
+   * it. Transactional, so a failure leaves the old table intact rather than a
+   * half-built one.
+   */
+  if (columns.includes('is_used')) {
+    const rebuildInvitations = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE invitations_rebuilt (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          assigned_role TEXT
+            CHECK(assigned_role IN ('user','developer','admin','superuser'))
+            NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','used','revoked')),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          expires_at DATETIME DEFAULT (datetime('now', '+28 days')),
+          reissue_count INTEGER DEFAULT 0 CHECK(reissue_count <= 6),
+          last_reissued_at DATETIME
+        );
+      `);
+
+      db.exec(`
+        INSERT INTO invitations_rebuilt
+          (id, email, assigned_role, token, status,
+           created_at, expires_at, reissue_count, last_reissued_at)
+        SELECT
+          id, email, assigned_role, token,
+          CASE WHEN is_used = 1 THEN 'used' ELSE 'pending' END,
+          created_at,
+          COALESCE(expires_at, datetime('now', '+28 days')),
+          COALESCE(reissue_count, 0),
+          last_reissued_at
+        FROM invitations;
+      `);
+
+      db.exec('DROP TABLE invitations');
+      db.exec('ALTER TABLE invitations_rebuilt RENAME TO invitations');
+    });
+
+    rebuildInvitations();
+
+    columns = db
+      .prepare("PRAGMA table_info(invitations)")
+      .all()
+      .map(c => c.name);
+
+    console.log('🔁 invitations rebuilt: is_used -> status, user is now invitable');
+  }
 
   if (!columns.includes('expires_at')) {
     db.exec(`
@@ -639,9 +699,14 @@ const initDb = () => {
 
       email TEXT UNIQUE NOT NULL,
 
+      -- 'user' is the tester: a login with no extra privileges. It is
+      -- invitable because that is how a tester is created — being a tester
+      -- needs no role of its own, since the tester features (download,
+      -- comment, report) are available to anyone logged in.
       assigned_role TEXT
         CHECK(
           assigned_role IN (
+            'user',
             'developer',
             'admin',
             'superuser'
@@ -651,7 +716,12 @@ const initDb = () => {
 
       token TEXT UNIQUE NOT NULL,
 
-      is_used INTEGER DEFAULT 0,
+      -- Replaces the old is_used flag. Three states rather than two, so a
+      -- revoked invitation is distinguishable from a used one — and expiry is
+      -- NOT a state: it is derived from expires_at at read time, so no
+      -- scheduled job is needed to move invitations between states.
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'used', 'revoked')),
 
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 

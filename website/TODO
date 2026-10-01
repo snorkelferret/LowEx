@@ -263,6 +263,69 @@ missing content, traversal in relative_path, and header injection through a
 filename containing quotes and newlines.
 
 
+INVITATIONS 2026-10-01 (backend done, delivery not)
+---------------------------------------------------
+Testers are NOT a role. A tester is a plain `user` — a login with no extra
+privileges — because the tester features (download a build, comment, report)
+are available to anyone logged in. So `user` is invitable, and is the default
+invitation role as the least privileged. frontend/user.html is `<h1> User
+Hello </h1>`; that placeholder IS the current tester experience.
+
+SECURITY FIX — admin-to-superuser escalation, now closed.
+Both invitation endpoints took assigned_role straight from the request body
+behind requireAdmin, and returned the token in the response. So any admin
+could mint a superuser invitation and redeem it themselves in two requests:
+
+    POST /api/auth/create-invite    { assigned_role: 'superuser' } -> token
+    POST /api/auth/register-invited { ..., inviteToken: token }    -> superuser
+
+The rule now: an inviter may assign only roles STRICTLY BELOW their own
+(backend/lib/roles.js). A superuser cannot invite another superuser, so there
+can only ever be one — deliberate, but it means no backup exists. The seeded
+superuser is created by db.js when users is empty, so the system cannot be left
+with none.
+
+  * POST /api/auth/create-invite REMOVED. One place creates invitations now:
+    /api/inviteDevs/generate-invite.
+  * GET /api/inviteDevs/assignable-roles — so the UI offers only valid options.
+  * POST /api/inviteDevs/:id/revoke — new. A USED invitation is deliberately
+    not revocable (409): the account exists and revoking the invitation would
+    not affect it, so "revoked" would be a lie. The message points at
+    deactivating the user instead.
+  * Registration now refuses with a REASON (revoked / used / expired) instead
+    of reporting all three as "invalid or expired".
+  * Reissue returns the new link. It used to mint a token and return only
+    success/expiry, so the call worked and the developer received nothing.
+
+SCHEMA: invitations rebuilt — `is_used` became a three-state `status`
+(pending / used / revoked), and `assigned_role` gained 'user'. Both are CHECK
+constraints, which SQLite cannot alter, so it is a rebuild in db.js's
+applySchemaPatches, guarded on the old column name and idempotent. EXPIRY IS
+NOT A STATE — it is derived from expires_at on read, so no scheduled job is
+needed and a missed job cannot leave an invitation stuck. Applies to every
+role; 28 days and the 6-reissue cap are unchanged.
+
+Verified with 32 assertions, weighted at the security end: an admin is refused
+a superuser invitation AND gets no token back; same for admin-at-own-level and
+superuser-at-own-level; an admin can invite developer and user; a superuser can
+invite an admin. Plus status, revocation, expiry, and the duplicate endpoint
+returning 404.
+
+STILL MISSING — the invitation flow does not yet deliver anything:
+
+  1. NO REGISTER PAGE. The link points at /register?token=... and nothing
+     serves it. An invited person arrives at a 404.
+  2. NO EMAIL. Both creation and reissue return the link in the API response
+     as a stopgap, so the inviter has to pass it on by hand. This is the
+     deferred SMTP/nodemailer item (TODO item 2), and the nodemailer 9 -> 10
+     bump belongs with it.
+  3. The invite UI (frontend/src/sharedInvites.js) still calls the old
+     reissue route and needs pointing at the new revoke/generate endpoints.
+
+Order agreed: register page first (so the link works), then email.
+
+
+
 GAME-SPACE READ — DEFERRED BY DECISION (2026-10-01)
 ---------------------------------------------------
 DEFERRED, not forgotten, and deliberately bundled with building the game.
