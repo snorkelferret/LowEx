@@ -210,6 +210,45 @@ function matchAssetName(existingNames, candidateName) {
     return { tier: 'different' };
 }
 
+// ---------------------------------------------------------------------------
+// Deriving the uploaded root from the file paths
+// ---------------------------------------------------------------------------
+//
+// A directory upload arrives as paths sharing a first segment:
+//
+//     bigTree_v04/scripts/nuke.nk
+//     bigTree_v04/models/tree.blend
+//     -> bigTree_v04
+//
+// Deriving it here rather than trusting a separate field means the name cannot
+// disagree with the content it describes. The client may still send an explicit
+// name, but this is the fallback and the cross-check.
+//
+// Returns null when there is no single root: loose files at the top level, or a
+// mix of a directory and loose files. The caller decides what to do about that
+// — there is no name to derive, so the upload cannot infer one.
+function deriveUploadRoot(filePaths) {
+    const paths = (Array.isArray(filePaths) ? filePaths : [])
+        .map(p => String(p).replace(/\\/g, '/').replace(/^\/+/, ''))
+        .filter(p => p.length > 0);
+
+    if (paths.length === 0) return null;
+
+    const roots = new Set();
+
+    for (const p of paths) {
+        const segments = p.split('/');
+
+        // A file with no directory component sits at the top level, which means
+        // there is no single folder to take a name from.
+        if (segments.length < 2) return null;
+
+        roots.add(segments[0]);
+    }
+
+    return roots.size === 1 ? [...roots][0] : null;
+}
+
 module.exports = {
     RESERVED_EXTENSIONS,
     NEAR_MATCH_MAX_DISTANCE,
@@ -219,4 +258,5 @@ module.exports = {
     normaliseForComparison,
     editDistance,
     matchAssetName,
+    deriveUploadRoot,
 };

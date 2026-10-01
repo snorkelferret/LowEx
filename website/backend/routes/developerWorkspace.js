@@ -14,6 +14,13 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
+const {
+    parseAssetName,
+    classifyFolderName,
+    matchAssetName,
+    deriveUploadRoot
+} = require('../lib/assetNaming');
+
 
 // ============================================================
 // Temporary upload storage
@@ -1122,6 +1129,140 @@ const assetUpload = multer({
     dest: tempUploadDir
 });
 
+
+// ============================================================
+// POST /api/developer/workspace/assets/check-name
+// ============================================================
+//
+// Preflight for an upload's folder name.
+//
+// The naming rules live on the server ONLY. The client asks rather than
+// carrying its own copy of the regex, so there is one source of truth and the
+// preview cannot disagree with what the upload will actually do.
+//
+// See docs/uploadmodel01. The asset name comes from the developer's folder:
+// bigTree_v04 is asset "bigTree", and the _v04 is the developer's own
+// labelling — their iteration marker, not the system's version. The system's
+// upload version is a separate per-asset counter (v01, v02, …), housekeeping
+// rather than something the developer manages.
+//
+// Body: { upload_name?, file_paths? } — the name is derived from file_paths
+// when not given, so it cannot disagree with the content it describes.
+//
+// Returns the verdict, the parsed asset name, which asset the upload would
+// join and how confidently, and the version it would become.
+// ============================================================
+
+router.post(
+    '/assets/check-name',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+
+        if (!developerId) {
+            return res.status(401).json({ error: 'Authenticated user ID not found' });
+        }
+
+        try {
+            // A developer with no workspace yet is not an error — it is exactly
+            // who needs a preflight. A missing workspace simply means there are
+            // no existing assets to match against. The workspace row itself is
+            // created lazily by the upload, as before.
+            const workspace = db.prepare(`
+                SELECT id FROM developer_workspaces WHERE developer_id = ?
+            `).get(developerId);
+
+            const explicitName = String(req.body?.upload_name || '').trim();
+
+            let filePaths = [];
+
+            if (Array.isArray(req.body?.file_paths)) {
+                filePaths = req.body.file_paths;
+            } else if (typeof req.body?.file_paths === 'string') {
+                try { filePaths = JSON.parse(req.body.file_paths); } catch { filePaths = []; }
+            }
+
+            const uploadName = explicitName || deriveUploadRoot(filePaths);
+
+            if (!uploadName) {
+                return res.json({
+                    verdict: 'block',
+                    reason:
+                        'No asset name could be determined. Select a FOLDER to ' +
+                        'upload — the folder name is the asset name — or provide ' +
+                        'one explicitly.',
+                    upload_name: null,
+                    asset_name: null,
+                    match: { tier: 'different', matched_name: null },
+                    next_upload_version: null
+                });
+            }
+
+            const classification = classifyFolderName(uploadName);
+            const parsed = classification.parsed;
+            const assetName = parsed.name;
+
+            const existingNames = workspace
+                ? db.prepare(`
+                    SELECT name
+                    FROM workspace_assets
+                    WHERE workspace_id = ?
+                      AND is_active = 1
+                `).all(workspace.id).map(r => r.name)
+                : [];
+
+            const match = matchAssetName(existingNames, assetName);
+
+            // The version the upload WOULD become. Only meaningful for an
+            // existing asset; a new one starts at 1.
+            const targetName =
+                match.tier === 'near' ? match.match :
+                match.tier === 'exact' ? match.match :
+                assetName;
+
+            const target = workspace
+                ? db.prepare(`
+                    SELECT id FROM workspace_assets
+                    WHERE workspace_id = ? AND name = ?
+                `).get(workspace.id, targetName)
+                : null;
+
+            let nextUploadVersion = 1;
+
+            if (target) {
+                const latest = db.prepare(`
+                    SELECT MAX(version_number) AS v
+                    FROM workspace_versions
+                    WHERE workspace_asset_id = ?
+                `).get(target.id);
+
+                nextUploadVersion = (latest?.v || 0) + 1;
+            }
+
+            return res.json({
+                verdict: classification.verdict,
+                reason: classification.reason || null,
+                upload_name: uploadName,
+                asset_name: assetName,
+                version_marker: parsed.version,
+                match: {
+                    tier: match.tier,
+                    matched_name: match.match || null
+                },
+                next_upload_version: nextUploadVersion,
+                existing_asset_names: existingNames
+            });
+
+        } catch (err) {
+            console.error('Failed to check upload name:', err);
+
+            return res.status(500).json({ error: 'Failed to check upload name' });
+        }
+    }
+);
+
 router.post(
     '/upload',
     authenticateToken,
@@ -1162,9 +1303,6 @@ router.post(
             // Metadata
             // ----------------------------------------------------
 
-            const assetName =
-                String(req.body.asset_name || '').trim();
-
             const assetType =
                 String(req.body.asset_type || '').trim();
 
@@ -1177,10 +1315,6 @@ router.post(
                     'Initial upload'
                 ).trim();
 
-
-            if (!assetName) {
-                throw new Error('Asset name is required');
-            }
 
             if (!versionNote) {
                 throw new Error('Version note is required');
@@ -1218,6 +1352,54 @@ router.post(
                     );
                 }
             }
+
+
+            // ----------------------------------------------------
+            // The asset name comes from the FOLDER the developer
+            // uploaded. See docs/uploadmodel01.
+            //
+            // It is DERIVED FROM THE PATHS rather than taken on
+            // trust from a separate field, so the name cannot
+            // disagree with the content it describes.
+            //
+            //   bigTree_v04/scripts/nuke.nk
+            //     -> root  "bigTree_v04"
+            //     -> asset "bigTree"
+            //
+            // The _v04 is the DEVELOPER'S labelling — their own
+            // iteration marker — not the system's version. The
+            // upload version is a separate per-asset counter, which
+            // is what MAX(version_number) + 1 below still does.
+            // ----------------------------------------------------
+
+            const explicitUploadName =
+                String(req.body.upload_name || '').trim();
+
+            const uploadName =
+                explicitUploadName ||
+                deriveUploadRoot(filePaths) ||
+                deriveUploadRoot(uploadedFiles.map(f => f.originalname));
+
+            if (!uploadName) {
+                throw new Error(
+                    'No asset name could be determined. Select a FOLDER to ' +
+                    'upload — the folder name is the asset name.'
+                );
+            }
+
+            const classification =
+                classifyFolderName(uploadName);
+
+            // Deliberately fatal: a name ending in a file extension is a file,
+            // not an asset, and proceeding would create a nonsense asset.
+            if (classification.verdict === 'block') {
+                const namingError = new Error(classification.reason);
+                namingError.status = 422;
+                throw namingError;
+            }
+
+            const parsedName =
+                classification.parsed;
 
 
             // ----------------------------------------------------
@@ -1439,6 +1621,73 @@ router.post(
                 workspace = {
                     id: result.lastInsertRowid
                 };
+            }
+
+
+            // ----------------------------------------------------
+            // Three-tier match against the developer's existing
+            // assets.
+            //
+            //   exact      the parsed name is an existing asset
+            //   near       it differs only by case, separators,
+            //              whitespace, or is within an edit
+            //              distance of one -> ASK, because parsing
+            //              is fuzzy and a forgotten capital or
+            //              underscore is exactly when a developer
+            //              does NOT mean to create a new asset
+            //   different  genuinely new
+            //
+            // The confirmation arrives as confirmed_asset_name,
+            // which must be one of the two names offered. Anything
+            // else is refused rather than guessed at.
+            // ----------------------------------------------------
+
+            const existingAssetNames = db.prepare(`
+                SELECT name
+                FROM workspace_assets
+                WHERE workspace_id = ?
+                  AND is_active = 1
+            `).all(workspace.id).map(r => r.name);
+
+            const nameMatch =
+                matchAssetName(existingAssetNames, parsedName.name);
+
+            const confirmedName =
+                String(req.body.confirmed_asset_name || '').trim();
+
+            let assetName = parsedName.name;
+
+            if (nameMatch.tier === 'near') {
+
+                if (!confirmedName) {
+                    const prompt = new Error(
+                        `"${uploadName}" looks like it belongs to the existing ` +
+                        `asset "${nameMatch.match}", but it is not an exact ` +
+                        `match. Confirm which one you meant.`
+                    );
+
+                    prompt.status = 409;
+                    prompt.details = {
+                        reason: 'near_match',
+                        upload_name: uploadName,
+                        parsed_name: parsedName.name,
+                        matched_name: nameMatch.match,
+                        options: [parsedName.name, nameMatch.match],
+                        message: prompt.message
+                    };
+
+                    throw prompt;
+                }
+
+                if (![parsedName.name, nameMatch.match].includes(confirmedName)) {
+                    throw new Error(
+                        `Confirmed name "${confirmedName}" is neither the name ` +
+                        `in the upload ("${parsedName.name}") nor the existing ` +
+                        `asset ("${nameMatch.match}").`
+                    );
+                }
+
+                assetName = confirmedName;
             }
 
 
@@ -2017,12 +2266,15 @@ router.post(
             );
 
 
-            // Errors raised deliberately (the freeze check) carry their own
-            // status; everything else stays a 400 as before.
+            // Errors raised deliberately carry their own status — the freeze
+            // check (409), a blocked name (422), and the near-match prompt
+            // (409, with details the client needs to ask the right question).
+            // Everything else stays a 400 as before.
             return res.status(err.status || 400).json({
                 error:
                     err.message ||
-                    'Failed to process uploaded files'
+                    'Failed to process uploaded files',
+                ...(err.details ? { details: err.details } : {})
             });
         }
     }

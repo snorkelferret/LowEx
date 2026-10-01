@@ -113,6 +113,32 @@ check(
 );
 check('editDistance sanity', N.editDistance('asset', 'assets') === 1 && N.editDistance('abc', 'abc') === 0);
 
+// ------------------------------------------------------ deriving the root
+
+console.log('\n  -- upload root from file paths --');
+
+const R = N.deriveUploadRoot;
+
+check('a shared first segment is the root',
+    R(['bigTree_v04/scripts/nuke.nk', 'bigTree_v04/models/tree.blend']) === 'bigTree_v04');
+check('backslashes (a Windows upload) are handled',
+    R(['bigTree_v04\\scripts\\nuke.nk', 'bigTree_v04\\models\\tree.blend']) === 'bigTree_v04');
+check('a leading slash is ignored',
+    R(['/bigTree_v04/a.nk', '/bigTree_v04/b.nk']) === 'bigTree_v04');
+check('loose files at the top level have no root',
+    R(['a.nk', 'b.nk']) === null);
+check('a mix of directory and loose files has no root',
+    R(['bigTree_v04/a.nk', 'b.nk']) === null);
+check('two different roots have no single root',
+    R(['bigTree_v04/a.nk', 'other/b.nk']) === null);
+check('an empty list has no root', R([]) === null);
+check('single nested file still yields its root',
+    R(['bigTree_v04/only.nk']) === 'bigTree_v04');
+
+// The derived root then goes through the parser, which is the whole chain.
+check('the chain: paths -> root -> asset name',
+    N.parseAssetName(R(['bigTree_v04/scripts/nuke.nk', 'bigTree_v04/x.blend'])).name === 'bigTree');
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 console.log(fail === 0 ? '\n  PASS' : '\n  FAIL');
 
