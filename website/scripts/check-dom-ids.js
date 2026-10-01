@@ -72,9 +72,6 @@ const KNOWN_MISSING = {
     'signInAsBtn':
         'the entry point for impersonation, which is deferred by decision. '
         + 'Impersonation is how an admin reaches inside a workspace.',
-    'invite-link-input':
-        'sharedInvites.js copyInviteLink() selects it, but nothing renders the '
-        + 'generated link with that id, so the copy helper does nothing.',
 };
 
 let failures = 0;

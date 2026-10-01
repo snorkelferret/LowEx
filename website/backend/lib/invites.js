@@ -45,11 +45,63 @@ function isAcceptable(db, invite) {
     return expired ? { ok: false, reason: 'expired' } : { ok: true };
 }
 
+// May this invitation be reissued?
+//
+// Shared by BOTH reissue paths — the unauthenticated one where the invitee
+// holds a link, and the admin one where an administrator picks from the list.
+// Two copies of these checks would drift, and the failure would be quiet: one
+// path allowing a reissue of a revoked invitation, say.
+function canReissue(invite) {
+    if (!invite) {
+        return { ok: false, reason: 'missing' };
+    }
+
+    if (invite.status === 'revoked') {
+        return { ok: false, reason: 'revoked' };
+    }
+
+    if (invite.status === 'used') {
+        return { ok: false, reason: 'used' };
+    }
+
+    if (invite.reissue_count >= MAX_REISSUES) {
+        return { ok: false, reason: 'limit' };
+    }
+
+    return { ok: true };
+}
+
+// The messages both paths use for a refusal, so they cannot disagree either.
+const REISSUE_REFUSALS = {
+    revoked: {
+        status: 403,
+        body: {
+            error: 'REVOKED',
+            message: 'This invitation has been withdrawn. Please contact your administrator.'
+        }
+    },
+    used: {
+        status: 400,
+        body: { message: 'This invitation has already been accepted.' }
+    },
+    limit: {
+        status: 403,
+        body: {
+            error: 'LIMIT_REACHED',
+            message:
+                `Maximum reissue limit (${MAX_REISSUES}/${MAX_REISSUES}) reached. ` +
+                `Please contact your administrator for a fresh invitation.`
+        }
+    }
+};
+
 module.exports = {
     INVITE_VALID_DAYS,
     MAX_REISSUES,
     STATUSES,
     DISPLAY_STATUS_SQL,
+    REISSUE_REFUSALS,
     inviteLinkFor,
     isAcceptable,
+    canReissue,
 };

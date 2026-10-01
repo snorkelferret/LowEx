@@ -345,10 +345,35 @@ STILL MISSING — the flow is reachable but not yet self-service:
      shows a reissued link directly to the person who asked, which is the right
      stopgap but still not the real thing. This is the deferred SMTP/nodemailer
      item (TODO item 2); the nodemailer 9 -> 10 bump belongs with it.
-  2. frontend/src/sharedInvites.js still calls the old id-based reissue route
-     and needs pointing at /generate-invite, /:id/revoke and
-     /request-reissue. Its copyInviteLink() also has nothing to copy from —
-     see TODO item 25.
+  2. frontend/src/sharedInvites.js REWRITTEN 2026-10-01 — no longer a gap.
+     It called two things that never existed: a reissue-by-id route, and a
+     copy helper reading an element nothing rendered. Neither reissue nor copy
+     has ever worked from that panel.
+
+     Fixed by adding the missing endpoint (POST /:id/reissue) and giving the
+     copy helper something real to copy — the generated and reissued links are
+     now shown with a copy button.
+
+     Also fixed in the same file:
+       * the status shown is the SERVER's. It used to be recomputed from
+         createdAt + 28 days, which was wrong twice: a reissue moves expiresAt
+         but not createdAt, so a renewed invitation read as expired forever;
+         and `new Date('2026-09-07 13:08:31')` is an Invalid Date in Safari.
+       * STORED XSS. invite.email, role and status were interpolated into
+         innerHTML, so an invitation to `<img src=x onerror=...>` executed in
+         the admin's session. Every value is escaped now, verified mechanically
+         rather than by eye — all 9 interpolations in the markup surface are
+         wrapped.
+       * the role select was hardcoded to Developer/Admin/Superuser and now
+         reflects what the caller may actually assign, from
+         GET /assignable-roles. An admin was being offered "Superuser", which
+         the server refuses.
+       * Revoke added to the panel; the list had no way to withdraw one.
+       * one delegated click listener instead of one per row per refresh.
+     admin.js's now-unused import of reissueInvite/getInviteStatus removed.
+
+  3. The two reissue paths now share their guards (lib/invites.js canReissue),
+     so they cannot drift on what may be reissued.
 
 
 
@@ -859,3 +884,34 @@ They MUST be dealt with before any real user data exists.
         rework above.
 
     Remove an entry when the control is added or the code is deleted.
+
+25) DEVELOPER PAGE: browse the game store, to reuse approved assets.
+    A developer should be able to browse what is already in the game store —
+    particularly IMAGES and MODELS — and pull it into their own work, rather
+    than re-uploading a copy of something the store already holds.
+
+    This is the consumption side of the model, and it is the same ground as
+    GAME-SPACE READ below: neither exists, because both were deferred until
+    the game itself is being built. Recorded separately because it is a
+    DEVELOPER-facing requirement with its own shape — browsing by type,
+    previewing an image or a model, and importing into a workspace — whereas
+    game-space read is the access layer underneath it.
+
+    What it needs, when the time comes:
+
+      * a /api/game router, and the THIRD access class: workspace content is
+        the owning developer only, game-store content is readable by any
+        authenticated developer, release management is admin/superuser.
+      * import into a workspace, writing workspace_assets.repository_asset_id
+        and repository_base_version_id — both exist in the schema and neither
+        has ever been written. That is what would finally make "pick up your
+        own approved work and continue" possible.
+      * preview for the types that can be previewed: images inline (with the
+        usual care — octet-stream, never the stored mime), and models via a
+        glTF viewer. See docs/assettypes01 for why only some formats are
+        renderable.
+
+    Note the quota interaction: content pulled from the game store is
+    EXCLUDED from the workspace limit, because it is not what the workspace is
+    staging. That is already implemented, so importing approved work is free —
+    which is the point.

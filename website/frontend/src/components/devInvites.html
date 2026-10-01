@@ -25,10 +25,13 @@
           <div class="col-md-4">
             <!-- ✅ FIX: Added for="invite-role" to link with the select menu element -->
             <label for="invite-role" class="form-label small text-secondary fw-semibold">Role / Access Level</label>
+            <!-- Repopulated on load from /assignable-roles with only what THIS
+                 caller may assign: an inviter may assign roles strictly below
+                 their own, so an admin is never offered Superuser. These
+                 options are just a fallback if that request fails. -->
             <select id="invite-role" class="form-select form-select-sm bg-dark text-light border-secondary">
-              <option value="developer" selected>Developer (Sandbox + Client)</option>
-              <option value="admin">Admin (Full Access)</option>
-              <option value="superuser">Superuser (Infrastructure & Keys)</option>
+              <option value="developer" selected>Developer</option>
+              <option value="user">Tester</option>
             </select>
           </div>
 

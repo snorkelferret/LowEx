@@ -1,5 +1,6 @@
 // frontend/src/admin.js
-import { reissueInvite, getInviteStatus } from './sharedInvites.js';
+// No import from sharedInvites.js any more: reissueInvite and getInviteStatus
+// were only used by the dead block removed below.
 
 // ==========================================
 // 1. Strict Module-Level Configuration

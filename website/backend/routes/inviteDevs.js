@@ -27,7 +27,9 @@ const {
     INVITE_VALID_DAYS,
     MAX_REISSUES,
     DISPLAY_STATUS_SQL,
+    REISSUE_REFUSALS,
     inviteLinkFor,
+    canReissue,
 } = require('../lib/invites');
 
 const router = express.Router();
@@ -223,26 +225,16 @@ router.post('/request-reissue', (req, res) => {
             return res.status(404).json({ message: 'Invitation record not found.' });
         }
 
-        if (invite.status === 'revoked') {
-            return res.status(403).json({
-                error: 'REVOKED',
-                message: 'This invitation has been revoked. Please contact your administrator.'
-            });
-        }
+        // Shared with the admin-side reissue below, so the two paths cannot
+        // drift on what may be reissued.
+        const reissueable = canReissue(invite);
 
-        if (invite.status === 'used') {
-            return res.status(400).json({
-                message: 'This invitation has already been accepted.'
-            });
-        }
+        if (!reissueable.ok) {
+            const refusal = REISSUE_REFUSALS[reissueable.reason];
 
-        if (invite.reissue_count >= MAX_REISSUES) {
-            return res.status(403).json({
-                error: 'LIMIT_REACHED',
-                message:
-                    `Maximum reissue limit (${MAX_REISSUES}/${MAX_REISSUES}) reached. ` +
-                    `Please contact your administrator for a fresh invitation.`
-            });
+            return refusal
+                ? res.status(refusal.status).json(refusal.body)
+                : res.status(400).json({ message: 'This invitation cannot be reissued.' });
         }
 
         const newToken = crypto.randomBytes(32).toString('hex');
@@ -332,6 +324,76 @@ router.post('/:id/revoke', authenticateToken, requireAdmin, (req, res) => {
     } catch (err) {
         console.error('Error revoking invitation:', err);
         return res.status(500).json({ error: 'Failed to revoke invitation.' });
+    }
+});
+
+
+/**
+ * POST /api/inviteDevs/:id/reissue
+ * Admin/superuser. Reissues a pending invitation, chosen from the list.
+ *
+ * This is the ADMIN-side counterpart to /request-reissue. That one is
+ * unauthenticated because whoever asks holds a link and has no account yet, so
+ * the token is the credential. An administrator has neither problem, and the
+ * list endpoint deliberately does not return tokens — putting every
+ * invitation's token on the page would make the list itself a liability. So
+ * they pick by id and the server looks the token up.
+ *
+ * The route the admin UI called — /:id/reissue — was this path, but it did not
+ * exist. Reissue from the panel has therefore never worked.
+ */
+router.post('/:id/reissue', authenticateToken, requireAdmin, (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+        return res.status(400).json({ error: 'Invalid invitation ID' });
+    }
+
+    try {
+        const invite = db.prepare('SELECT * FROM invitations WHERE id = ?').get(id);
+
+        if (!invite) {
+            return res.status(404).json({ error: 'Invitation not found' });
+        }
+
+        const reissueable = canReissue(invite);
+
+        if (!reissueable.ok) {
+            const refusal = REISSUE_REFUSALS[reissueable.reason];
+
+            return refusal
+                ? res.status(refusal.status).json(refusal.body)
+                : res.status(400).json({ error: 'This invitation cannot be reissued.' });
+        }
+
+        const newToken = crypto.randomBytes(32).toString('hex');
+
+        db.prepare(`
+            UPDATE invitations
+            SET token = ?,
+                reissue_count = reissue_count + 1,
+                expires_at = datetime('now', ?),
+                last_reissued_at = datetime('now')
+            WHERE id = ?
+        `).run(newToken, `+${INVITE_VALID_DAYS} days`, id);
+
+        const updated = db.prepare(
+            'SELECT reissue_count, expires_at FROM invitations WHERE id = ?'
+        ).get(id);
+
+        return res.json({
+            success: true,
+            id,
+            email: invite.email,
+            inviteLink: linkFor(newToken),
+            reissuesRemaining: MAX_REISSUES - updated.reissue_count,
+            expiresAt: updated.expires_at,
+            note: 'No mail transport yet — pass this link on yourself.'
+        });
+
+    } catch (err) {
+        console.error('Error reissuing invitation:', err);
+        return res.status(500).json({ error: 'Failed to reissue invitation.' });
     }
 });
 
