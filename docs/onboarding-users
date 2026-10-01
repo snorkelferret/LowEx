@@ -40,12 +40,20 @@ invitation.
 If your invitation was withdrawn, or has already been used, the page says so
 rather than showing you a form that cannot work.
 
-NOT BUILT: the invitation is not emailed. Whoever invited you currently has to
-pass the link on themselves, and after a reissue the new link is shown on that
-page for the same reason.
+The invitation is emailed to you, if the portal has been configured to send
+mail. If it has not, whoever invited you is given the link to pass on
+themselves, so a link still reaches you either way.
 
 Two-factor authentication is required at login. You will be asked for a code
 from an authenticator app.
+
+WHAT YOUR ACCOUNT CAN DO
+
+  * Sign in, and see your own landing page.
+  * Follow the Discussion link to the team's board.
+
+That is genuinely all. There is no build to download yet and no way to report
+anything yet — see below.
 
 
 ================================================================================
@@ -57,16 +65,36 @@ NOT BUILT — none of the following exists yet. This is the intended shape.
   * Download a build of the game, and older versions of it.
   * Leave comments, and read other people's.
   * Report bugs, and follow up on ones you have reported.
-  * Discuss, on the portal's own board — the "Slack-like" board from the
-    specification.
+  * Talk to the team. See the Discussion section below.
 
 The intent is that a tester never needs a copy of the source, or any tooling.
 Download, play, say what you found.
 
-WHAT EXISTS TODAY
 
-Nothing. The page a `user` account lands on is a placeholder. A tester account
-can log in and nothing else.
+================================================================================
+DISCUSSION
+================================================================================
+
+The team talks on a board separate from this portal. It is NOT built into the
+portal and will not be, and that is a decision rather than an oversight: the
+board is being chosen to be open source and hosted in the UK or the EU, so the
+conversation is not subject to US jurisdiction.
+
+WHAT THAT MEANS FOR YOU, and it is worth knowing before you sign up:
+
+  * YOUR BOARD ACCOUNT IS SEPARATE from your portal account. Signing in here
+    does not sign you in there, and your role here does not carry over.
+  * Signing out here does not sign you out of the board.
+  * Revoking your portal access will revoke your board access too — that is
+    being built deliberately, because it is the thing a third-party board
+    normally cannot do.
+
+NOT BUILT YET. The board has not been chosen and configured. The Discussion
+link on the portal says so rather than offering a link that goes nowhere, which
+is the correct behaviour and not an error.
+
+The page is deliberately honest about that rather than describing features that
+are coming as though they were here.
 
 
 ================================================================================
@@ -89,11 +117,15 @@ REVOCATION
 ================================================================================
 
 Your invitation can be withdrawn before you use it, and your ACCESS can be
-revoked after — by deactivating the account, which takes effect immediately
-rather than when your session would have expired.
+revoked after — by deactivating the account.
 
-If you think that has happened in error, contact whoever invited you. There is
-no self-service route back in.
+That takes effect IMMEDIATELY. If you are signed in when it happens, your very
+next action is refused — you are not left working until your session happens to
+expire. Being deactivated does not delete anything you have done.
+
+An administrator can reactivate you, which restores access immediately in the
+same way. If you think a deactivation was a mistake, contact whoever invited
+you; there is no self-service route back in.
 
 
 ================================================================================

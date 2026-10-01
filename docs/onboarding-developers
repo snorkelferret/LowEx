@@ -32,8 +32,9 @@ The invitation link is valid for 28 days. If it expires you can request a new
 one from the same page, up to six times before an administrator has to issue a
 fresh invitation.
 
-NOT BUILT: the invitation is not emailed yet. Whoever invites you currently has
-to pass the link on themselves.
+The invitation is emailed to you, if the portal is configured to send mail. If
+it is not, whoever invited you is given the link to pass on themselves — so a
+link reaches you either way, and a reissued one is shown on the page too.
 
 If your link has been withdrawn, or already used, the page will say so rather
 than showing you a form that cannot work.
@@ -152,11 +153,50 @@ deliberately deferred until the game itself is being built.
 
 
 ================================================================================
+IF YOUR ACCESS IS REVOKED
+================================================================================
+
+An administrator can deactivate your account. Access is revoked IMMEDIATELY —
+if you are signed in, your very next action is refused rather than the session
+being allowed to run out.
+
+Nothing you have made is deleted. Your assets, versions, submissions and
+reviews stay exactly where they are, because that work belongs to the project
+rather than to your account. An administrator can reactivate you, and access
+comes back the same way.
+
+Every deactivation and reactivation is recorded — who did it, to whom, and
+when — so this is not something that can happen quietly.
+
+
+================================================================================
+DISCUSSION
+================================================================================
+
+The team talks on a board separate from this portal — not built into it, and
+that is a decision rather than an oversight. It is being chosen to be open
+source and hosted in the UK or the EU so the conversation is not subject to US
+jurisdiction.
+
+YOUR BOARD ACCOUNT IS SEPARATE from your portal account. Signing in here does
+not sign you in there, and your role does not carry over. Signing out here does
+not sign you out of the board.
+
+Revoking your portal access will revoke your board access too. That is being
+built deliberately, because it is the thing a third-party board normally cannot
+do — and you should assume it works from the day the board exists.
+
+NOT BUILT YET: the board has not been chosen and configured. The Discussion
+link says so rather than offering a link that goes nowhere.
+
+
+================================================================================
 WHAT DOES NOT EXIST YET
 ================================================================================
 
   * Downloading a build of the game
-  * The discussion board, comments and bug reports
+  * Comments and bug reports
+  * The discussion board itself — chosen and designed, but not installed
   * Impersonation, so an admin cannot yet act as you
-  * Email for invitations
   * Release management — versions of the game, and what shipped when
+  * Browsing the game store to reuse approved assets — see the section above
