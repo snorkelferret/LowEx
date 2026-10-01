@@ -25,14 +25,28 @@ const ROLE_RANK = {
 // Every role the users table permits. Kept in step with the CHECK in db.js.
 const ASSIGNABLE_ROLES = Object.keys(ROLE_RANK);
 
-// STRICTLY below, not at your own level.
+// The rank comparison itself, named for what it is because two different
+// operations need it: inviting someone (you may only create accounts below
+// you) and deactivating someone (you may only remove accounts below you).
 //
-// An admin cannot create another admin, and a superuser cannot create another
-// superuser. That is deliberate and has a consequence worth knowing: there can
-// only ever be one superuser, and no backup exists. The initial one is seeded
-// by db.js when the users table is empty, so the system cannot be left with
-// none — but it also cannot be left with two.
+// STRICTLY below, not at your own level. Two consequences worth knowing:
 //
+//   * There can only ever be one superuser, and no backup exists. The initial
+//     one is seeded by db.js when the users table is empty, so the system
+//     cannot be left with none — but it also cannot be left with two.
+//   * Nobody can remove a peer. A superuser cannot deactivate another
+//     superuser, so the last one standing cannot be locked out by a rival.
+function isStrictlyBelow(higherRole, lowerRole) {
+    const higher = ROLE_RANK[higherRole];
+    const lower = ROLE_RANK[lowerRole];
+
+    if (higher === undefined || lower === undefined) {
+        return false;
+    }
+
+    return lower < higher;
+}
+
 // `user` is the tester: a login with no extra privileges. It is invitable
 // because that is how a tester is created.
 function canAssignRole(inviterRole, targetRole) {
@@ -40,13 +54,7 @@ function canAssignRole(inviterRole, targetRole) {
         return false;
     }
 
-    const inviter = ROLE_RANK[inviterRole];
-
-    if (inviter === undefined) {
-        return false;
-    }
-
-    return ROLE_RANK[targetRole] < inviter;
+    return isStrictlyBelow(inviterRole, targetRole);
 }
 
 // Roles the given inviter is allowed to hand out — used to tell the UI which
@@ -60,4 +68,5 @@ module.exports = {
     ASSIGNABLE_ROLES,
     canAssignRole,
     assignableRolesFor,
+    isStrictlyBelow,
 };
