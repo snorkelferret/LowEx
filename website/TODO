@@ -239,14 +239,21 @@ Security, all verified by test:
   - a malformed storage_key, or content missing from the store, is refused with
     an explicit message rather than a bare 404.
 
-AUTHORIZATION is narrower than "admins can read anything":
+AUTHORIZATION: the caller's OWN workspace, and nothing else.
 
-    developer        their OWN workspace only
-    admin/superuser  only versions SUBMITTED for review (any creative_approvals
-                     row exists for the version)
+There is deliberately NO admin bypass. An admin or superuser who needs to see
+inside a developer's workspace does it by IMPERSONATION — marked, time-bounded,
+audit-logged. A standing "admins can read anything" exception would make
+impersonation pointless and the sandbox not private.
 
-So the sandbox stays private apart from what the developer explicitly
-submitted, while an approver can read what they are being asked to approve.
+An earlier revision of this code allowed admin/superuser to read versions that
+had been SUBMITTED for review. That was removed: it was still a standing
+exception, and it quietly reopened the door impersonation exists to control.
+
+Consequence, worth stating plainly: an approver cannot fetch the bytes of a
+submission without impersonating. If reviewing files becomes routine, the
+answer is impersonation — not an exception here.
+
 A missing version and someone else's version both return 404, not 403, so this
 cannot be used to probe for the existence of another developer's work.
 
@@ -410,10 +417,12 @@ They MUST be dealt with before any real user data exists.
      - no archive download. A single zip is a convenience for someone without a
        working copy; deliberately not built yet (see docs/assettypes01 layer B
        for why a manifest-and-per-file shape was chosen first).
-     - admin/superuser can read only versions that were SUBMITTED for review,
-       not a developer's other sandbox versions. Deliberate — it keeps the
-       sandbox private apart from what was explicitly submitted. Revisit if
-       approvers need to see more.
+     - NO game-space read path yet. A developer cannot browse or download
+       assets that have been APPROVED into the game store, which is how they
+       are meant to pick up their own approved work as the basis for
+       continuing. That is layer C in docs/assettypes01 and it needs a
+       /api/game router. Until it exists, approved work can only be reached by
+       re-uploading it into a workspace.
 
 7) Set assets.recommended_version_id (or drop the columns).
    `assets.recommended_version_id`, `asset_recommended_versions`,

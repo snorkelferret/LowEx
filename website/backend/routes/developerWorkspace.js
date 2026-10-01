@@ -446,16 +446,16 @@ router.get(
 // The first code in this project that serves user-uploaded bytes, so the
 // details matter and are spelled out rather than left to a helper.
 //
-// AUTHORIZATION IS DELIBERATELY NARROWER THAN "admins can read anything":
+// AUTHORIZATION: the caller's OWN workspace, and nothing else.
 //
-//   developer        their OWN workspace only
-//   admin/superuser  only versions SUBMITTED for review — that is, versions
-//                    with at least one creative_approvals row
+// There is deliberately NO admin bypass. An admin or superuser who needs to
+// see inside a developer's workspace does it by IMPERSONATION — marked,
+// time-bounded, audit-logged. A standing "admins can read anything" exception
+// would make impersonation pointless and the sandbox not private.
 //
-// So the sandbox stays private apart from what the developer explicitly
-// submitted, and an approver can still read what they are being asked to
-// approve. Until this existed, reviewing a submission was blind: the queue
-// listed filenames, sizes and hashes, and nothing more.
+// Consequence, and it is worth being explicit: an approver cannot fetch the
+// bytes of a submission without impersonating. If reviewing files becomes a
+// normal need, impersonation is the mechanism — not an exception here.
 //
 // ============================================================
 
@@ -496,25 +496,17 @@ function relativePathIsSafe(value) {
     return true;
 }
 
-// Resolve the files of one version, subject to the authorization rule above.
-// Returns null when the caller may not see this version at all — deliberately
-// the same result for "does not exist" and "not yours", so this cannot be used
-// to probe for the existence of another developer's work.
+// Resolve the files of one version.
+//
+// SCOPE IS ALWAYS THE CALLER'S OWN WORKSPACE. There is no admin bypass.
+// An admin or superuser who needs to see inside a developer's workspace does
+// it by IMPERSONATION, which is marked, time-bounded and audit-logged — not by
+// a standing read path. A quiet "admins can read anything" exception would
+// make impersonation pointless and the sandbox not private.
+//
+// Returns null both when the version does not exist and when it is not the
+// caller's, so this cannot be used to probe for another developer's work.
 function filesForVersion(assetId, versionId, user) {
-    const isReviewer = user.role === 'admin' || user.role === 'superuser';
-
-    const scope = isReviewer
-        ? `AND EXISTS (
-               SELECT 1
-               FROM creative_approvals ca
-               WHERE ca.workspace_version_id = wv.id
-           )`
-        : `AND dw.developer_id = ?`;
-
-    const params = isReviewer
-        ? [versionId, assetId]
-        : [versionId, assetId, user.id];
-
     const version = db.prepare(`
         SELECT
             wv.id,
@@ -526,13 +518,13 @@ function filesForVersion(assetId, versionId, user) {
             wa.name AS asset_name,
             wa.asset_type
         FROM workspace_versions wv
-        JOIN workspace_assets wa    ON wa.id = wv.workspace_asset_id
+        JOIN workspace_assets wa     ON wa.id = wv.workspace_asset_id
         JOIN developer_workspaces dw ON dw.id = wa.workspace_id
         WHERE wv.id = ?
           AND wa.id = ?
           AND wa.is_active = 1
-          ${scope}
-    `).get(...params);
+          AND dw.developer_id = ?
+    `).get(versionId, assetId, user.id);
 
     if (!version) return null;
 
