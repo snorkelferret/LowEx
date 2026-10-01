@@ -975,44 +975,45 @@ They MUST be dealt with before any real user data exists.
     trust and contract matter. Testers are the group the portal can actually
     control, which is why its access rules matter more for them.
 
-27) MESSAGE BOARD — Slack-like, self-hosted, messages kept indefinitely.
-    Wanted, not yet designed. Referenced by frontend/discussion.html and the
-    stub comment there, so it needs to exist as a record even before the plan.
+27) DISCUSSION BOARD — ON DISCORD, by decision 2026-10-01.
+    Third-party, not self-hosted. The earlier version of this item assumed we
+    would build one; that is not happening.
 
-    THE TWO REQUIREMENTS THAT DRIVE THE DESIGN:
+    WHY: the requirement is no age-based message deletion, and Slack's free tier
+    shows only the last 90 days and deletes content older than a year. Discord
+    keeps history indefinitely on its free tier. It is also the standard for
+    game communities, has voice channels the original spec wanted, and needs
+    no development work at all.
 
-      OPEN SOURCE / SELF-HOSTED — no third-party service. Messages live in our
-      own SQLite database, in this application, like everything else. That is
-      also what makes the second requirement possible at all.
+    THE TRADE, recorded because it is real and reversible only at a cost:
 
-      NO 90-DAY DELETION. Slack's free tier discards old messages; that is the
-      specific behaviour being avoided. Nothing here should ever prune by age.
-      Retention is indefinite, and deleting a message would have to be a
-      deliberate act rather than a policy.
+      * A SECOND IDENTITY SYSTEM. Portal accounts and Discord accounts are
+        separate. Roles do not carry over, people are invited twice, and
+        revoking portal access does NOT revoke board access — though the
+        is_active check makes the portal side immediate while Discord's does
+        not. This is the sharp edge and it has no fix short of building our own.
+      * It departs from Specification 02, which describes chat "built directly
+        into the private contributor web portal". A deliberate departure, not
+        a drift, but worth knowing it is one.
+      * Discord is not open source and the history lives on their servers.
+        Ordinary for a game studio, still a decision.
 
-    FROM THE ORIGINAL REQUEST: channels, direct messages between two people,
-    and @mentions that reach someone even in a room they are not watching.
-    Unread state so a person can catch up without reading everything.
+    WHAT EXISTS NOW:
+      * frontend/discussion.html is a bridge page, not a stub — it explains the
+        board is Discord and offers the invite.
+      * The invite URL comes from VITE_DISCORD_INVITE (see .env.example), so it
+        is configured in one place rather than hardcoded across the pages that
+        link to it. Blank means the page says "not configured" rather than
+        offering a dead link.
+      * Links to it sit on the sign-in panel and the tester landing page.
 
-    EVERYONE WITH AN ACCOUNT participates — testers, developers, admins. It is
-    not a developer-only tool, which is why the link sits on the sign-in page
-    and the tester landing page rather than inside a dashboard.
-
-    NOT YET DECIDED, and worth deciding before building:
-      * polling or websockets for new messages. Polling is far simpler and
-        probably fine at this scale; websockets are real-time but add a second
-        transport and reconnect handling.
-      * whether messages are markdown, plain text, or a restricted subset.
-        Anything rendered as HTML needs escaping — see the XSS in the invite
-        table (item 8) for how that goes wrong.
-      * whether attachments are allowed, and if so whether they go in the
-        content store (stored_files) or somewhere separate. Note the store is
-        content-addressed and shared, which is not obviously right for chat.
-      * moderation: can an admin delete someone else's message? That collides
-        with the no-deletion instinct above, so it needs an explicit answer.
-      * whether this needs to work for people who are not signed in. It does
-        not, currently.
-
-    SCOPE NOTE: this is a feature in its own right, not a small addition. It
-    needs a schema (channels, memberships, messages, read state, mentions), an
-    API, and a UI. Worth planning as its own piece rather than bolting on.
+    STILL TO DO:
+      * Create the Discord server, generate a PERMANENT invite, and set
+        VITE_DISCORD_INVITE. Until that is done the page says not configured.
+      * Decide whether to do Discord OAuth so a portal account can be linked to
+        a Discord account. That is the cheap way to close some of the identity
+        gap — it gives a mapping between the two, not full integration.
+      * Decide the channel structure, and whether testers and developers get
+        different access on the Discord side.
+      * Write it into docs/onboarding-users and docs/onboarding-developers,
+        which currently describe a board that does not exist.

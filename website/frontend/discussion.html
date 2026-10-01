@@ -14,13 +14,16 @@
 <body class="bg-dark text-light min-vh-100 d-flex flex-column">
 
     <!--
-      A STUB. The discussion board is specified as "Slack-like" and does not
-      exist yet — no channels, no messages, no table behind them. This page
-      exists so the links to it from the login page and the tester landing page
-      do not lead to a 404, and so what the board is meant to be is written
-      down somewhere a person will actually see it.
+      A bridge to the Discord server, not the board itself.
 
-      Replace this entirely when the board is built. See TODO item 27.
+      The board is third-party by decision: Slack's free tier discards history
+      and Discord's does not, and Discord is where game communities and
+      playtesters already are. That also means a SEPARATE ACCOUNT — portal
+      accounts and Discord accounts are not linked, and neither are their
+      roles. This page says so rather than letting people discover it.
+
+      The invite URL comes from VITE_DISCORD_INVITE so it is configured in one
+      place. See TODO item 27.
     -->
 
     <nav class="navbar navbar-dark bg-black border-bottom border-secondary border-opacity-25 sticky-top px-3">
@@ -32,15 +35,33 @@
         </div>
     </nav>
 
-    <main class="container py-5" style="max-width: 760px;">
+    <main class="container py-5" style="max-width: 720px;">
 
         <div class="text-center mb-5">
-            <i class="bi bi-chat-square-text text-secondary display-4"></i>
+            <i class="bi bi-discord text-secondary display-4"></i>
             <h1 class="h3 fw-bold mt-3 mb-2">Discussion</h1>
             <p class="text-secondary mb-0">
-                Where the team talks. Not built yet — this page describes what it
-                will be, so the shape is agreed before anyone writes it.
+                The team talks on Discord. Channels, direct messages and
+                mentions, plus voice when typing is too slow.
             </p>
+        </div>
+
+        <!-- The join action. Populated by discussion.js from configuration. -->
+
+        <div id="discord-not-configured" class="alert alert-secondary py-3 small d-none">
+            <strong>Not set up yet.</strong>
+            The Discord invite has not been configured, so there is nothing to
+            join from here. Whoever runs the portal needs to set
+            <code>VITE_DISCORD_INVITE</code> — see <code>.env.example</code>.
+        </div>
+
+        <div id="discord-join" class="d-none text-center mb-5">
+            <a id="discord-invite-link" class="btn btn-primary btn-lg px-5 fw-semibold" href="#" target="_blank" rel="noopener noreferrer">
+                <i class="bi bi-discord me-2"></i> Join the server
+            </a>
+            <div class="small text-secondary mt-2">
+                Opens Discord. Use a permanent invite, or this link will expire.
+            </div>
         </div>
 
         <div class="row g-3 mb-4">
@@ -52,8 +73,7 @@
                             <i class="bi bi-hash text-secondary me-2"></i>Channels
                         </h2>
                         <p class="text-secondary small mb-0">
-                            Open rooms by subject. Asset reviews, engine work,
-                            build problems — somewhere a conversation can be
+                            Open rooms by subject, so a conversation can be
                             found later rather than lost in a thread.
                         </p>
                     </div>
@@ -67,9 +87,8 @@
                             <i class="bi bi-envelope text-secondary me-2"></i>Direct messages
                         </h2>
                         <p class="text-secondary small mb-0">
-                            One-to-one conversations, for the things that do not
-                            belong in a room. Private between the two people in
-                            them.
+                            One-to-one, for the things that do not belong in a
+                            room.
                         </p>
                     </div>
                 </div>
@@ -82,9 +101,8 @@
                             <i class="bi bi-at text-secondary me-2"></i>Mentions
                         </h2>
                         <p class="text-secondary small mb-0">
-                            <code>@name</code> pulls someone in. Mentions reach
-                            you even in a room you are not watching, so nobody
-                            is waiting on an answer they never saw.
+                            <code>@name</code> pulls someone in, even if they
+                            are not watching that room.
                         </p>
                     </div>
                 </div>
@@ -94,11 +112,11 @@
                 <div class="card bg-dark border-secondary h-100">
                     <div class="card-body">
                         <h2 class="h6 fw-bold mb-2">
-                            <i class="bi bi-bell text-secondary me-2"></i>Unread state
+                            <i class="bi bi-mic text-secondary me-2"></i>Voice
                         </h2>
                         <p class="text-secondary small mb-0">
-                            What has happened since you were last here, so you
-                            can catch up without reading everything.
+                            For when describing a bug in text is taking longer
+                            than showing it.
                         </p>
                     </div>
                 </div>
@@ -106,11 +124,19 @@
 
         </div>
 
-        <div class="alert alert-secondary py-3 small mb-0">
-            <strong>Not built.</strong> There is no board behind this page yet —
-            no messages, no channels, and nothing stored. It exists so the links
-            to it work and the intent is written down. See TODO item 27.
+        <div class="alert alert-secondary py-3 small mb-3">
+            <strong>This is a separate account.</strong>
+            Your portal login is not your Discord login, and your role here does
+            not carry over — a tester and a developer look the same to Discord
+            unless someone sets it up otherwise. Signing out of the portal does
+            not sign you out of Discord.
         </div>
+
+        <p class="small text-secondary mb-0">
+            Discord keeps message history indefinitely on its free tier, which
+            is why it was chosen — Slack's free tier only shows the last 90
+            days. Messages live on Discord's servers, not ours.
+        </p>
 
     </main>
 
