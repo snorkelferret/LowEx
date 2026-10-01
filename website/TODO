@@ -352,6 +352,32 @@ STILL MISSING — the flow is reachable but not yet self-service:
 
 
 
+ONBOARDING DOCS 2026-10-01 (stubs)
+----------------------------------
+  docs/onboarding-developers
+  docs/onboarding-users
+
+Both are STUBS, written from what the code actually does rather than from what
+the specs intend, with everything unbuilt marked NOT BUILT. That distinction is
+the point: they should not describe features to a reader as though they exist.
+
+For developers the portal is mostly real, so that one is substantive —
+invitations, the workspace and its quota, the folder naming rules, what happens
+to a version, deleting, and getting work back.
+
+For testers almost nothing exists, and the doc says so plainly. Its main job
+today is to record that TESTER IS NOT A ROLE: a tester is a plain `user`, and
+the tester features (download a build, comment, report) are meant to be
+available to anyone logged in.
+
+Neither is served yet. They should become pages on the portal once there is
+something to describe — and the tester one in particular will need the
+discussion board and bug reporting to exist first.
+
+Both end with a FUTURE SECTIONS list, so it is obvious what is missing rather
+than the document silently looking complete.
+
+
 GAME-SPACE READ — DEFERRED BY DECISION (2026-10-01)
 ---------------------------------------------------
 DEFERRED, not forgotten, and deliberately bundled with building the game.

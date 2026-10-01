@@ -1,0 +1,107 @@
+ONBOARDING — TESTERS
+Status: STUB. Almost none of this is built yet. Written down now so the shape
+is agreed before anyone builds it, and so the gap between it and reality is
+obvious rather than discovered.
+
+Eventually this becomes a served page. For now it is a working document.
+
+
+================================================================================
+WHO A TESTER IS
+================================================================================
+
+A TESTER IS NOT A ROLE. There is no "tester" account type and no permission
+for it. A tester is simply someone with a login and no extra privileges — the
+plain `user` role.
+
+That is deliberate. Everyone who has a login can be a tester: developers and
+administrators too. Downloading a build, leaving a comment or reporting a
+problem are things any signed-in person can do, not a special grant.
+
+So being invited "as a tester" just means being invited as a plain user. You
+get no workspace and no upload rights, and none of that is a restriction being
+placed on you — there is simply nothing else a login carries by default.
+
+
+================================================================================
+GETTING IN
+================================================================================
+
+Someone with admin rights invites you by email address. You receive a link:
+
+    /register?token=...
+
+Open it and choose a username and password.
+
+The link is valid for 28 days. If it expires, the same page offers to generate
+a new one, up to six times before an administrator must issue a fresh
+invitation.
+
+If your invitation was withdrawn, or has already been used, the page says so
+rather than showing you a form that cannot work.
+
+NOT BUILT: the invitation is not emailed. Whoever invited you currently has to
+pass the link on themselves, and after a reissue the new link is shown on that
+page for the same reason.
+
+Two-factor authentication is required at login. You will be asked for a code
+from an authenticator app.
+
+
+================================================================================
+WHAT A TESTER WILL BE ABLE TO DO
+================================================================================
+
+NOT BUILT — none of the following exists yet. This is the intended shape.
+
+  * Download a build of the game, and older versions of it.
+  * Leave comments, and read other people's.
+  * Report bugs, and follow up on ones you have reported.
+  * Discuss, on the portal's own board — the "Slack-like" board from the
+    specification.
+
+The intent is that a tester never needs a copy of the source, or any tooling.
+Download, play, say what you found.
+
+WHAT EXISTS TODAY
+
+Nothing. The page a `user` account lands on is a placeholder. A tester account
+can log in and nothing else.
+
+
+================================================================================
+WHAT A TESTER CANNOT DO
+================================================================================
+
+  * See inside a developer's workspace. It is private to them, and to nobody
+    else — including administrators, except by impersonation, which is marked
+    and audited rather than routine.
+  * Upload or change assets.
+  * Approve anything.
+
+None of that is a technicality to work around. The workspace is private because
+developers need to be able to make a mess while they work, and that only works
+if nobody is watching over their shoulder.
+
+
+================================================================================
+REVOCATION
+================================================================================
+
+Your invitation can be withdrawn before you use it, and your ACCESS can be
+revoked after — by deactivating the account, which takes effect immediately
+rather than when your session would have expired.
+
+If you think that has happened in error, contact whoever invited you. There is
+no self-service route back in.
+
+
+================================================================================
+FUTURE SECTIONS TO WRITE
+================================================================================
+
+  * How to download and install a build, once builds exist
+  * What makes a useful bug report here, and where it should go
+  * How comments and bugs are triaged
+  * Whether testers see developer replies, and where
+  * What a tester should expect between releases
