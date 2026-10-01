@@ -336,9 +336,25 @@ limit), weighted toward the negative cases: dedup, the game-store exclusion,
 refusals leaving no trace, cross-developer and admin refusal, deletion blocked
 under review, and that soft delete never destroys shared bytes.
 
-STILL TO BUILD: the pre-flight UI. The upload preview should show per-file
-sizes, a running total, and current usage, warning before submit if the upload
-would exceed. Delete buttons in the panel too. Backend is ready for both.
+PANEL (built): a usage bar in the "My Workspace" header ("4.2 GB of 5.0 GB
+used", colour-coded), a pre-flight line in the upload preview ("Total 600 MB
+across 12 files") with a warning when the upload would exceed, and delete
+buttons on each asset and each version.
+
+  The pre-flight figure deliberately ASSUMES EVERY FILE IS NEW. The browser
+  cannot know which files the workspace already holds without hashing all of
+  them, which is far too slow at GB scale. So it is an upper bound: if it fits,
+  the upload definitely fits. The wording says "may exceed" rather than "will",
+  and the server is what actually refuses.
+
+  Delete buttons are disabled while an approval is pending, so a developer
+  cannot click into a 409 the UI already knows about.
+
+  NOT VERIFIED IN A BROWSER. Confirmed by a clean vite build, by the new UI
+  strings appearing in the bundle, and by cross-checking that all 20 element
+  ids the client reaches for exist in the built page — a typo'd id fails
+  silently behind an `if (!el) return`, so that check is worth keeping. But
+  nobody has looked at it. Worth a visual pass.
 
 
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)

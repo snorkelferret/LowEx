@@ -182,6 +182,16 @@
 
         </div>
 
+        <!-- Pre-flight: what this upload weighs, and whether it would take the
+             workspace over its limit. Only content the workspace does not
+             already hold consumes quota, and the browser cannot know that
+             without hashing every file — so this estimate assumes everything
+             is new, which makes it an upper bound. If it fits, the upload
+             definitely fits. The server checks precisely regardless. -->
+        <div
+          id="uploadSizeSummary"
+          class="small text-secondary mb-2"
+        ></div>
 
         <div class="table-responsive">
 
@@ -202,6 +212,12 @@
           </table>
 
         </div>
+
+        <div
+          id="uploadQuotaWarning"
+          class="alert alert-warning d-none mt-3 mb-0 py-2 small"
+          role="alert"
+        ></div>
 
 
         <!-- ====================================================
@@ -295,11 +311,20 @@
 
   <div class="card bg-dark border-secondary mt-4">
 
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
+
       <h2 class="h5 mb-0">
         <i class="bi bi-boxes"></i>
         My Workspace
       </h2>
+
+      <!-- Workspace quota. A workspace is a staging area, not a store, so how
+           much it is holding is shown here rather than buried. -->
+      <div
+        id="workspaceUsage"
+        class="small text-secondary"
+      ></div>
+
     </div>
 
     <div class="card-body">

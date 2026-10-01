@@ -213,6 +213,8 @@ function renderUploadPreview() {
             uploadButton.disabled = true;
         }
 
+        updateUploadSizeSummary();
+
         return;
     }
 
@@ -225,6 +227,8 @@ function renderUploadPreview() {
             `${selectedFiles.length} file` +
             (selectedFiles.length === 1 ? '' : 's');
     }
+
+    updateUploadSizeSummary();
 
 
     const overrideEnabled =
@@ -715,6 +719,100 @@ function showUploadStatus(
 // Workspace
 // ============================================================
 
+// ---------------------------------------------------------------------------
+// Workspace quota
+//
+// A workspace is a staging area, not a store. The figures come from the server,
+// which counts distinct content and excludes anything already in the game
+// store — the browser cannot work either of those out for itself.
+// ---------------------------------------------------------------------------
+
+let workspaceUsage = null;
+
+function renderQuotaPanel() {
+    const el = $('workspaceUsage');
+
+    if (!el) return;
+
+    el.textContent = '';
+
+    if (!workspaceUsage) return;
+
+    const variant =
+        workspaceUsage.percent_used >= 95 ? 'danger' :
+        workspaceUsage.percent_used >= 75 ? 'warning' :
+        'success';
+
+    const label = document.createElement('span');
+    label.className = 'me-2';
+    label.textContent =
+        `${formatFileSize(workspaceUsage.bytes)} of ` +
+        `${formatFileSize(workspaceUsage.limit_bytes)} used`;
+
+    const bar = document.createElement('div');
+    bar.className = 'progress d-inline-block align-middle';
+    bar.style.height = '6px';
+    bar.style.width = '120px';
+
+    const fill = document.createElement('div');
+    fill.className = `progress-bar bg-${variant}`;
+    fill.style.width = `${Math.min(100, workspaceUsage.percent_used)}%`;
+    fill.setAttribute('aria-valuenow', String(workspaceUsage.percent_used));
+    fill.setAttribute('aria-valuemin', '0');
+    fill.setAttribute('aria-valuemax', '100');
+
+    bar.appendChild(fill);
+
+    el.appendChild(label);
+    el.appendChild(bar);
+}
+
+// Pre-flight for a pending upload.
+//
+// The browser cannot know which of the selected files the workspace already
+// holds without hashing every one of them, which is far too slow at GB scale.
+// So the estimate deliberately assumes EVERY file is new — an upper bound. If
+// the bound fits, the upload definitely fits. If it does not, it may still be
+// fine, because re-uploaded content costs nothing. Hence "may", and the server
+// checks precisely and is the thing that actually refuses.
+function updateUploadSizeSummary() {
+    const summary = $('uploadSizeSummary');
+    const warning = $('uploadQuotaWarning');
+
+    if (!summary) return;
+
+    if (selectedFiles.length === 0) {
+        summary.textContent = '';
+        if (warning) warning.classList.add('d-none');
+        return;
+    }
+
+    const totalBytes = selectedFiles.reduce(
+        (sum, item) => sum + (item.file?.size || 0),
+        0
+    );
+
+    summary.textContent =
+        `Total ${formatFileSize(totalBytes)} across ${selectedFiles.length} ` +
+        `file${selectedFiles.length === 1 ? '' : 's'}.`;
+
+    if (!warning || !workspaceUsage) return;
+
+    const projected = workspaceUsage.bytes + totalBytes;
+
+    if (projected > workspaceUsage.limit_bytes) {
+        warning.textContent =
+            `This upload may exceed the workspace limit — up to ` +
+            `${formatFileSize(projected)} against a ` +
+            `${formatFileSize(workspaceUsage.limit_bytes)} limit. Content the ` +
+            `workspace already holds does not count, so the real figure may be ` +
+            `lower. The server checks exactly and will refuse if it would go over.`;
+        warning.classList.remove('d-none');
+    } else {
+        warning.classList.add('d-none');
+    }
+}
+
 async function loadDeveloperWorkspace() {
 
     try {
@@ -753,9 +851,19 @@ async function loadDeveloperWorkspace() {
         );
 
 
+        workspaceUsage =
+            data.usage || null;
+
+        renderQuotaPanel();
+
+
         renderWorkspaceAssets(
             data.assets || []
         );
+
+
+        // Usage has just changed, so refresh the pending-upload estimate.
+        renderUploadPreview();
 
 
     } catch (err) {
@@ -880,6 +988,72 @@ function renderVersionState(version) {
     return wrapper.childElementCount ? wrapper : null;
 }
 
+// ---------------------------------------------------------------------------
+// Deleting from the workspace
+//
+// A developer can delete anything in their own workspace. It is a soft delete:
+// the content survives while anything else references it — the game store, or
+// another workspace — and review history is kept. Only their workspace copy and
+// their quota go. The confirmation says so, because "delete" is a word people
+// reasonably expect to be final.
+// ---------------------------------------------------------------------------
+
+async function sendWorkspaceDelete(url, successMessage) {
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Delete failed');
+        }
+
+        await loadDeveloperWorkspace();
+        showUploadStatus(successMessage, 'success');
+
+    } catch (err) {
+        console.error('Workspace delete failed:', err);
+        showUploadStatus(err.message || 'Delete failed', 'danger');
+    }
+}
+
+async function deleteWorkspaceVersion(asset, version) {
+    const label = `${asset.name} version ${version.version_number}`;
+
+    const confirmed = window.confirm(
+        `Delete ${label} from your workspace?\n\n` +
+        `The content stays in the store if anything else uses it — the game ` +
+        `store, or another workspace — and review history is kept. Only your ` +
+        `workspace copy is removed, which frees quota.`
+    );
+
+    if (!confirmed) return;
+
+    await sendWorkspaceDelete(
+        `/api/developer/workspace/assets/${asset.id}/versions/${version.id}`,
+        `Deleted ${label}.`
+    );
+}
+
+async function deleteWorkspaceAsset(asset) {
+    const confirmed = window.confirm(
+        `Delete "${asset.name}" and all of its versions from your workspace?\n\n` +
+        `The content stays in the store if anything else uses it — the game ` +
+        `store, or another workspace — and review history is kept. Only your ` +
+        `workspace copy is removed, which frees quota.`
+    );
+
+    if (!confirmed) return;
+
+    await sendWorkspaceDelete(
+        `/api/developer/workspace/assets/${asset.id}`,
+        `Deleted "${asset.name}".`
+    );
+}
+
 function renderWorkspaceAssets(assets) {
     const list = $('workspaceAssetsList');
     if (!list) return;
@@ -939,6 +1113,31 @@ function renderWorkspaceAssets(assets) {
         const body = document.createElement('div');
         body.className = 'accordion-body';
 
+        // Deleting is soft: the content stays in the store while anything else
+        // references it, and review history is preserved. The server refuses
+        // while an approval is pending, so the button is disabled here rather
+        // than letting the developer click straight into a 409.
+        const assetActions = document.createElement('div');
+        assetActions.className = 'd-flex justify-content-end mb-2';
+
+        const deleteAssetButton = document.createElement('button');
+        deleteAssetButton.type = 'button';
+        deleteAssetButton.className = 'btn btn-sm btn-outline-danger';
+        deleteAssetButton.innerHTML = '<i class="bi bi-trash"></i> Delete asset';
+
+        if (asset.has_pending_approval) {
+            deleteAssetButton.disabled = true;
+            deleteAssetButton.title =
+                'Under review — cannot be deleted until the approval is decided.';
+        } else {
+            deleteAssetButton.addEventListener('click', () => {
+                deleteWorkspaceAsset(asset);
+            });
+        }
+
+        assetActions.appendChild(deleteAssetButton);
+        body.appendChild(assetActions);
+
         if (asset.description) {
             const description = document.createElement('p');
             description.className = 'small text-secondary mb-3';
@@ -969,8 +1168,35 @@ function renderWorkspaceAssets(assets) {
                 versionDate.textContent =
                     formatWorkspaceDate(version.created_at);
 
+                const versionMeta = document.createElement('div');
+                versionMeta.className = 'd-flex align-items-center gap-2';
+
+                versionMeta.appendChild(versionDate);
+
+                const deleteVersionButton = document.createElement('button');
+                deleteVersionButton.type = 'button';
+                deleteVersionButton.className = 'btn btn-sm btn-outline-danger py-0 px-1';
+                deleteVersionButton.innerHTML = '<i class="bi bi-trash"></i>';
+
+                const versionUnderReview =
+                    version.latest_approval?.status === 'pending';
+
+                if (versionUnderReview) {
+                    deleteVersionButton.disabled = true;
+                    deleteVersionButton.title =
+                        'Under review — cannot be deleted until the approval is decided.';
+                } else {
+                    deleteVersionButton.title =
+                        'Delete this version from your workspace';
+                    deleteVersionButton.addEventListener('click', () => {
+                        deleteWorkspaceVersion(asset, version);
+                    });
+                }
+
+                versionMeta.appendChild(deleteVersionButton);
+
                 versionHeader.appendChild(versionTitle);
-                versionHeader.appendChild(versionDate);
+                versionHeader.appendChild(versionMeta);
 
                 versionBlock.appendChild(versionHeader);
 
