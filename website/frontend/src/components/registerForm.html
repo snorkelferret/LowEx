@@ -1,0 +1,142 @@
+<!-- ============================================================
+     Register / accept an invitation
+     ============================================================
+
+     The page an invitation link lands on. Four states, only one of which is
+     a form:
+
+       pending   the invitation is good — show the form
+       expired   offer a reissue
+       revoked   withdrawn by an administrator
+       used      already accepted — point at login
+
+     The expired screen used to live on the DEVELOPER DASHBOARD, which could
+     not work: an expired-invite holder has no account, so they can never be
+     logged in to see it. Its reissue button also called a function that was
+     not loaded on that page, and fetched a URL that does not exist.
+
+     No header, no nav: whoever arrives here is not signed in.
+     ============================================================ -->
+
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+  <div
+    class="card bg-dark text-light border-secondary p-4 shadow-lg"
+    style="max-width: 460px; width: 100%;"
+  >
+
+    <!-- Checking ------------------------------------------------------- -->
+
+    <div id="register-checking" class="text-center py-4">
+      <div class="spinner-border text-secondary mb-3" role="status"></div>
+      <p class="text-secondary small mb-0">Checking your invitation…</p>
+    </div>
+
+
+    <!-- Pending: the form ---------------------------------------------- -->
+
+    <div id="register-form-wrap" class="d-none">
+
+      <h4 class="fw-bold text-white mb-2">Accept your invitation</h4>
+
+      <p class="text-secondary small mb-4">
+        You have been invited as
+        <strong id="register-role" class="text-light">…</strong>
+        for <strong id="register-email" class="text-light">…</strong>.
+      </p>
+
+      <form id="registerForm" novalidate>
+
+        <div class="mb-3">
+          <label for="register-username" class="form-label">Username</label>
+          <input
+            type="text"
+            class="form-control"
+            id="register-username"
+            autocomplete="username"
+            required
+          >
+        </div>
+
+        <div class="mb-3">
+          <label for="register-password" class="form-label">Password</label>
+          <input
+            type="password"
+            class="form-control"
+            id="register-password"
+            autocomplete="new-password"
+            required
+          >
+        </div>
+
+        <div class="mb-3">
+          <label for="register-password-confirm" class="form-label">
+            Confirm password
+          </label>
+          <input
+            type="password"
+            class="form-control"
+            id="register-password-confirm"
+            autocomplete="new-password"
+            required
+          >
+        </div>
+
+        <div id="register-error" class="alert alert-danger py-2 small d-none"></div>
+
+        <button
+          type="submit"
+          class="btn btn-primary w-100 fw-bold py-2"
+          id="register-submit"
+        >
+          Create account
+        </button>
+
+      </form>
+    </div>
+
+
+    <!-- Done ----------------------------------------------------------- -->
+
+    <div id="register-done" class="d-none text-center py-3">
+      <i class="bi bi-check-circle text-success display-4"></i>
+      <h4 class="fw-bold text-white mt-3 mb-2">Account created</h4>
+      <p class="text-secondary small mb-4">You can now log in.</p>
+      <a href="/index.html" class="btn btn-primary w-100 fw-bold py-2">
+        Go to login
+      </a>
+    </div>
+
+
+    <!-- Expired -------------------------------------------------------- -->
+
+    <div id="register-expired" class="d-none text-center py-3">
+      <i class="bi bi-clock-history text-warning display-4"></i>
+      <h4 class="fw-bold text-white mt-3 mb-2">Invitation Expired</h4>
+      <p class="text-secondary small mb-4">
+        Invitation links are valid for 28 days for security. This link has
+        passed its expiration window.
+      </p>
+
+      <button
+        id="btn-request-reissue"
+        class="btn btn-warning w-100 fw-bold py-2 mb-2"
+      >
+        Request a new link
+      </button>
+
+      <div id="reissue-status-msg" class="alert mt-3 mb-0 py-2 small d-none"></div>
+    </div>
+
+
+    <!-- Revoked / used / unknown --------------------------------------- -->
+
+    <div id="register-blocked" class="d-none text-center py-3">
+      <i class="bi bi-shield-exclamation text-danger display-4"></i>
+      <h4 class="fw-bold text-white mt-3 mb-2" id="register-blocked-title">
+        Invitation unavailable
+      </h4>
+      <p class="text-secondary small mb-0" id="register-blocked-message"></p>
+    </div>
+
+  </div>
+</div>

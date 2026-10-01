@@ -16,23 +16,20 @@ const API_URL = '/api';
 
 document.addEventListener('DOMContentLoaded', async () => {
   await fetchAdminMetrics();
-
-  // Binds directly to target reissue elements inside the admin DOM view layer
-  document.getElementById('invites-table-body')?.addEventListener('click', async (e) => {
-    if (e.target.classList.contains('btn-reissue-trigger')) {
-      const inviteId = e.target.dataset.id;
-      
-      // Fires shared utility seamlessly - cookies handle authorization invisibly
-      const result = await reissueInvite(inviteId);
-      if (result.success) {
-        alert('Invitation successfully extended for another 28 days!');
-        window.location.reload();
-      } else {
-        alert(`Action failed: ${result.error}`);
-      }
-    }
-  });
 });
+
+// REMOVED: a reissue click-handler bound to a table-body id that does not
+// exist — the real one is `invite-list-body`.
+//
+// It was dead three times over, which is why it is deleted rather than fixed:
+//
+//   1. the id was wrong, so nothing was ever bound;
+//   2. sharedInvites.js already handles reissue clicks on that table by
+//      delegation, so correcting the id would have made a second handler fire
+//      and send the request twice;
+//   3. it called reissueInvite(id), and there is no id-based reissue route.
+//      Reissue is token-based: POST /api/inviteDevs/request-reissue.
+
 
 
 

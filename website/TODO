@@ -311,18 +311,44 @@ superuser-at-own-level; an admin can invite developer and user; a superuser can
 invite an admin. Plus status, revocation, expiry, and the duplicate endpoint
 returning 404.
 
-STILL MISSING — the invitation flow does not yet deliver anything:
+REGISTER PAGE — built 2026-10-01.
 
-  1. NO REGISTER PAGE. The link points at /register?token=... and nothing
-     serves it. An invited person arrives at a 404.
-  2. NO EMAIL. Both creation and reissue return the link in the API response
-     as a stopgap, so the inviter has to pass it on by hand. This is the
-     deferred SMTP/nodemailer item (TODO item 2), and the nodemailer 9 -> 10
-     bump belongs with it.
-  3. The invite UI (frontend/src/sharedInvites.js) still calls the old
-     reissue route and needs pointing at the new revoke/generate endpoints.
+  /register?token=... is a real page now (frontend/register.html, built from
+  components/registerForm.html + src/register.js). It is NOT behind the app
+  shell: whoever arrives has no account, which is the whole reason they are
+  there. Four states, only one of which is a form:
 
-Order agreed: register page first (so the link works), then email.
+    pending   the form
+    expired   the "Invitation Expired" screen with a reissue button
+    revoked   withdrawn by an administrator
+    used      already accepted — point at login
+    unknown   not a valid link
+
+  Backed by GET /api/inviteDevs/token-state?token=... — unauthenticated by
+  necessity, since the caller has no account. Discovering a token this way is
+  not a risk: they are 32 random bytes.
+
+  THE INVITE-EXPIRED SCREEN WAS IN THE WRONG PLACE and has MOVED here from the
+  developer dashboard. It could never have worked where it was: an
+  expired-invite holder has no account, so they can never be logged in to see
+  it. It was also broken three more ways on that page — its button called
+  handleDeveloperReissueRequest(), an export of auth.js which was not loaded
+  there (ReferenceError), and it fetched /api/invites/request-reissue, a route
+  that has never existed. And it dragged in an unrelated, entirely dead
+  "Developer Tools & Sandbox" section. All of it is gone from the dashboard;
+  developerInviteExp.html and .js are deleted.
+
+STILL MISSING — the flow is reachable but not yet self-service:
+
+  1. NO EMAIL. Creation and reissue both return the link in the API response as
+     a stopgap, so the inviter has to pass it on by hand. The register page
+     shows a reissued link directly to the person who asked, which is the right
+     stopgap but still not the real thing. This is the deferred SMTP/nodemailer
+     item (TODO item 2); the nodemailer 9 -> 10 bump belongs with it.
+  2. frontend/src/sharedInvites.js still calls the old id-based reissue route
+     and needs pointing at /generate-invite, /:id/revoke and
+     /request-reissue. Its copyInviteLink() also has nothing to copy from —
+     see TODO item 25.
 
 
 
@@ -785,3 +811,25 @@ They MUST be dealt with before any real user data exists.
     mounted router sits after the catch-all. Verified in both directions: it
     reports all 8 shadowed handlers against 50baa00 and passes on the current
     tree. Run it before committing any change to server.js.
+
+24) Known-missing DOM ids, listed by npm run check:dom.
+    Real gaps, not typos. Each is exempted in scripts/check-dom-ids.js with its
+    reason, so a NEW missing id still fails the check while these stay visible.
+
+      runDiagnosticsBtn  (superuser.js)
+        Bound to POST /api/superuser/developer/diagnostics, which works. The
+        button lived in developerInviteExp.html — a component only ever built
+        into the DEVELOPER dashboard — so it was never on the superuser page
+        that binds it. Needs adding to the superuser panel.
+
+      signInAsBtn  (superuser.js)
+        The entry point for impersonation. Deferred by decision: impersonation
+        is how an admin reaches inside a developer workspace, and it is the
+        ONLY way in — there is deliberately no admin read path.
+
+      invite-link-input  (sharedInvites.js)
+        copyInviteLink() selects it, but nothing renders a generated link with
+        that id, so the copy helper does nothing. Belongs with the sharedInvites
+        rework above.
+
+    Remove an entry when the control is added or the code is deleted.

@@ -43,9 +43,8 @@ const pageConfigurations = [
     output: 'frontend/devDashboard.html',
     title: 'Developer Dashboard',
     scripts: [
-	'./src/header.js',          // Fill in login details	  	 
-	'./src/developerInviteExp.js',    // Admin Core logic
-	'./src/developerPanel.js',    // Exact same single-instance file compiled here!
+	'./src/header.js',          // Fill in login details
+	'./src/developerPanel.js',
 	'./src/developerWorkspace.js'
     ],
     styles: '/styles/styles.css',
@@ -53,8 +52,24 @@ const pageConfigurations = [
 	'frontend/src/components/header.html',
 	'frontend/src/components/developerPanel.html',
 	'frontend/src/components/developerAssets.html',
-	'frontend/src/components/developerInviteExp.html', // <--- Added here!
 	'frontend/src/components/loginModal.html',
+    ],
+},
+
+{
+    // The page an invitation link lands on. Deliberately NOT behind the app
+    // shell: whoever arrives here has no account yet, so there is nothing to
+    // log in to. It handles a pending invitation, and says something useful
+    // for the other three states — expired (with a reissue), revoked, and
+    // already used.
+    output: 'frontend/register.html',
+    title: 'Accept Invitation',
+    scripts: [
+	'./src/register.js'
+    ],
+    styles: '/styles/styles.css',
+    modules: [
+	'frontend/src/components/registerForm.html',
     ],
 },
 

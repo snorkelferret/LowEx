@@ -53,6 +53,7 @@ frontend/dist/
 frontend/adminDashboard.html
 frontend/superuserDashboard.html
 frontend/devDashboard.html
+frontend/register.html
 
 # Stray empty directory at the repo root, superseded by frontend/dist.
 /dist/

@@ -78,6 +78,67 @@ router.get('/assignable-roles', authenticateToken, requireAdmin, (req, res) => {
 
 
 /**
+ * GET /api/inviteDevs/token-state?token=...
+ *
+ * What state is this invitation in? Unauthenticated by necessity: whoever is
+ * asking holds an invitation link and has no account yet, so there is nothing
+ * to authenticate them with.
+ *
+ * This exists so the register page can say something useful — expired, with a
+ * reissue offered; withdrawn; already accepted — instead of presenting a form
+ * that will fail on submit. Discovering a token this way is not a risk: they
+ * are 32 random bytes.
+ */
+router.get('/token-state', (req, res) => {
+    const token = String(req.query?.token || '').trim();
+
+    if (!token) {
+        return res.status(400).json({ state: 'unknown', error: 'A token is required.' });
+    }
+
+    try {
+        const invite = db.prepare(`
+            SELECT
+                email,
+                assigned_role,
+                status                                AS stored_status,
+                ${DISPLAY_STATUS_SQL}                 AS state,
+                expires_at,
+                reissue_count
+            FROM invitations
+            WHERE token = ?
+        `).get(token);
+
+        // Same answer for "no such token" as for a malformed one — there is
+        // nothing here worth distinguishing.
+        if (!invite) {
+            return res.status(404).json({ state: 'unknown' });
+        }
+
+        return res.json({
+            state: invite.state,
+            role: invite.assigned_role,
+            email: invite.email,
+            expiresAt: invite.expires_at,
+            // A used or revoked invitation cannot be reissued, and a pending
+            // one that has not expired does not need to be.
+            reissueAllowed:
+                invite.stored_status === 'pending' &&
+                invite.reissue_count < MAX_REISSUES,
+            reissuesRemaining:
+                invite.stored_status === 'pending'
+                    ? Math.max(0, MAX_REISSUES - invite.reissue_count)
+                    : 0
+        });
+
+    } catch (err) {
+        console.error('Error checking invitation token:', err);
+        return res.status(500).json({ state: 'unknown', error: 'Could not check the invitation.' });
+    }
+});
+
+
+/**
  * POST /api/inviteDevs/generate-invite
  * The one way an invitation is created.
  *
