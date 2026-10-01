@@ -975,45 +975,68 @@ They MUST be dealt with before any real user data exists.
     trust and contract matter. Testers are the group the portal can actually
     control, which is why its access rules matter more for them.
 
-27) DISCUSSION BOARD — ON DISCORD, by decision 2026-10-01.
-    Third-party, not self-hosted. The earlier version of this item assumed we
-    would build one; that is not happening.
+27) DISCUSSION BOARD — third-party and SERVICE-NEUTRAL. NOT YET CHOSEN.
 
-    WHY: the requirement is no age-based message deletion, and Slack's free tier
-    shows only the last 90 days and deletes content older than a year. Discord
-    keeps history indefinitely on its free tier. It is also the standard for
-    game communities, has voice channels the original spec wanted, and needs
-    no development work at all.
+    Requirements, in the order they were decided:
+      * OPEN SOURCE
+      * HOSTED IN THE UK OR THE EU, so the conversation is not subject to US
+        jurisdiction
+      * NO age-based message deletion
 
-    THE TRADE, recorded because it is real and reversible only at a cost:
+    DISCORD WAS CHOSEN AND THEN REJECTED 2026-10-01. Worth recording why,
+    because it looked good on the retention requirement and the problem was
+    elsewhere: Discord, Inc. is a US company (San Francisco) and processes and
+    stores on US servers. It offers NO EU data residency, and as a US provider
+    it is exposed to the CLOUD Act — US legal process could compel access
+    regardless of where data sits. For a project that has just been thinking
+    carefully about who can see what, that is the wrong direction.
 
-      * A SECOND IDENTITY SYSTEM. Portal accounts and Discord accounts are
-        separate. Roles do not carry over, people are invited twice, and
-        revoking portal access does NOT revoke board access — though the
-        is_active check makes the portal side immediate while Discord's does
-        not. This is the sharp edge and it has no fix short of building our own.
-      * It departs from Specification 02, which describes chat "built directly
-        into the private contributor web portal". A deliberate departure, not
-        a drift, but worth knowing it is one.
-      * Discord is not open source and the history lives on their servers.
-        Ordinary for a game studio, still a decision.
+    Slack is out for the original reason: its free tier shows only 90 days and
+    deletes content older than a year.
 
-    WHAT EXISTS NOW:
-      * frontend/discussion.html is a bridge page, not a stub — it explains the
-        board is Discord and offers the invite.
-      * The invite URL comes from VITE_DISCORD_INVITE (see .env.example), so it
-        is configured in one place rather than hardcoded across the pages that
-        link to it. Blank means the page says "not configured" rather than
-        offering a dead link.
+    SHORTLIST — none verified with the vendor yet:
+
+      Element / Matrix  STRONGEST MATCH. Element is UK-headquartered (London)
+                        with EU subsidiaries in DE and FR; the Matrix protocol
+                        is governed by a UK foundation. Open source (Apache 2.0
+                        / AGPL), end-to-end encrypted by default, and used by
+                        NATO and the French and German governments — which is a
+                        far better compliance signal than any marketing page.
+                        Hosted from ~EUR 5/user/month with EU residency, or free
+                        if self-hosted.
+                        CAVEAT: the exact data-centre locations for their
+                        managed hosting are not stated on their site. Pin the
+                        instance location in the contract, or ask.
+
+      Stoat             UK, open source, EU-hosted, and the closest in feel to
+      (was Revolt)      what Discord offered. Less established than Element.
+
+      Nextcloud Talk    German company, open source. Best if Nextcloud is
+                        already in use for files. Large calls need a separate
+                        backend.
+
+      Mattermost        Open source and Slack-like, but US-origin — fine only
+                        via an EU hosting provider, and that needs checking
+                        rather than assuming.
+
+    WHAT EXISTS NOW, and it is deliberately product-agnostic:
+      * frontend/discussion.html links out to whichever board is chosen, via
+        VITE_DISCUSSION_URL. It names no provider, so changing boards — or not
+        having chosen one — costs a config change, not an edit.
+      * Blank means the page says it is not configured rather than offering a
+        dead link. That is the state today.
+      * The page states plainly that the account is SEPARATE: the portal login
+        is not the board login, roles do not carry over, and signing out of the
+        portal does not sign you out of the board. True of any third-party
+        board, and people find it within a minute anyway.
       * Links to it sit on the sign-in panel and the tester landing page.
 
-    STILL TO DO:
-      * Create the Discord server, generate a PERMANENT invite, and set
-        VITE_DISCORD_INVITE. Until that is done the page says not configured.
-      * Decide whether to do Discord OAuth so a portal account can be linked to
-        a Discord account. That is the cheap way to close some of the identity
-        gap — it gives a mapping between the two, not full integration.
-      * Decide the channel structure, and whether testers and developers get
-        different access on the Discord side.
-      * Write it into docs/onboarding-users and docs/onboarding-developers,
-        which currently describe a board that does not exist.
+    TO DO:
+      * Choose one. Ask about EU/UK instance location and retention in writing
+        before committing — the retention requirement is the whole reason this
+        is not Slack.
+      * Set VITE_DISCUSSION_URL.
+      * Decide whether to link portal and board accounts (Element supports SSO;
+        that would close most of the identity gap, which nothing else here can).
+      * Correct docs/onboarding-users and docs/onboarding-developers, which
+        still describe a board we would have built.

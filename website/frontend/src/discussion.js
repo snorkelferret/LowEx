@@ -1,30 +1,30 @@
 // frontend/src/discussion.js
 //
-// The bridge to the Discord server.
+// The link out to the discussion board, whichever one the project settles on.
 //
-// Two jobs: show the join link if the invite is configured, and point the nav
-// action somewhere sensible depending on whether you are signed in.
+// Deliberately knows nothing about which product it is. The board is
+// third-party and service-neutral here on purpose: it names no provider, and
+// takes its URL from VITE_DISCUSSION_URL, so switching boards — or not having
+// chosen one yet — is a config change rather than an edit to this file.
 //
-// The invite comes from VITE_DISCORD_INVITE rather than being written into the
-// markup, so it is changed in one place instead of across every page linking
-// here. Unset is treated as a configuration gap to report, not as a broken link
-// to offer.
+// Two jobs: show the join link if configured, and point the nav action
+// somewhere sensible depending on whether you are signed in.
 
 const $ = (id) => document.getElementById(id);
 
-const INVITE = import.meta.env.VITE_DISCORD_INVITE || '';
+const BOARD_URL = import.meta.env.VITE_DISCUSSION_URL || '';
 
-function showInvite() {
-    const join = $('discord-join');
-    const notice = $('discord-not-configured');
+function showJoin() {
+    const join = $('discussion-join');
+    const notice = $('discussion-not-configured');
 
     // Only accept something that looks like a URL. Anything else is a
-    // misconfiguration and saying so is more useful than a dead button.
-    const looksLikeUrl = /^https?:\/\//i.test(INVITE);
+    // misconfiguration, and saying so is more useful than a dead button.
+    const looksLikeUrl = /^https?:\/\//i.test(BOARD_URL);
 
     if (looksLikeUrl) {
-        const link = $('discord-invite-link');
-        if (link) link.href = INVITE;
+        const link = $('discussion-link');
+        if (link) link.href = BOARD_URL;
         if (join) join.classList.remove('d-none');
         return;
     }
@@ -48,11 +48,7 @@ function pointNav() {
     if (!action) return;
 
     const user = readUser();
-
-    if (!user || !user.role) {
-        // The invite is public; anything else here is Discord's business.
-        return;
-    }
+    if (!user || !user.role) return;
 
     const destination = {
         superuser: '/superuserDashboard.html',
@@ -65,5 +61,5 @@ function pointNav() {
     action.innerHTML = '<i class="bi bi-arrow-left me-1"></i> Back';
 }
 
-showInvite();
+showJoin();
 pointNav();

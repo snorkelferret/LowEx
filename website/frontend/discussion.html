@@ -14,16 +14,17 @@
 <body class="bg-dark text-light min-vh-100 d-flex flex-column">
 
     <!--
-      A bridge to the Discord server, not the board itself.
+      Where the team talks. Deliberately SERVICE-NEUTRAL: it links to whatever
+      board the project settles on, via VITE_DISCUSSION_URL, and names no
+      product. That way changing boards — or not having chosen one yet — costs
+      a config change rather than an edit here.
 
-      The board is third-party by decision: Slack's free tier discards history
-      and Discord's does not, and Discord is where game communities and
-      playtesters already are. That also means a SEPARATE ACCOUNT — portal
-      accounts and Discord accounts are not linked, and neither are their
-      roles. This page says so rather than letting people discover it.
+      Requirements already decided, recorded so the reasoning is not lost: the
+      board must be OPEN SOURCE, and HOSTED IN THE UK OR EU so the conversation
+      is not subject to US jurisdiction. Slack's free tier also discards
+      history at 90 days, which is why it is out.
 
-      The invite URL comes from VITE_DISCORD_INVITE so it is configured in one
-      place. See TODO item 27.
+      See TODO item 27 for the shortlist and the decision.
     -->
 
     <nav class="navbar navbar-dark bg-black border-bottom border-secondary border-opacity-25 sticky-top px-3">
@@ -38,30 +39,27 @@
     <main class="container py-5" style="max-width: 720px;">
 
         <div class="text-center mb-5">
-            <i class="bi bi-discord text-secondary display-4"></i>
+            <i class="bi bi-chat-square-text text-secondary display-4"></i>
             <h1 class="h3 fw-bold mt-3 mb-2">Discussion</h1>
             <p class="text-secondary mb-0">
-                The team talks on Discord. Channels, direct messages and
-                mentions, plus voice when typing is too slow.
+                Where the team talks. Not long-form and not email — somewhere a
+                question can be asked and answered.
             </p>
         </div>
 
         <!-- The join action. Populated by discussion.js from configuration. -->
 
-        <div id="discord-not-configured" class="alert alert-secondary py-3 small d-none">
+        <div id="discussion-not-configured" class="alert alert-secondary py-3 small d-none">
             <strong>Not set up yet.</strong>
-            The Discord invite has not been configured, so there is nothing to
-            join from here. Whoever runs the portal needs to set
-            <code>VITE_DISCORD_INVITE</code> — see <code>.env.example</code>.
+            The discussion board has not been chosen and configured, so there is
+            nothing to join from here. Whoever runs the portal needs to set
+            <code>VITE_DISCUSSION_URL</code> — see <code>.env.example</code>.
         </div>
 
-        <div id="discord-join" class="d-none text-center mb-5">
-            <a id="discord-invite-link" class="btn btn-primary btn-lg px-5 fw-semibold" href="#" target="_blank" rel="noopener noreferrer">
-                <i class="bi bi-discord me-2"></i> Join the server
+        <div id="discussion-join" class="d-none text-center mb-5">
+            <a id="discussion-link" class="btn btn-primary btn-lg px-5 fw-semibold" href="#" target="_blank" rel="noopener noreferrer">
+                <i class="bi bi-box-arrow-up-right me-2"></i> Open the board
             </a>
-            <div class="small text-secondary mt-2">
-                Opens Discord. Use a permanent invite, or this link will expire.
-            </div>
         </div>
 
         <div class="row g-3 mb-4">
@@ -112,11 +110,12 @@
                 <div class="card bg-dark border-secondary h-100">
                     <div class="card-body">
                         <h2 class="h6 fw-bold mb-2">
-                            <i class="bi bi-mic text-secondary me-2"></i>Voice
+                            <i class="bi bi-clock-history text-secondary me-2"></i>History kept
                         </h2>
                         <p class="text-secondary small mb-0">
-                            For when describing a bug in text is taking longer
-                            than showing it.
+                            Nothing is discarded for being old. Slack's free
+                            tier drops everything past 90 days, which is why it
+                            is not being used.
                         </p>
                     </div>
                 </div>
@@ -126,16 +125,16 @@
 
         <div class="alert alert-secondary py-3 small mb-3">
             <strong>This is a separate account.</strong>
-            Your portal login is not your Discord login, and your role here does
-            not carry over — a tester and a developer look the same to Discord
-            unless someone sets it up otherwise. Signing out of the portal does
-            not sign you out of Discord.
+            Your portal login is not your board login, and your role here does
+            not carry over — a tester and a developer look the same unless
+            someone sets it up otherwise. Signing out of the portal does not
+            sign you out of the board.
         </div>
 
         <p class="small text-secondary mb-0">
-            Discord keeps message history indefinitely on its free tier, which
-            is why it was chosen — Slack's free tier only shows the last 90
-            days. Messages live on Discord's servers, not ours.
+            The board is hosted by a third party rather than by us. It was
+            chosen to be open source and hosted in the UK or the EU, so the
+            conversation is not subject to US jurisdiction.
         </p>
 
     </main>
