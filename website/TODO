@@ -236,9 +236,36 @@ Consequences to remember:
 
 NEXT SECTION — ASSET TYPES, PREVIEW, LOCAL DISTRIBUTION
 -------------------------------------------------------
-Designed but NOT STARTED. Full design note in docs/assettypes01, which covers:
-upload types (Blender / Nuke / Unreal / Maya / images), on-site preview, and
-downloading to an approver's local working copy of the game.
+Designed but NOT STARTED. Two design notes, both in docs/:
+
+  docs/assettypes01   upload types, on-site preview, downloading to an
+                      approver's local working copy. Maps the work onto
+                      docs/Specification_v04_web.html sections 02.4, 02.6 and
+                      the TBD vetting gate.
+
+  docs/uploadmodel01  the developer upload and naming model. Amends
+                      docs/dbspec01, which is now annotated to point at it.
+
+Read BOTH before starting. uploadmodel01 is the more consequential of the two:
+it changes what an upload MEANS.
+
+  Uploads currently CREATE a version on every drop (versionNumber = MAX + 1).
+  Under the new model the developer owns versioning in the sandbox and an
+  upload record is a HISTORY TRAIL entry, not a storage event. An upload that
+  adds no new bytes is still recorded — that is correct, it documents what was
+  submitted, under what name, and when. Only genuinely new content reaches the
+  SHA store; known content is referenced.
+
+  NOTE the dependency: nothing except the upload route currently creates a
+  workspace_version, so stopping it from auto-creating leaves a gap. The
+  replacement path (developer creates/selects a version) has to land with it.
+
+  uploadmodel01 also carries: the folder-name parser and its separator
+  variants, the three-tier name match (exact / near / different), the three
+  validation tiers (block reserved extensions / warn on marginal like tree.v2 /
+  accept), the two clash mechanisms (whole-upload warn, per-path
+  overwrite-rename-merge-add), and the rule that paths are NEVER rewritten.
+  That last one means filename_overrides should be removed.
 
 Read that note before starting. It maps the work onto
 docs/Specification_v04_web.html sections 02.4, 02.6 and the TBD vetting gate,

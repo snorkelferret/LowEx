@@ -1,0 +1,189 @@
+DEVELOPER UPLOAD AND NAMING MODEL
+Design note — v0.1 — 2026-10-01
+Status: DESIGNED, NOT BUILT
+
+This AMENDS docs/dbspec01, which states "Uploading changed content creates the
+next version". That is upload-driven versioning and is no longer the model.
+
+
+================================================================================
+1. THE SHIFT
+================================================================================
+
+BEFORE: an upload IS a version-creating event. Every drop finds-or-creates the
+asset, computes version_number = MAX + 1, and writes a new version row.
+
+AFTER: the developer owns versioning in their sandbox. An upload record is a
+HISTORY TRAIL entry, not a storage event. Version rules change only when an
+asset moves into GAME SPACE, where the system tracks versions instead — out of
+scope for now.
+
+The consequence that matters: an upload record has value independent of new
+content. Recording an upload that adds no new bytes is correct and expected —
+it records "on this date, this developer submitted this, under this name".
+
+The SHA store only gains entries for genuinely new content. Files whose SHA is
+already known are REFERENCED, not stored. workspace_version_files is already
+unique on (version, relative_path, filename) with no constraint on
+stored_file_id, so many paths may reference one stored file. The schema already
+supports this correctly.
+
+
+================================================================================
+2. WORKED EXAMPLE
+================================================================================
+
+  Upload                            New content        Store     Record
+  --------------------------------  -----------------  --------  ---------------
+  1. bigAsset04, first time         everything         all SHAs  v01 bigAsset04
+
+  2. bigAsset04 again, now with     scripts/           one SHA   v02 bigAsset04
+     scripts/nuke_v11.nk added      nuke_v11.nk
+
+  3. BiggerAsset05, byte-identical to bigAsset04:
+       nothing new
+       -> WARN the developer, then record v01 BiggerAsset05 with NO SHAs written.
+
+  Case 3 is the point. Same bytes, different role: a Nuke script may reference
+  one of them by path, so they are legitimately different assets.
+
+
+================================================================================
+3. NAMING AND PARSING
+================================================================================
+
+The developer's folder name carries the asset name and, usually, a version
+marker. The name is NOT retyped in the UI.
+
+Separators vary — observed as . - _ or a bare v.
+
+Candidate parser:
+
+    /^(?<name>.+?)[\s._-]*v(?<version>\d+(?:[._-]\d+)*)$/i
+
+    Asset_v08, Asset.v08, Asset-v08, Assetv08, Asset v08 -> Asset / 08
+    Assets_v04                                           -> Assets / 04
+    tree_v1.02                                           -> tree / 1.02
+    bigAsset04                                           -> no match
+    Video2, V2, Vault, OakTree, texture.png              -> no match
+
+No false positives on ordinary names is the important property.
+
+Case is PRESERVED in the capture, deliberately: it means `asset_v04` and
+`ASSET_v04` parse as different names, so neither is silently merged nor
+silently split — the near-match prompt fires instead.
+
+A name with no version marker (bigAsset04) is a new asset at version 1, still
+subject to the prompt below.
+
+
+================================================================================
+4. THREE-TIER MATCH
+================================================================================
+
+  exact      parsed name equals an existing asset exactly
+             -> that asset; new upload record
+
+  near       differences only in case / separator / whitespace / leading zeros
+             (Asset_v8 vs Asset_v08, asset_v04 vs Asset_v04)
+             -> ASK: "did you mean Asset?"
+
+  different  genuinely different name
+             -> new asset; its own numbering starts at 1
+
+The prompt exists because parsing is fuzzy. A forgotten capital or underscore
+is exactly the case where a developer does NOT mean to create a new asset.
+
+Upload numbering is PER ASSET and resets for a new asset, which
+UNIQUE (workspace_asset_id, version_number) already supports. No schema change.
+
+
+================================================================================
+5. NAME VALIDATION — THREE TIERS, SAME SHAPE AS ABOVE
+================================================================================
+
+  block   the suffix is a KNOWN file extension (.nk .jpg .pdf .png .blend
+          .uasset .ma .mb ...). Such a name is a FILE, never an asset or a
+          directory: nuke_v10.nk is a file.
+
+  warn    a dotted suffix that is NOT a known type, e.g. tree.v2. Marginally
+          acceptable — flag it and offer to change the name.
+
+  accept  anything else
+
+Reject against a KNOWN-EXTENSION LIST, never against "contains a dot", which
+would wrongly reject legitimate names.
+
+The pattern throughout is: the system GUIDES rather than BLOCKS. Warn and offer
+options; reserve blocking for names that are unambiguously wrong.
+
+
+================================================================================
+6. CLASH MECHANISMS — TWO, DIFFERENT SCOPES
+================================================================================
+
+  WHOLE UPLOAD
+    The upload duplicates an existing asset's content.
+    -> warn, offer to proceed. The record is created either way.
+
+  PER PATH
+    The same version is re-uploaded (Asset_v04 twice), so incoming files land
+    where files already sit.
+    -> offer, per file: overwrite | rename | merge | add
+
+  These are separate mechanisms and should not be conflated in the UI.
+
+  See open items: "merge" and "add" are not yet defined precisely.
+
+
+================================================================================
+7. CONTENT IS TRUTH, NAMES ARE HINTS
+================================================================================
+
+  identity  SHA-256. Same bytes = same content, wherever it appears and
+            whatever it is called.
+
+  type      to be determined from CONTENT (magic bytes), not the extension.
+            This becomes a technical check: "named .png but the content is a
+            Blender file". Same principle as the SHA — the bytes are the fact,
+            the name is a hint.
+
+Both belong to the upload-types work in docs/assettypes01.
+
+
+================================================================================
+8. WHAT THIS CHANGES IN CODE
+================================================================================
+
+  * The upload route currently CREATES a version on every upload
+    (versionNumber = MAX + 1). It must stop. NOTE: nothing else currently
+    creates a workspace_version, so a replacement path is needed — this is a
+    gap to fill, not just a deletion.
+
+  * Name parsing, the three-tier match, and the three validation tiers are new.
+
+  * Per-path clash handling (overwrite / rename / merge / add) is new.
+
+  * filename_overrides should be REMOVED. It exists to rename files, and this
+    model's rule is that paths are never rewritten. It is also already dead
+    code — the lookup cannot match (TODO item 17).
+
+  * Path normalisation must stay limited to traversal safety. It currently also
+    converts backslashes to forward slashes, which IS a rewrite. Deliberate and
+    probably right, but confirm.
+
+  * The upload form and developer panel need rework: no typed asset name,
+    version selection, clash prompts.
+
+
+================================================================================
+9. OPEN ITEMS
+================================================================================
+
+  * Precise meaning of "merge" and "add" in the per-path clash options.
+  * The near-match threshold — keep it conservative; one named constant.
+  * Where the known-extension list lives. It should be ONE registry serving
+    both the name validator and the content-based type check.
+  * Whether version-number gaps matter (v01, v02, v05) — take at face value,
+    or flag?
+  * Backslash-to-forward-slash normalisation: confirm it is wanted.

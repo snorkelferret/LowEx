@@ -3,8 +3,23 @@ Good. I think we now have the core principles sufficiently nailed down that we s
 The important rules we've established are:
 
 Every asset is independently versioned.
-Uploading changed content creates the next version.
-Uploading identical content does not create a pointless new version.
+
+[AMENDED 2026-10-01 — see docs/uploadmodel01. The two rules below described
+ upload-driven versioning and are no longer the model. An upload no longer
+ creates a version: the developer owns versioning in their sandbox, and an
+ upload record is a HISTORY TRAIL entry rather than a storage event. An upload
+ that adds no new bytes is still recorded, because it documents what was
+ submitted, under what name, and when. Version rules only change when an asset
+ moves into game space.]
+
+  (was) Uploading changed content creates the next version.
+  (was) Uploading identical content does not create a pointless new version.
+
+  (now) An upload records what the developer submitted. The SHA store gains an
+        entry only for content it does not already hold; known content is
+        referenced, not stored. An upload of entirely known content is
+        recorded with no new SHAs, after warning the developer.
+
 Files are identified by SHA-256 so identical physical content can be stored only once.
 Different assets may legitimately reference the same physical file.
 A control file is never automatically modified by the repository.
