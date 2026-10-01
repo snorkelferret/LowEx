@@ -1,0 +1,194 @@
+DISCUSSION BOARD — SELF-HOSTED MATRIX / ELEMENT
+Design note — v0.1 — 2026-10-01
+Status: DECIDED, NOT BUILT. Nothing has been installed.
+
+
+================================================================================
+1. THE REQUIREMENTS, AND HOW THEY GOT US HERE
+================================================================================
+
+Three requirements, in the order they were decided:
+
+  * OPEN SOURCE
+  * HOSTED IN THE UK OR THE EU, so the conversation is not subject to US
+    jurisdiction
+  * NO AGE-BASED MESSAGE DELETION
+
+THE ROUTE TAKEN, worth keeping because each step looked reasonable:
+
+  Slack was ruled out first and for the clearest reason: its free tier shows
+  only the last 90 days and, by one account, deletes content older than a year.
+  The retention requirement alone disqualifies it.
+
+  Discord was chosen next, and looked strong on retention — it keeps history
+  indefinitely on the free tier. It was rejected on jurisdiction. Discord, Inc.
+  is a US company and "processes and stores information on servers located in
+  the United States". There is no EU data residency option, and as a US
+  provider it is exposed to the CLOUD Act: US legal process could compel access
+  regardless of where data sits.
+
+  That matters more than usual here because the portal has just been through a
+  deliberate exercise in who can see what — sandboxes private to their owner, no
+  admin read path, impersonation as the only way in. Putting the studio's
+  conversation somewhere US process can reach would have undone a good deal of
+  that thinking.
+
+  A THIRD-PARTY EU/UK BOARD was considered next. Element is available hosted,
+  from roughly EUR 5/user/month, with EU residency. That remains the fallback if
+  self-hosting proves too much.
+
+  SELF-HOSTING was then chosen, because it is the only option that satisfies all
+  three requirements at once AND makes real integration possible — see section 4,
+  which is the part that actually distinguishes it.
+
+
+================================================================================
+2. WHAT WE WOULD RUN
+================================================================================
+
+  Synapse          the Matrix homeserver — holds the rooms and the messages
+  PostgreSQL       Synapse's database
+  Element Web      the client, served as static files at e.g. chat.<domain>
+  nginx            reverse proxy (already present in shell.nix)
+  TURN server      only if voice/video must work through restrictive networks
+
+Synapse speaks to clients over HTTPS; nginx fronts it. Element Web is just
+static files pointing at the homeserver, so it can be served from the same host
+or anywhere.
+
+
+================================================================================
+3. WHY SYNAPSE, WHEN IT IS THE HEAVIEST OF THE THREE
+================================================================================
+
+Normally the lighter homeserver would be the recommendation. Two things rule
+that out, and one of them is decisive.
+
+  Conduit (Rust, ~256 MB) is by far the lightest. Its lineage is a mess: the
+  original lead stepped back, conduwuit was discontinued in 2025, and active
+  development scattered across forks (continuwuity, tuwunel). Betting the
+  studio's chat on that is not sensible.
+
+  Dendrite (Go, ~512 MB) is in MAINTENANCE MODE — security patches only, no new
+  features, and the feature gap with Synapse is no longer closing.
+
+  THE DECISIVE POINT: the features this project needs for integration are
+  exactly the ones the lighter servers do not have. Synapse is the only
+  implementation with a complete admin API and OIDC/SSO support. Cheap to run
+  and unable to integrate is the wrong trade here — section 4 is the whole
+  reason this is worth self-hosting at all.
+
+Also recorded, because it is a trap: you CANNOT reuse the same (sub)domain when
+migrating a homeserver from Synapse to Dendrite — it breaks federation. Changing
+homeserver later is not a drop-in swap.
+
+
+================================================================================
+4. INTEGRATION WITH THE PORTAL — THE REASON THIS IS WORTH DOING
+================================================================================
+
+A third-party board means a second identity system: separate accounts, roles
+that do not carry over, and — the sharp edge — revoking portal access does NOT
+revoke board access. The portal's own revocation is immediate, because
+authenticateToken re-reads is_active on every request; Discord's was not.
+
+Self-hosting lets that be fixed rather than documented. Three rungs, in
+increasing order of value and effort:
+
+  RUNG 1 — LINK OUT
+    What exists today. frontend/discussion.html links to the board. Separate
+    accounts, no connection. Costs nothing, solves nothing.
+
+  RUNG 2 — ADMIN API SYNC          <- START HERE
+    Synapse has an admin REST API. The portal calls it:
+
+      portal account created      -> create the Matrix user
+      portal account deactivated  -> DEACTIVATE the Matrix user
+
+    The second line is the point. A revoked tester loses the board immediately,
+    the same moment they lose the portal — which is the thing Discord could not
+    offer and the reason this is worth the operational cost.
+
+  RUNG 3 — SSO
+    Synapse supports OIDC, so the portal could become the identity provider and
+    one login would cover both. This closes the identity gap entirely: roles,
+    invitations, deactivation, all from one account. Meaningfully more work —
+    it means implementing an OIDC provider in the portal — and rung 2 does not
+    have to be undone to get there.
+
+A DEPENDENCY WORTH NOTING: the portal currently has NO way to deactivate an
+account. authenticateToken reads is_active, but nothing writes it. So rung 2's
+deactivation path has nothing to hook into yet — the portal needs a deactivate
+feature before the sync has anything to propagate. That is small, and it is
+worth doing on its own merits.
+
+
+================================================================================
+5. SIZING, COST, AND WHERE THE MACHINE GOES
+================================================================================
+
+For a studio of 10-50 people: Synapse with PostgreSQL on roughly 4 GB RAM and
+2 cores. That is about EUR 5-10 per month, and there are no per-user fees at any
+point.
+
+Use PostgreSQL, not SQLite. Synapse's own documentation says SQLite is for
+development only and "will become extremely slow" in production.
+
+WHERE THE MACHINE IS MATTERS MORE THAN THE MACHINE. Self-hosting only solves
+the jurisdiction problem if the host is in the UK or the EU. A US VPS would put
+us straight back where Discord had us, and would be a worse position because it
+would look private while being no different.
+
+
+================================================================================
+6. THE HONEST COST
+================================================================================
+
+This is now infrastructure the project runs: upgrades, backups, monitoring, a
+domain, TLS certificates, and the assumption that someone will notice when it
+breaks.
+
+BACKUPS ARE NOT OPTIONAL. With no age-based deletion the database grows
+forever, and chat history is exactly the thing that cannot be regenerated from
+anything else. Losing it means losing it.
+
+The trade, stated plainly: jurisdiction, open source, no per-user cost, and
+genuine integration — paid for in operational attention. If that attention is
+not available, hosted Element is the middle ground and should be taken
+deliberately rather than drifted into.
+
+
+================================================================================
+7. OPEN QUESTIONS
+================================================================================
+
+  * WHICH MACHINE. Must be UK or EU. Decides the whole jurisdiction argument.
+  * VOICE? Element Call needs more infrastructure than text does. If voice is
+    dropped, the TURN server and a good deal of complexity go with it. The
+    original specification did mention voice.
+  * WHO ADMINISTERS IT. Who holds the Synapse admin token, and who can
+    deactivate a Matrix user directly rather than through the portal.
+  * ROOM STRUCTURE. Channels, and whether testers and developers get different
+    spaces. This is the point where roles would have to mean something on the
+    board, if they ever do.
+  * RETENTION, AGAIN, EXPLICITLY. "No age-based deletion" is a requirement
+    here, and with self-hosting it is a config decision rather than a vendor's
+    promise. Set it deliberately and write it down.
+  * WHETHER RUNG 3 IS EVER NEEDED. If rung 2 turns out to be enough, SSO is a
+    large piece of work for a smaller gain than it first appears.
+
+
+================================================================================
+8. WHEN IT IS BUILT
+================================================================================
+
+  1. Provision a UK/EU machine. Set Synapse's retention explicitly.
+  2. Stand up Synapse + PostgreSQL + Element Web behind nginx.
+  3. Set VITE_DISCUSSION_URL to the Element Web address. One line — the
+     discussion page is already service-neutral and takes its URL from config.
+  4. Add portal-side deactivation, which is needed regardless of the board.
+  5. Implement rung 2: create on registration, deactivate on deactivation.
+  6. Consider rung 3 separately, later.
+
+Nothing in the portal blocks on this. The page says "not configured" until
+VITE_DISCUSSION_URL is set, which is the correct behaviour and not an error.

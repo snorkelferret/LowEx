@@ -975,68 +975,47 @@ They MUST be dealt with before any real user data exists.
     trust and contract matter. Testers are the group the portal can actually
     control, which is why its access rules matter more for them.
 
-27) DISCUSSION BOARD — third-party and SERVICE-NEUTRAL. NOT YET CHOSEN.
+27) DISCUSSION BOARD — SELF-HOSTED MATRIX / ELEMENT. Decided, not built.
+    Full design note: docs/discussionboard01. Read that before starting.
 
-    Requirements, in the order they were decided:
-      * OPEN SOURCE
-      * HOSTED IN THE UK OR THE EU, so the conversation is not subject to US
-        jurisdiction
-      * NO age-based message deletion
+    Requirements: open source, hosted in the UK or the EU, and no age-based
+    message deletion. Slack fails on retention; Discord was chosen and then
+    rejected on jurisdiction (US company, US servers, no EU residency, CLOUD
+    Act exposure).
 
-    DISCORD WAS CHOSEN AND THEN REJECTED 2026-10-01. Worth recording why,
-    because it looked good on the retention requirement and the problem was
-    elsewhere: Discord, Inc. is a US company (San Francisco) and processes and
-    stores on US servers. It offers NO EU data residency, and as a US provider
-    it is exposed to the CLOUD Act — US legal process could compel access
-    regardless of where data sits. For a project that has just been thinking
-    carefully about who can see what, that is the wrong direction.
+    WHAT WE WOULD RUN: Synapse + PostgreSQL + Element Web behind nginx, on a
+    UK/EU machine. ~4 GB / 2 cores, EUR 5-10/month, no per-user fees.
 
-    Slack is out for the original reason: its free tier shows only 90 days and
-    deletes content older than a year.
+    WHY SYNAPSE and not the lighter homeservers: Conduit's lineage is a mess
+    (conduwuit discontinued 2025, work scattered across forks) and Dendrite is
+    in maintenance mode. Decisively, the admin API and OIDC/SSO — the features
+    the portal actually wants — exist only in Synapse. Cheap to run and unable
+    to integrate is the wrong trade.
 
-    SHORTLIST — none verified with the vendor yet:
+    THE POINT OF SELF-HOSTING IS INTEGRATION, not just jurisdiction. A
+    third-party board means revoking portal access does NOT revoke board
+    access. Self-hosting lets that be fixed: the portal's admin API calls can
+    create a Matrix user on registration and DEACTIVATE it on deactivation, so
+    a revoked tester loses the board the same moment they lose the portal.
+    That is rung 2 of three in the note; rung 1 is the link-out that exists
+    today, rung 3 is full SSO.
 
-      Element / Matrix  STRONGEST MATCH. Element is UK-headquartered (London)
-                        with EU subsidiaries in DE and FR; the Matrix protocol
-                        is governed by a UK foundation. Open source (Apache 2.0
-                        / AGPL), end-to-end encrypted by default, and used by
-                        NATO and the French and German governments — which is a
-                        far better compliance signal than any marketing page.
-                        Hosted from ~EUR 5/user/month with EU residency, or free
-                        if self-hosted.
-                        CAVEAT: the exact data-centre locations for their
-                        managed hosting are not stated on their site. Pin the
-                        instance location in the contract, or ask.
+    A DEPENDENCY FIRST: there is no way to deactivate a portal account.
+    authenticateToken reads is_active and nothing writes it, so rung 2 has
+    nothing to hook into. Add deactivation — it is small and worth having
+    regardless.
 
-      Stoat             UK, open source, EU-hosted, and the closest in feel to
-      (was Revolt)      what Discord offered. Less established than Element.
+    WHAT EXISTS NOW, deliberately product-agnostic: frontend/discussion.html
+    links out via VITE_DISCUSSION_URL and names no provider, so pointing it at
+    the Element instance is one config line. Blank means the page says "not
+    configured" rather than offering a dead link, which is the state today.
 
-      Nextcloud Talk    German company, open source. Best if Nextcloud is
-                        already in use for files. Large calls need a separate
-                        backend.
+    STILL TO DO — all in the note's section 7 and 8: choose the machine (UK or
+    EU, and it decides the whole jurisdiction argument), decide whether voice
+    is needed (TURN and a lot of complexity go with it), decide room structure
+    and whether roles mean anything on the board, and set retention explicitly
+    since with self-hosting it is a config decision rather than a vendor's
+    promise.
 
-      Mattermost        Open source and Slack-like, but US-origin — fine only
-                        via an EU hosting provider, and that needs checking
-                        rather than assuming.
-
-    WHAT EXISTS NOW, and it is deliberately product-agnostic:
-      * frontend/discussion.html links out to whichever board is chosen, via
-        VITE_DISCUSSION_URL. It names no provider, so changing boards — or not
-        having chosen one — costs a config change, not an edit.
-      * Blank means the page says it is not configured rather than offering a
-        dead link. That is the state today.
-      * The page states plainly that the account is SEPARATE: the portal login
-        is not the board login, roles do not carry over, and signing out of the
-        portal does not sign you out of the board. True of any third-party
-        board, and people find it within a minute anyway.
-      * Links to it sit on the sign-in panel and the tester landing page.
-
-    TO DO:
-      * Choose one. Ask about EU/UK instance location and retention in writing
-        before committing — the retention requirement is the whole reason this
-        is not Slack.
-      * Set VITE_DISCUSSION_URL.
-      * Decide whether to link portal and board accounts (Element supports SSO;
-        that would close most of the identity gap, which nothing else here can).
-      * Correct docs/onboarding-users and docs/onboarding-developers, which
-        still describe a board we would have built.
+    Also: correct docs/onboarding-users and docs/onboarding-developers, which
+    still describe a board we would have built.
