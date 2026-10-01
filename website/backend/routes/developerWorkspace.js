@@ -440,6 +440,326 @@ router.get(
 
 
 // ============================================================
+// FILE ACCESS — manifest and content download
+// ============================================================
+//
+// The first code in this project that serves user-uploaded bytes, so the
+// details matter and are spelled out rather than left to a helper.
+//
+// AUTHORIZATION IS DELIBERATELY NARROWER THAN "admins can read anything":
+//
+//   developer        their OWN workspace only
+//   admin/superuser  only versions SUBMITTED for review — that is, versions
+//                    with at least one creative_approvals row
+//
+// So the sandbox stays private apart from what the developer explicitly
+// submitted, and an approver can still read what they are being asked to
+// approve. Until this existed, reviewing a submission was blind: the queue
+// listed filenames, sizes and hashes, and nothing more.
+//
+// ============================================================
+
+// The content store is flat: one file per SHA, named by its hash. Nothing else
+// is ever used to build a filesystem path.
+const UPLOAD_STORAGE_DIR = path.join(__dirname, '../uploads/files');
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+// Content-Disposition values are built from a developer-supplied filename, so
+// they are sanitised rather than interpolated. RFC 5987 carries the real name
+// for non-ASCII; the plain filename is reduced to printable ASCII with quotes
+// and backslashes removed, so it cannot terminate the header or imply a path.
+function attachmentHeader(filename) {
+    const raw = String(filename || 'file');
+
+    const ascii = raw
+        .replace(/[^\x20-\x7E]/g, '_')
+        .replace(/["\\]/g, '')
+        .trim() || 'file';
+
+    return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(raw)}`;
+}
+
+// relative_path came from the client at upload time and was normalised for
+// traversal then. It is validated again on the way out, because the manifest
+// tells a client where to WRITE files. A bad path is reported rather than
+// silently passed through.
+function relativePathIsSafe(value) {
+    if (value === null || value === undefined || value === '') return true;
+
+    const p = String(value);
+
+    if (p.startsWith('/') || /^[A-Za-z]:/.test(p)) return false;   // absolute
+    if (p.split(/[\\/]/).some(seg => seg === '..')) return false;  // traversal
+    if (/[\x00-\x1f]/.test(p)) return false;                       // control chars
+
+    return true;
+}
+
+// Resolve the files of one version, subject to the authorization rule above.
+// Returns null when the caller may not see this version at all — deliberately
+// the same result for "does not exist" and "not yours", so this cannot be used
+// to probe for the existence of another developer's work.
+function filesForVersion(assetId, versionId, user) {
+    const isReviewer = user.role === 'admin' || user.role === 'superuser';
+
+    const scope = isReviewer
+        ? `AND EXISTS (
+               SELECT 1
+               FROM creative_approvals ca
+               WHERE ca.workspace_version_id = wv.id
+           )`
+        : `AND dw.developer_id = ?`;
+
+    const params = isReviewer
+        ? [versionId, assetId]
+        : [versionId, assetId, user.id];
+
+    const version = db.prepare(`
+        SELECT
+            wv.id,
+            wv.version_number,
+            wv.version_note,
+            wv.creative_locked,
+            wv.repository_version_id,
+            wa.id   AS asset_id,
+            wa.name AS asset_name,
+            wa.asset_type
+        FROM workspace_versions wv
+        JOIN workspace_assets wa    ON wa.id = wv.workspace_asset_id
+        JOIN developer_workspaces dw ON dw.id = wa.workspace_id
+        WHERE wv.id = ?
+          AND wa.id = ?
+          AND wa.is_active = 1
+          ${scope}
+    `).get(...params);
+
+    if (!version) return null;
+
+    const files = db.prepare(`
+        SELECT
+            wvf.id,
+            wvf.filename,
+            wvf.relative_path,
+            sf.sha256,
+            sf.file_size,
+            sf.mime_type,
+            sf.storage_key
+        FROM workspace_version_files wvf
+        JOIN stored_files sf ON sf.id = wvf.stored_file_id
+        WHERE wvf.workspace_version_id = ?
+        ORDER BY
+            COALESCE(wvf.relative_path, '') COLLATE NOCASE,
+            wvf.filename COLLATE NOCASE
+    `).all(versionId);
+
+    return { version, files };
+}
+
+
+// ============================================================
+// GET .../assets/:assetId/versions/:versionId/manifest
+// ============================================================
+//
+// What a client needs to sync a working copy: every file with the path it
+// belongs at, its SHA-256, and its size. Because the content is addressed by
+// hash, a client that already holds a file can skip it — which is the whole
+// point. A developer with a working copy only wants what changed.
+//
+// This is also the reason a monolithic zip is not the primary mechanism: a
+// game asset tree can exceed 4 GB, and re-downloading all of it to collect one
+// changed file is the wrong shape.
+// ============================================================
+
+router.get(
+    '/assets/:assetId/versions/:versionId/manifest',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const caller = req.user;
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        try {
+            const resolved = filesForVersion(assetId, versionId, caller);
+
+            if (!resolved) {
+                return res.status(404).json({ error: 'Workspace version not found' });
+            }
+
+            const { version, files } = resolved;
+
+            const unsafePaths = [];
+            let totalSize = 0;
+
+            const entries = files.map(file => {
+                const path = file.relative_path
+                    ? `${file.relative_path}/${file.filename}`
+                    : file.filename;
+
+                if (!relativePathIsSafe(file.relative_path)) {
+                    unsafePaths.push(path);
+                }
+
+                totalSize += file.file_size;
+
+                return {
+                    id: file.id,
+                    path,
+                    relative_path: file.relative_path,
+                    filename: file.filename,
+                    sha256: file.sha256,
+                    size: file.file_size,
+                    mime_type: file.mime_type,
+                    // The client never needs to construct this itself.
+                    url:
+                        `/api/developer/workspace/assets/${assetId}` +
+                        `/versions/${versionId}/files/${file.id}/content`
+                };
+            });
+
+            return res.json({
+                asset: {
+                    id: version.asset_id,
+                    name: version.asset_name,
+                    asset_type: version.asset_type
+                },
+                version: {
+                    id: version.id,
+                    version_number: version.version_number,
+                    version_note: version.version_note,
+                    creative_locked: version.creative_locked,
+                    repository_version_id: version.repository_version_id
+                },
+                file_count: entries.length,
+                total_size: totalSize,
+                // Non-empty means the database holds a path a client must not
+                // write to. Reported rather than dropped, so it is visible.
+                unsafe_paths: unsafePaths,
+                files: entries
+            });
+
+        } catch (err) {
+            console.error('Failed to build download manifest:', err);
+
+            return res.status(500).json({
+                error: 'Failed to build download manifest'
+            });
+        }
+    }
+);
+
+
+// ============================================================
+// GET .../assets/:assetId/versions/:versionId/files/:fileId/content
+// ============================================================
+//
+// Streams one file.
+//
+// Two things here are load-bearing:
+//
+//   1. The filesystem path is built from stored_files.storage_key ONLY, after
+//      validating it as 64 hex characters. Nothing client-supplied touches the
+//      path, so there is no traversal surface at all.
+//
+//   2. The response is application/octet-stream with Content-Disposition:
+//      attachment — NEVER the stored mime_type. Serving a developer-supplied
+//      .svg or .html inline, from this origin, would be stored XSS against
+//      whoever opened it. The mime_type is metadata for display, not a header.
+// ============================================================
+
+router.get(
+    '/assets/:assetId/versions/:versionId/files/:fileId/content',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const caller = req.user;
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+        const fileId = Number(req.params.fileId);
+
+        if (!Number.isInteger(assetId) ||
+            !Number.isInteger(versionId) ||
+            !Number.isInteger(fileId)) {
+            return res.status(400).json({ error: 'Invalid asset, version or file ID' });
+        }
+
+        try {
+            const resolved = filesForVersion(assetId, versionId, caller);
+
+            if (!resolved) {
+                return res.status(404).json({ error: 'Workspace version not found' });
+            }
+
+            const file = resolved.files.find(f => f.id === fileId);
+
+            if (!file) {
+                return res.status(404).json({ error: 'File not found in this version' });
+            }
+
+            // Refuse to build a path from anything that is not a plain SHA-256.
+            if (!SHA256_HEX.test(String(file.storage_key))) {
+                console.error(
+                    'Refusing to serve stored file with a malformed storage_key:',
+                    file.storage_key
+                );
+
+                return res.status(500).json({
+                    error: 'Stored file record is malformed'
+                });
+            }
+
+            const absolutePath = path.join(UPLOAD_STORAGE_DIR, file.storage_key);
+
+            let stat;
+
+            try {
+                stat = await fs.promises.stat(absolutePath);
+            } catch {
+                // The technical check reports this too ("Physical file is
+                // missing..."). Say so plainly rather than sending a bare 404.
+                return res.status(404).json({
+                    error:
+                        'The stored content for this file is missing from the ' +
+                        'content store. It may need re-uploading.'
+                });
+            }
+
+            if (!stat.isFile()) {
+                return res.status(500).json({ error: 'Stored content is not a file' });
+            }
+
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', attachmentHeader(file.filename));
+            res.setHeader('Content-Length', stat.size);
+            // The bytes never change for a given hash.
+            res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+
+            return res.sendFile(absolutePath, err => {
+                if (err && !res.headersSent) {
+                    console.error('Failed to stream stored file:', err);
+
+                    res.status(500).json({ error: 'Failed to stream stored file' });
+                }
+            });
+
+        } catch (err) {
+            console.error('Failed to serve stored file:', err);
+
+            return res.status(500).json({ error: 'Failed to serve stored file' });
+        }
+    }
+);
+
+
+// ============================================================
 // TEST FILE UPLOAD
 // ============================================================
 //

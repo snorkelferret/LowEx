@@ -204,6 +204,58 @@ NOTE on verification: the frontend changes are confirmed by a clean vite build
 and by review, not by clicking. The rendering has not been viewed in a browser.
 
 
+FILE ACCESS 2026-10-01 (manifest + per-file download)
+----------------------------------------------------
+The first code in this project that serves user-uploaded bytes. Two endpoints,
+both on the workspace router:
+
+  GET /assets/:assetId/versions/:versionId/manifest
+      Every file with the path it belongs at, its sha256, size and mime, plus a
+      ready-made url per file. This is what a client needs to sync a working
+      copy: content is addressed by hash, so a client already holding a file
+      can skip it.
+
+  GET /assets/:assetId/versions/:versionId/files/:fileId/content
+      Streams one file.
+
+Why this shape rather than a zip: a game asset tree can exceed 4 GB, and a
+developer with a working copy wants only what changed. A single archive is the
+wrong primary mechanism. It may come later as a convenience for someone
+without a working copy; no archive library is installed and the format decision
+is deliberately deferred.
+
+Security, all verified by test:
+  - the filesystem path is built from stored_files.storage_key ONLY, after
+    validating it as 64 hex characters. Nothing client-supplied reaches the
+    path, so there is no traversal surface.
+  - application/octet-stream with Content-Disposition: attachment, NEVER the
+    stored mime_type. Serving a developer-supplied .svg or .html inline from
+    this origin would be stored XSS against whoever opened it.
+  - Content-Disposition is built from a developer-supplied filename, so quotes
+    and CR/LF are stripped rather than escaped. RFC 5987 carries the real name.
+  - relative_path is re-validated on the way out. It was normalised at upload,
+    but the manifest tells a client where to WRITE, so an unsafe path is
+    reported in unsafe_paths rather than passed on silently.
+  - a malformed storage_key, or content missing from the store, is refused with
+    an explicit message rather than a bare 404.
+
+AUTHORIZATION is narrower than "admins can read anything":
+
+    developer        their OWN workspace only
+    admin/superuser  only versions SUBMITTED for review (any creative_approvals
+                     row exists for the version)
+
+So the sandbox stays private apart from what the developer explicitly
+submitted, while an approver can read what they are being asked to approve.
+A missing version and someone else's version both return 404, not 403, so this
+cannot be used to probe for the existence of another developer's work.
+
+Verified with 26 assertions, most of them negative cases: cross-developer
+access, admin access before vs after submission, malformed storage_key,
+missing content, traversal in relative_path, and header injection through a
+filename containing quotes and newlines.
+
+
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
 --------------------------------------------
 There used to be a second, unmanaged tree at backend/node_modules with no
@@ -339,20 +391,29 @@ They MUST be dealt with before any real user data exists.
    turns it into a misleading 409. (Feature is still in progress.)
 
 6) The approval workflow is still API-only above the read layer.
-   PARTLY ADDRESSED in Phase 1 (see PHASE 1 COMPLETE above): the admin review
-   queue now exists (GET /creative-approvals), GET /assets returns
-   creative_locked / repository_version_id / latest_check / latest_approval,
-   and the developer panel renders all of it.
+   LARGELY ADDRESSED — see PHASE 1 COMPLETE and FILE ACCESS above.
+
+   Done: the admin review queue (GET /creative-approvals); GET /assets returns
+   creative_locked / repository_version_id / latest_check / latest_approval;
+   the developer panel renders all of it; and the files themselves can now be
+   read — the manifest endpoint and the per-file content endpoint. An approver
+   is no longer blind.
 
    What remains:
-     - no download endpoint, so an approver can see the file LIST but not the
-       bytes. Reviewing a submission is still blind. This is Phase 3.1 and it
-       needs care: it is the first code that serves user-uploaded bytes, so it
-       must use application/octet-stream and Content-Disposition: attachment
-       rather than the stored mime_type, or an uploaded .svg/.html becomes
-       stored XSS on this origin.
      - no UI to request an approval, approve or reject. The endpoints exist and
-       are now discoverable, but both actions require calling the API by hand.
+       are discoverable, but all three actions still require calling the API by
+       hand.
+     - no client. The manifest is designed to be consumed by something that
+       syncs a working copy by hash — a small CLI that reads the manifest and
+       fetches only the files whose sha256 differs locally. Nothing does that
+       yet, so today it is manual.
+     - no archive download. A single zip is a convenience for someone without a
+       working copy; deliberately not built yet (see docs/assettypes01 layer B
+       for why a manifest-and-per-file shape was chosen first).
+     - admin/superuser can read only versions that were SUBMITTED for review,
+       not a developer's other sandbox versions. Deliberate — it keeps the
+       sandbox private apart from what was explicitly submitted. Revisit if
+       approvers need to see more.
 
 7) Set assets.recommended_version_id (or drop the columns).
    `assets.recommended_version_id`, `asset_recommended_versions`,
