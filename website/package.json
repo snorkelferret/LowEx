@@ -8,6 +8,7 @@
     "check:routes": "node scripts/check-route-order.js",
     "check:schema": "node scripts/check-schema-drift.js",
     "check:naming": "node scripts/check-naming.js",
+    "check:dom": "node scripts/check-dom-ids.js",
     "predev": "npm run generate:pages",
     "prebuild": "npm run generate:pages",
     "build": "vite build",

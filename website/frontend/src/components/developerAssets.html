@@ -24,21 +24,14 @@
       <div class="row g-3 mb-4">
 
         <div class="col-md-6">
-          <label for="assetName" class="form-label">
-            Asset name
-          </label>
+          <!-- The asset name is NOT typed. It comes from the folder the
+               developer uploads — bigTree_v04 is asset "bigTree", and the
+               _v04 is their own labelling rather than the system's version.
 
-          <input
-            type="text"
-            class="form-control"
-            id="assetName"
-            placeholder="e.g. OakTree"
-            autocomplete="off"
-          >
-
-          <div class="form-text">
-            The logical name of the asset in your workspace.
-          </div>
+               When files are picked without a folder there is no name to
+               derive, so this area becomes an asset picker instead. Which of
+               the two it shows is decided by renderAssetNameArea(). -->
+          <div id="assetNameArea"></div>
         </div>
 
 

@@ -97,11 +97,14 @@ function parseAssetName(rawName) {
 //   block  the suffix is a known file extension -- this is a file
 //   warn   a dotted version separator, which looks like an extension
 //   ok     anything else
+// `code` is the machine-readable half of the verdict. The client decides which
+// UI to show from it rather than matching on the prose, so rewording a message
+// cannot break the interface.
 function classifyFolderName(rawName) {
     const raw = String(rawName || '').trim();
 
     if (!raw) {
-        return { verdict: 'block', reason: 'The name is empty.' };
+        return { verdict: 'block', code: 'empty', reason: 'The name is empty.' };
     }
 
     const parsed = parseAssetName(raw);
@@ -110,6 +113,7 @@ function classifyFolderName(rawName) {
     if (ext && RESERVED_EXTENSIONS.has(ext)) {
         return {
             verdict: 'block',
+            code: 'reserved_extension',
             parsed,
             reason:
                 `"${raw}" ends in .${ext}, which is a file extension. This is ` +
@@ -120,6 +124,7 @@ function classifyFolderName(rawName) {
     if (parsed.separator === '.') {
         return {
             verdict: 'warn',
+            code: 'dotted_separator',
             parsed,
             reason:
                 `"${raw}" separates the version with ".", which reads like a ` +
@@ -128,7 +133,7 @@ function classifyFolderName(rawName) {
         };
     }
 
-    return { verdict: 'ok', parsed };
+    return { verdict: 'ok', code: 'ok', parsed };
 }
 
 // ---------------------------------------------------------------------------

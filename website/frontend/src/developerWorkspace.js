@@ -135,6 +135,11 @@ function addSelectedFiles(files) {
 
 
     renderUploadPreview();
+
+    // Ask the server what this selection would be called. The rules are
+    // server-side, so this is a request rather than a local calculation — the
+    // display then cannot disagree with what the upload will actually do.
+    checkUploadName();
 }
 
 
@@ -181,6 +186,288 @@ function getDirectory(filePath) {
 // ============================================================
 // Render preview
 // ============================================================
+
+// ---------------------------------------------------------------------------
+// Asset name
+//
+// NOT typed. It comes from the FOLDER the developer uploads: bigTree_v04 is
+// asset "bigTree", and the _v04 is their own labelling rather than the
+// system's version. The system's upload version is a separate per-asset
+// counter, shown as housekeeping in the version list.
+//
+// The rules live on the SERVER, so this asks rather than carrying its own copy
+// of the regex. One source of truth, and this display cannot disagree with what
+// the upload will actually do.
+//
+// Two modes, decided by the server's machine-readable code rather than by
+// matching on wording:
+//
+//   derived  a folder was selected, so the server names the asset
+//   pick     files with no folder — nothing to derive, so the developer
+//            chooses an existing asset or names a new one
+// ---------------------------------------------------------------------------
+
+let nameCheck = null;      // last preflight response
+let pickMode = false;      // this selection has no folder to take a name from
+let assetChoice = '';      // explicit choice: a picked asset, a new name, or a
+                           // near-match confirmation
+
+function resetNameState() {
+    nameCheck = null;
+    pickMode = false;
+    assetChoice = '';
+}
+
+async function checkUploadName() {
+    if (selectedFiles.length === 0) {
+        resetNameState();
+        renderAssetNameArea();
+        return;
+    }
+
+    const body = {
+        file_paths: selectedFiles.map(item => item.originalPath)
+    };
+
+    // In pick mode there is no folder to derive from, so the developer's
+    // choice IS the name — the server validates it exactly as it would a
+    // folder name, which is why it goes through the same endpoint.
+    if (pickMode && assetChoice) {
+        body.upload_name = assetChoice;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/assets/check-name`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body)
+        });
+
+        const result = await response.json();
+
+        // The check made with no explicit name is what tells us there is no
+        // folder. Once known, pickMode stays for this selection: after the
+        // developer chooses, the server has a name and would no longer report
+        // 'no_name', and the mode must not flip back.
+        if (!pickMode && result.code === 'no_name') {
+            pickMode = true;
+        }
+
+        nameCheck = result;
+
+    } catch (err) {
+        console.error('Upload name check failed:', err);
+        nameCheck = null;
+    }
+
+    renderAssetNameArea();
+}
+
+function renderAssetNameArea() {
+    const area = $('assetNameArea');
+
+    if (!area) return;
+
+    area.textContent = '';
+
+    const hint = (text) => {
+        const el = document.createElement('div');
+        el.className = 'form-text';
+        el.textContent = text;
+        return el;
+    };
+
+    const label = (text, forId) => {
+        const el = document.createElement('label');
+        el.className = 'form-label';
+        if (forId) el.setAttribute('for', forId);
+        el.textContent = text;
+        return el;
+    };
+
+    if (selectedFiles.length === 0) {
+        area.appendChild(label('Asset name'));
+        area.appendChild(hint('Select a folder — its name becomes the asset name.'));
+        return;
+    }
+
+    if (!nameCheck) {
+        area.appendChild(label('Asset name'));
+        area.appendChild(hint('Checking…'));
+        return;
+    }
+
+    // Nothing to derive, so the developer picks.
+    if (pickMode) {
+        renderAssetPicker(area, label);
+    } else {
+        renderDerivedName(area, label);
+    }
+
+    // Shared by both modes.
+
+    // The near-match question. Parsing is fuzzy, and a forgotten capital or
+    // underscore is exactly when a developer does NOT mean to create a new
+    // asset, so ask rather than decide.
+    if (nameCheck.match.tier === 'near') {
+        area.appendChild(
+            renderNearMatchPrompt(nameCheck, assetChoice, (choice) => {
+                assetChoice = choice;
+                renderAssetNameArea();
+            })
+        );
+    }
+
+    // Blocking and warning verdicts, explained rather than merely refused.
+    // 'no_name' is excluded because the picker already says it, in context.
+    if (nameCheck.verdict !== 'ok' &&
+        nameCheck.reason &&
+        nameCheck.code !== 'no_name') {
+        const notice = document.createElement('div');
+        notice.className = nameCheck.verdict === 'block'
+            ? 'alert alert-danger mt-2 mb-0 py-2 small'
+            : 'alert alert-warning mt-2 mb-0 py-2 small';
+        notice.textContent = nameCheck.reason;
+        area.appendChild(notice);
+    }
+}
+
+// The common case: a folder was selected, so the server named the asset.
+function renderDerivedName(area, label) {
+    area.appendChild(label('Asset name'));
+
+    const value = document.createElement('div');
+    value.className = 'form-control bg-dark text-light border-secondary';
+    value.textContent = nameCheck.asset_name || '—';
+    area.appendChild(value);
+
+    // Where it came from, so the derivation is visible rather than magic.
+    const from = document.createElement('div');
+    from.className = 'form-text';
+    from.textContent =
+        `From the folder "${nameCheck.upload_name}"` +
+        (nameCheck.version_marker ? ` (your marker: ${nameCheck.version_marker})` : '');
+    area.appendChild(from);
+
+    // What the upload will do.
+    const outcome = document.createElement('div');
+    outcome.className = 'small mt-2';
+    outcome.textContent = nameCheck.match.tier === 'exact'
+        ? `Adds to your existing asset "${nameCheck.match.matched_name}" ` +
+          `as upload v${nameCheck.next_upload_version}.`
+        : `Creates a new asset as upload v${nameCheck.next_upload_version}.`;
+
+    area.appendChild(outcome);
+}
+
+function renderNearMatchPrompt(check, current, onChoose) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'alert alert-warning mt-2 mb-0 py-2 small';
+
+    const question = document.createElement('div');
+    question.className = 'mb-2';
+    question.textContent =
+        `"${check.upload_name}" is not an exact match for "${check.match.matched_name}". ` +
+        `Which did you mean?`;
+    wrapper.appendChild(question);
+
+    for (const option of [check.match.matched_name, check.asset_name]) {
+        const id = `near-${option.replace(/[^A-Za-z0-9]/g, '-')}`;
+
+        const row = document.createElement('div');
+        row.className = 'form-check';
+
+        const radio = document.createElement('input');
+        radio.className = 'form-check-input';
+        radio.type = 'radio';
+        radio.name = 'nearMatchChoice';
+        radio.id = id;
+        radio.checked = current === option;
+        radio.addEventListener('change', () => onChoose(option));
+
+        const optionLabel = document.createElement('label');
+        optionLabel.className = 'form-check-label';
+        optionLabel.setAttribute('for', id);
+        optionLabel.textContent =
+            option === check.match.matched_name
+                ? `${option} — the existing asset`
+                : `${option} — a new asset`;
+
+        row.appendChild(radio);
+        row.appendChild(optionLabel);
+        wrapper.appendChild(row);
+    }
+
+    return wrapper;
+}
+
+function renderAssetPicker(area, label) {
+    area.appendChild(label('Asset', 'pickAssetSelect'));
+
+    const select = document.createElement('select');
+    select.className = 'form-select';
+    select.id = 'pickAssetSelect';
+
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = 'Select an asset…';
+    select.appendChild(none);
+
+    for (const name of nameCheck.existing_asset_names || []) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = assetChoice === name;
+        select.appendChild(option);
+    }
+
+    const NEW = '__new__';
+
+    // A choice that is not an existing asset is a new name. Recomputing this on
+    // every render matters: the picker is rebuilt after each check, and without
+    // it the developer's typed name would vanish the moment they tabbed away.
+    const isExisting =
+        (nameCheck.existing_asset_names || []).includes(assetChoice);
+    const isNew = assetChoice !== '' && !isExisting;
+
+    const newOption = document.createElement('option');
+    newOption.value = NEW;
+    newOption.textContent = '— new asset —';
+    newOption.selected = isNew;
+    select.appendChild(newOption);
+
+    const newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.className = 'form-control mt-2';
+    newInput.placeholder = 'New asset name';
+    newInput.autocomplete = 'off';
+    newInput.value = isNew ? assetChoice : '';
+    newInput.classList.toggle('d-none', !isNew);
+
+    select.addEventListener('change', () => {
+        const isNew = select.value === NEW;
+        newInput.classList.toggle('d-none', !isNew);
+        assetChoice = isNew ? newInput.value.trim() : select.value;
+        checkUploadName();
+    });
+
+    newInput.addEventListener('input', () => {
+        assetChoice = newInput.value.trim();
+    });
+
+    newInput.addEventListener('change', () => checkUploadName());
+
+    area.appendChild(select);
+    area.appendChild(newInput);
+
+    area.appendChild(Object.assign(document.createElement('div'), {
+        className: 'form-text',
+        textContent:
+            'These files have no folder, so there is nothing to take a name ' +
+            'from. Choose the asset they belong to, or name a new one.'
+    }));
+}
 
 function renderUploadPreview() {
 
@@ -432,9 +719,14 @@ function clearUpload() {
 
     selectedFiles = [];
 
+    // A new selection starts the naming over: the folder, and therefore the
+    // asset and any choice made about it, are all different.
+    resetNameState();
+
     $('uploadStatus').innerHTML = '';
 
     renderUploadPreview();
+    renderAssetNameArea();
 }
 
 
@@ -449,9 +741,6 @@ async function uploadAsset() {
     }
 
 
-    const assetName =
-        $('assetName')?.value.trim();
-
     const assetType =
         $('assetType')?.value.trim();
 
@@ -462,14 +751,38 @@ async function uploadAsset() {
         $('versionNote')?.value.trim();
 
 
-    if (!assetName) {
+    // The asset name is not typed — the server derives it from the folder. So
+    // the guard is on the name check, not on a form field.
+    if (!nameCheck) {
 
         showUploadStatus(
-            'Asset name is required.',
+            'Still working out what this upload should be called. Try again in a moment.',
+            'warning'
+        );
+
+        return;
+    }
+
+
+    if (nameCheck.code === 'no_name' || nameCheck.verdict === 'block') {
+
+        showUploadStatus(
+            nameCheck.reason || 'That name cannot be used.',
             'danger'
         );
 
-        $('assetName')?.focus();
+        $('pickAssetSelect')?.focus();
+
+        return;
+    }
+
+
+    if (nameCheck.match.tier === 'near' && !assetChoice) {
+
+        showUploadStatus(
+            'Confirm whether this is a new asset or an existing one.',
+            'danger'
+        );
 
         return;
     }
@@ -492,10 +805,15 @@ async function uploadAsset() {
         new FormData();
 
 
-    formData.append(
-        'asset_name',
-        assetName
-    );
+    // The name is NOT sent in the normal case — the server derives it from the
+    // folder, so sending one could only disagree with it. An explicit choice is
+    // sent: in pick mode there is no folder, and a near-match confirmation is
+    // the developer answering the question the server asked.
+    if (pickMode) {
+        formData.append('upload_name', assetChoice);
+    } else if (nameCheck.match.tier === 'near') {
+        formData.append('confirmed_asset_name', assetChoice);
+    }
 
     formData.append(
         'asset_type',

@@ -1189,6 +1189,7 @@ router.post(
             if (!uploadName) {
                 return res.json({
                     verdict: 'block',
+                    code: 'no_name',
                     reason:
                         'No asset name could be determined. Select a FOLDER to ' +
                         'upload — the folder name is the asset name — or provide ' +
@@ -1243,6 +1244,7 @@ router.post(
 
             return res.json({
                 verdict: classification.verdict,
+                code: classification.code,
                 reason: classification.reason || null,
                 upload_name: uploadName,
                 asset_name: assetName,

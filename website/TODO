@@ -422,23 +422,48 @@ NEXT SECTION — ASSET TYPES, PREVIEW, LOCAL DISTRIBUTION
 -------------------------------------------------------
 IN PROGRESS. The upload model is being built (see below).
 
-Built so far: backend/lib/assetNaming.js — the folder-name parser, the three
-validation tiers (block reserved extensions / warn on dotted separators /
-accept) and the three-tier match (exact / near / different). Tested by
-scripts/check-naming.js, 46 cases, runnable as `npm run check:naming`.
+BUILT:
 
-  NOT WIRED INTO THE UPLOAD ROUTE YET. The route still takes a typed
-  asset_name and numbers the version MAX(version_number) + 1.
+  backend/lib/assetNaming.js — the folder-name parser, the three validation
+  tiers (block reserved extensions / warn on dotted separators / accept), the
+  three-tier match (exact / near / different), and deriveUploadRoot() for
+  getting the folder out of an upload's paths. Tested by
+  scripts/check-naming.js, 55 cases, `npm run check:naming`.
 
-  BLOCKED on one question: docs/uploadmodel01 describes versioning two ways.
-  "developers work on Asset_v01 … Asset_vnn, so the name is not retyped" implies
-  the version comes FROM THE NAME. But the worked example has bigAsset04
-  uploaded twice producing v01 then v02 with the folder name unchanged, which
-  implies a per-asset COUNTER. The reading that reconciles them is "use the
-  version in the name when present, otherwise increment" — but that needs
-  confirming before the route is changed, because it is the load-bearing part.
-  Also unresolved: what happens when the name declares a version that already
-  exists for that asset.
+  POST /assets/check-name — preflight. The naming rules live on the server
+  ONLY, so the client asks rather than carrying its own copy of the regex. One
+  source of truth, and the preview cannot disagree with what the upload does.
+  Returns a machine-readable `code` alongside the human message, so the client
+  picks its UI from the code rather than by matching prose.
+
+  The upload route now derives the asset name from the FOLDER, not a typed
+  field. bigTree_v04 is asset "bigTree"; the _v04 is the developer's own
+  labelling. THE VERSION IS UNCHANGED — still a per-asset counter, MAX + 1.
+  It is housekeeping, and belongs in additional details rather than being the
+  headline. My earlier worry that stopping auto-versioning would leave a gap
+  was unfounded: nothing needed to change.
+
+  The near-match prompt is enforced on upload: a 409 carrying both options,
+  and confirmed_asset_name must be one of them. The validation tiers are
+  enforced too — a file-extension name is refused (422) with an explanation.
+
+  Client: the typed asset-name field is gone. A folder selection derives the
+  name and shows what the upload will do; a file selection with no folder shows
+  an asset picker instead (existing asset, or a new name). Both show the
+  near-match question and any verdict before the upload is attempted.
+
+  NOT VERIFIED IN A BROWSER. Clean build, and scripts/check-dom-ids.js confirms
+  every id the client looks up is declared — that check exists because an
+  undeclared id fails SILENTLY behind `if (!el) return`, which is the likely
+  way this kind of change breaks unnoticed. But nobody has clicked it.
+
+DESIGN NOTES now settled, recorded in docs/uploadmodel01:
+  * The developer's _vNN is their own labelling, NOT stored as a column —
+    working folders get names like tryagainStupid and Ihatethis, so it is not
+    worth promoting to a field. The SHA is truth for content, the system
+    counter is truth for history, the name is a human convenience.
+  * No escape hatch from a silly name. It is a sandbox; let them make a mess.
+  * Single-file uploads ask which asset they belong to, including a new name.
 
 Still designed but not built. Two design notes, both in docs/:
 
