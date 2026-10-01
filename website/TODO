@@ -263,6 +263,37 @@ missing content, traversal in relative_path, and header injection through a
 filename containing quotes and newlines.
 
 
+GAME-SPACE READ — DEFERRED BY DECISION (2026-10-01)
+---------------------------------------------------
+DEFERRED, not forgotten, and deliberately bundled with building the game.
+
+A developer cannot currently browse or download assets that have been APPROVED
+into the game store. That is how they are meant to pick up their own approved
+work as the basis for continuing, and it is why the workspace quota excludes
+game-store content — the round trip is the point.
+
+Decision: wait until the game itself is being built. The developer access rules
+depend on how the game is actually structured — how assets are organised, what
+a working copy looks like, how dependencies resolve between them — and writing
+them now would mean guessing, then rewriting once the game exists.
+
+So this is not a gap in the portal; it is an interface that has to be designed
+against the game, not ahead of it.
+
+When it happens it needs a /api/game router (layer C in docs/assettypes01):
+browse the store, and download its files. Note it introduces a THIRD access
+class alongside the two that exist:
+
+    workspace content   the owning developer only (no admin bypass —
+                        impersonation is the only way in)
+    game content        readable by any authenticated developer
+    release management  admin/superuser (not yet built)
+
+Getting that split right is the main design work, and it is why the admin read
+path was removed from the workspace endpoints first — the rules had to be clean
+before a third class was added.
+
+
 WORKSPACE QUOTA AND SOFT DELETE 2026-10-01
 -----------------------------------------
 A workspace is a STAGING AREA, not a store. Two additions that depend on each
@@ -389,7 +420,27 @@ Consequences to remember:
 
 NEXT SECTION — ASSET TYPES, PREVIEW, LOCAL DISTRIBUTION
 -------------------------------------------------------
-Designed but NOT STARTED. Two design notes, both in docs/:
+IN PROGRESS. The upload model is being built (see below).
+
+Built so far: backend/lib/assetNaming.js — the folder-name parser, the three
+validation tiers (block reserved extensions / warn on dotted separators /
+accept) and the three-tier match (exact / near / different). Tested by
+scripts/check-naming.js, 46 cases, runnable as `npm run check:naming`.
+
+  NOT WIRED INTO THE UPLOAD ROUTE YET. The route still takes a typed
+  asset_name and numbers the version MAX(version_number) + 1.
+
+  BLOCKED on one question: docs/uploadmodel01 describes versioning two ways.
+  "developers work on Asset_v01 … Asset_vnn, so the name is not retyped" implies
+  the version comes FROM THE NAME. But the worked example has bigAsset04
+  uploaded twice producing v01 then v02 with the folder name unchanged, which
+  implies a per-asset COUNTER. The reading that reconciles them is "use the
+  version in the name when present, otherwise increment" — but that needs
+  confirming before the route is changed, because it is the load-bearing part.
+  Also unresolved: what happens when the name declares a version that already
+  exists for that asset.
+
+Still designed but not built. Two design notes, both in docs/:
 
   docs/assettypes01   upload types, on-site preview, downloading to an
                       approver's local working copy. Maps the work onto
@@ -511,12 +562,8 @@ They MUST be dealt with before any real user data exists.
      - no archive download. A single zip is a convenience for someone without a
        working copy; deliberately not built yet (see docs/assettypes01 layer B
        for why a manifest-and-per-file shape was chosen first).
-     - NO game-space read path yet. A developer cannot browse or download
-       assets that have been APPROVED into the game store, which is how they
-       are meant to pick up their own approved work as the basis for
-       continuing. That is layer C in docs/assettypes01 and it needs a
-       /api/game router. Until it exists, approved work can only be reached by
-       re-uploading it into a workspace.
+     - GAME-SPACE READ — DEFERRED BY DECISION, bundled with building the game.
+       See the dedicated entry below; it is deliberately not being built yet.
 
 7) Set assets.recommended_version_id (or drop the columns).
    `assets.recommended_version_id`, `asset_recommended_versions`,
