@@ -31,6 +31,7 @@ const {
     inviteLinkFor,
     canReissue,
 } = require('../lib/invites');
+const { sendInvitation } = require('../lib/mailer');
 
 const router = express.Router();
 
@@ -146,11 +147,13 @@ router.get('/token-state', (req, res) => {
  *
  * Body: { email, role }
  *
- * The link is returned in the response rather than emailed, because there is
- * no mail transport yet (see TODO). That is a stopgap: it means the inviter
- * has to pass the link on by hand.
+ * Emails the invitation, and also returns the link. Both, deliberately:
+ * the returned link is what the inviter needs if SMTP is not configured or
+ * the mail bounces. See backend/lib/mailer.js — email degrades gracefully, so
+ * a deployment without credentials behaves exactly as it did before email
+ * existed rather than failing here.
  */
-router.post('/generate-invite', authenticateToken, requireAdmin, (req, res) => {
+router.post('/generate-invite', authenticateToken, requireAdmin, async (req, res) => {
     const email = String(req.body?.email || '').trim();
     const role = String(req.body?.role || 'user').trim();
 
@@ -183,13 +186,34 @@ router.post('/generate-invite', authenticateToken, requireAdmin, (req, res) => {
             VALUES (?, ?, ?, 'pending', 0, datetime('now', ?), datetime('now'))
         `).run(email, role, token, `+${INVITE_VALID_DAYS} days`);
 
+        const created = db.prepare(
+            'SELECT expires_at FROM invitations WHERE email = ?'
+        ).get(email);
+
+        const inviteLink = linkFor(token);
+
+        const mail = await sendInvitation(email, {
+            role,
+            link: inviteLink,
+            expiresAt: created?.expires_at,
+        });
+
         return res.json({
             success: true,
             email,
             role,
-            inviteLink: linkFor(token),
+            inviteLink,
+            expiresAt: created?.expires_at,
             expiresInDays: INVITE_VALID_DAYS,
-            note: 'No mail transport yet — pass this link on yourself.'
+            emailSent: mail.sent,
+            // The link comes back either way. If the mail did not go it is the
+            // only way to reach them; if it did, it is the fallback for an
+            // address that bounces later.
+            note: mail.sent
+                ? 'Invitation emailed.'
+                : mail.reason === 'not_configured'
+                    ? 'Email is not configured — pass this link on yourself.'
+                    : `Email could not be sent (${mail.error}) — pass this link on yourself.`
         });
 
     } catch (err) {
@@ -211,7 +235,7 @@ router.post('/generate-invite', authenticateToken, requireAdmin, (req, res) => {
  * return only success/expiry — the call worked and the developer received
  * nothing usable, because the token was neither returned nor emailed.
  */
-router.post('/request-reissue', (req, res) => {
+router.post('/request-reissue', async (req, res) => {
     const token = String(req.body?.token || '').trim();
 
     if (!token) {
@@ -252,13 +276,26 @@ router.post('/request-reissue', (req, res) => {
             'SELECT reissue_count, expires_at FROM invitations WHERE id = ?'
         ).get(invite.id);
 
+        const inviteLink = linkFor(newToken);
+
+        const mail = await sendInvitation(invite.email, {
+            role: invite.assigned_role,
+            link: inviteLink,
+            expiresAt: updated.expires_at,
+            reissued: true,
+        });
+
         return res.json({
             success: true,
             reissuesRemaining: MAX_REISSUES - updated.reissue_count,
             expiresAt: updated.expires_at,
-            // Returned rather than emailed, for the same reason as above.
-            inviteLink: linkFor(newToken),
-            message: `Invitation reissued. A new ${INVITE_VALID_DAYS}-day link has been generated.`
+            // Shown on the page as well as emailed. If the mail could not be
+            // sent this is the only way the person asking gets a usable link.
+            inviteLink,
+            emailSent: mail.sent,
+            message: mail.sent
+                ? `Invitation reissued and emailed. A new ${INVITE_VALID_DAYS}-day link is on its way.`
+                : `Invitation reissued. A new ${INVITE_VALID_DAYS}-day link has been generated.`
         });
 
     } catch (err) {
@@ -342,7 +379,7 @@ router.post('/:id/revoke', authenticateToken, requireAdmin, (req, res) => {
  * The route the admin UI called — /:id/reissue — was this path, but it did not
  * exist. Reissue from the panel has therefore never worked.
  */
-router.post('/:id/reissue', authenticateToken, requireAdmin, (req, res) => {
+router.post('/:id/reissue', authenticateToken, requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) {
@@ -381,14 +418,28 @@ router.post('/:id/reissue', authenticateToken, requireAdmin, (req, res) => {
             'SELECT reissue_count, expires_at FROM invitations WHERE id = ?'
         ).get(id);
 
+        const inviteLink = linkFor(newToken);
+
+        const mail = await sendInvitation(invite.email, {
+            role: invite.assigned_role,
+            link: inviteLink,
+            expiresAt: updated.expires_at,
+            reissued: true,
+        });
+
         return res.json({
             success: true,
             id,
             email: invite.email,
-            inviteLink: linkFor(newToken),
+            inviteLink,
             reissuesRemaining: MAX_REISSUES - updated.reissue_count,
             expiresAt: updated.expires_at,
-            note: 'No mail transport yet — pass this link on yourself.'
+            emailSent: mail.sent,
+            note: mail.sent
+                ? 'Invitation reissued and emailed.'
+                : mail.reason === 'not_configured'
+                    ? 'Email is not configured — pass this link on yourself.'
+                    : `Email could not be sent (${mail.error}) — pass this link on yourself.`
         });
 
     } catch (err) {

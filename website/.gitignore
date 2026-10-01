@@ -12,6 +12,9 @@ backend/node_modules/
 .env
 .env.*
 .env~
+# ...but .env.example IS committed — it is the template a new clone starts
+# from, and carries no secrets.
+!.env.example
 #.env#
 #.env#
 

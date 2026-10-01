@@ -4,24 +4,45 @@ LOW EXPECTATIONS — TODO
 PRE-EXISTING
 ------------
 1) cleanup the auth.js frontend backend middleware and authUtils......
-2) Write the inviteDevs email flow: SMTP server setup plus the two stubs in
-   backend/routes/inviteDevs.js
+2) [DONE 2026-10-01] The inviteDevs email flow.
 
-     line  55  // TODO: Connect Nodemailer transportation wrapper here
-     line 114  // TODO: Trigger email service with `newRawToken` to developer's email
+   backend/lib/mailer.js sends invitation mail, wired into all three places a
+   link is produced: generate-invite, the invitee's request-reissue, and the
+   admin's :id/reissue.
 
-   Do the nodemailer 9 -> 10 upgrade (item 22) as part of this, not before.
-   Nodemailer is not imported anywhere yet, so bumping it now would mean
-   testing a major-version change against nothing. It is one `npm audit fix`
-   once there is real code to exercise it.
+   GRACEFUL DEGRADATION is the design. With no SMTP configured the application
+   behaves exactly as it did before email existed — the link comes back in the
+   API response and the inviter passes it on. Turning email on is a
+   configuration change, not a code change, so a fresh clone without
+   credentials still works rather than failing when someone first tries to
+   invite anybody.
 
-   Worth noting while in here: without email there is currently no way for a
-   developer to receive either link. generate-invite returns the invite URL in
-   its own API response (line 57) rather than sending it, and request-reissue
-   returns only success/reissuesRemaining/expiresAt (line 116) — it never
-   returns the new token it just minted at line 109, so the call succeeds and
-   the developer gets nothing usable. Also generate-invite hardcodes
-   http://localhost:5173 (line 53), which needs to come from config.
+   A SEND FAILURE IS NOT A REQUEST FAILURE. If the mail bounces the invitation
+   is still real, the request still succeeds, and the caller is told the mail
+   did not go — with the link, so they can act. Rolling the invitation back
+   because a mail server was down would be the wrong trade.
+
+   Config in .env; .env.example documents it and is committed (the only .env*
+   file that is). SMTP_USER and SMTP_PASS are optional as a pair — a local
+   relay often needs no auth — but setting only one is refused rather than
+   letting the relay reject every message with a confusing error.
+
+   Verified across all three states rather than just the happy one:
+     * not configured   -> invitation created, emailSent false, link returned
+     * relay working    -> delivered; subject, plain-text part and an INTACT
+                           link all confirmed against a stub SMTP server
+     * relay unreachable-> request still 200, failure named, link returned,
+                           and the operator gets a log line
+
+   A NOTE FROM THAT TESTING: the body is quoted-printable, so the link appears
+   in the raw stream as `?token=3D...` with a soft line break inside it.
+   Searching the raw message for a literal URL fails while the mail is
+   perfectly correct — the assertion had to decode first, as a mail client
+   does. Worth remembering before anyone "fixes" a link-detection problem that
+   is not there.
+
+   Still open from the original note: nothing. The hardcoded localhost:5173 is
+   gone too — links are built from CLIENT_URL.
 
 
 COMPLETED 2026-09-29 (code review items 4, 5, 7, 8, 9)
@@ -830,60 +851,18 @@ They MUST be dealt with before any real user data exists.
     backend/routes/developerWorkspace.js already does this correctly.
     Low severity (malformed requests only) but trivially avoided.
 
-22) npm audit: 1 remaining high-severity advisory (nodemailer).
-    Multer was fixed on 2026-09-29 by bumping 2.2.0 -> 2.4.0; see COMPLETED.
-    What is left:
+22) [DONE 2026-10-01] npm audit is CLEAN — 0 vulnerabilities.
 
-      nodemailer 9.0.5 -> 10.0.12 (major bump)
-        Multiple advisories including cross-tenant SMTP credential disclosure.
+    nodemailer 9.0.5 -> 10.0.13, done with the email work rather than before
+    it, as planned: bumping a major version with no call sites would have meant
+    validating it against nothing. The mail path is now exercised by tests
+    against a stub relay, so the bump was checked against real use.
 
-    DEFERRED BY DECISION: do this as part of item 2, when the inviteDevs email
-    flow is written. Nodemailer is not imported anywhere yet, so upgrading it
-    now would mean validating a major-version change against no call sites.
-    `npm audit fix` is the whole fix once there is code to exercise it.
+    Worth recording a mistake made on the way: the first attempt installed
+    `nodemailer@^7`, which DOWNGRADED from 9.0.5 and left the advisory in
+    place. `npm audit` still reported 1 high severity, which is what caught it.
+    The fix was 10.x.
 
-    This is the only remaining audit finding. It is not urgent because nothing
-    imports the module, and it is not a security exposure until the SMTP code
-    exists.
-
-23) REGRESSION GUARD: keep the fallbacks last, and test it.
-    backend/server.js section 8 holds the /api JSON 404 and the SPA catch-all.
-    Express matches in registration order, so a catch-all registered too early
-    silently swallows every route declared below it. That is not theoretical --
-    it is exactly how login-step1, login-step2, the Google OAuth routes,
-    create-invite, register-invited and setup-2fa all became unreachable and
-    login broke with a "Not found" body.
-
-    Nothing else in the test suite catches this, so there is now a check:
-
-        npm run check:routes      # scripts/check-route-order.js
-
-    It stubs listen(), walks app.router.stack and fails if any route or
-    mounted router sits after the catch-all. Verified in both directions: it
-    reports all 8 shadowed handlers against 50baa00 and passes on the current
-    tree. Run it before committing any change to server.js.
-
-24) Known-missing DOM ids, listed by npm run check:dom.
-    Real gaps, not typos. Each is exempted in scripts/check-dom-ids.js with its
-    reason, so a NEW missing id still fails the check while these stay visible.
-
-      runDiagnosticsBtn  (superuser.js)
-        Bound to POST /api/superuser/developer/diagnostics, which works. The
-        button lived in developerInviteExp.html — a component only ever built
-        into the DEVELOPER dashboard — so it was never on the superuser page
-        that binds it. Needs adding to the superuser panel.
-
-      signInAsBtn  (superuser.js)
-        The entry point for impersonation. Deferred by decision: impersonation
-        is how an admin reaches inside a developer workspace, and it is the
-        ONLY way in — there is deliberately no admin read path.
-
-      invite-link-input  (sharedInvites.js)
-        copyInviteLink() selects it, but nothing renders a generated link with
-        that id, so the copy helper does nothing. Belongs with the sharedInvites
-        rework above.
-
-    Remove an entry when the control is added or the code is deleted.
 
 25) DEVELOPER PAGE: browse the game store, to reuse approved assets.
     A developer should be able to browse what is already in the game store —
@@ -915,3 +894,44 @@ They MUST be dealt with before any real user data exists.
     EXCLUDED from the workspace limit, because it is not what the workspace is
     staging. That is already implemented, so importing approved work is free —
     which is the point.
+
+26) LEAK PREVENTION — stopping a build escaping into the wild.
+
+    Put on the list as a topic, not yet a task. No build distribution exists
+    yet, so there is nothing to protect; but the DESIGN of distribution should
+    account for this from the start rather than being retrofitted.
+
+    THE PREMISE: it cannot be prevented. Anyone with a copy can leak it. Every
+    real technique is deterrence, attribution or damage limitation.
+
+    Attribution is the highest-value one for a studio this size — knowing WHO
+    leaked is worth more than slowing anyone down. Spec 01 already says
+    "Dynamic account telemetry is embedded in client binaries for leak
+    tracing", which is this. Practical forms: per-user binary edits (different
+    constants, reordered functions) or steganographic marks in assets/shaders.
+    A visible username overlay is worth little — it is cropped in seconds.
+
+    Also already in spec 01, and worth keeping when distribution is built:
+      * HWID binding — "session tokens are tied to Hardware ID (HWID) hashes
+        upon launch". Does not stop a determined attacker; kills casual
+        sharing, which is most of it.
+      * short-lived user-signed download URLs — limits the window in which a
+        build can be grabbed.
+
+    Revocation ALREADY WORKS and needs nothing built: authenticateToken
+    re-reads is_active on every request, so deactivating an account takes
+    effect immediately rather than at token expiry. That covers both a
+    developer and a tester.
+
+    Staged content is the cheapest lever: do not put anything in an early
+    build that could not afford to leak — no debug symbols, no source, no
+    unreleased audio.
+
+    DELIBERATELY NOT DRM. Denuvo-class protection is expensive, fragile,
+    degrades the game, and delays rather than prevents. Wrong trade for
+    pre-release builds shared with testers.
+
+    AND THE PART THAT CANNOT BE ENGINEERED AWAY: developers have the source
+    and assets on their machines because that is the job. Leak risk there is a
+    trust and contract matter. Testers are the group the portal can actually
+    control, which is why its access rules matter more for them.
