@@ -26,6 +26,125 @@ fs.mkdirSync(tempUploadDir, { recursive: true });
 
 
 // ============================================================
+// WORKSPACE QUOTA
+// ============================================================
+//
+// A workspace is a STAGING AREA, not a store. The limit exists to stop it
+// being used as permanent storage, not to ration legitimate work.
+//
+// THE ACCOUNTING, and why it is shaped this way:
+//
+//   * COUNTED: distinct content the workspace still holds — that is, distinct
+//     stored_files referenced by its ACTIVE assets and ACTIVE versions.
+//
+//   * DISTINCT, because content is addressed by SHA. Re-uploading unchanged
+//     files must not count again, or every iteration would appear to cost the
+//     full size of the tree.
+//
+//   * EXCLUDED: anything already in the GAME STORE. Game-owned content is not
+//     what the workspace is staging, and pulling an approved asset back down
+//     to iterate on it must not consume quota — that round trip is the workflow
+//     the portal exists to support.
+//
+//   * NOT excluded: content shared with another developer's workspace. It is
+//     not approved, so it is still staging, and it counts for both. That is the
+//     conservative direction and avoids free-riding on someone else's work.
+//
+//   * SOFT-DELETED rows do not count, which is precisely how deleting frees
+//     quota without destroying review history.
+//
+// Tunable without a code change. Default 5 GiB: a 500 MB .blend re-saved ten
+// times is 5 GB of genuinely new content, and dedup does not help with that,
+// so a smaller limit would strand a developer mid-iteration on a large asset.
+const WORKSPACE_LIMIT_BYTES = (() => {
+    const configured = Number(process.env.WORKSPACE_LIMIT_BYTES);
+    return Number.isFinite(configured) && configured > 0
+        ? configured
+        : 5 * 1024 * 1024 * 1024;
+})();
+
+// Sizes are shown to developers, so they are rendered in a unit a person can
+// read. A fixed MB divisor reported a small limit as "0.0 MB" and a 5 GB limit
+// as "5120.0 MB".
+function formatBytes(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+    let value = Number(bytes) || 0;
+    let unit = 0;
+
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit++;
+    }
+
+    return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
+}
+
+// Distinct stored files the workspace currently holds, game-store content
+// excluded.
+const workspaceStoredFileIds = db.prepare(`
+    SELECT DISTINCT wvf.stored_file_id AS id
+    FROM workspace_version_files wvf
+    JOIN workspace_versions wv ON wv.id = wvf.workspace_version_id
+    JOIN workspace_assets   wa ON wa.id = wv.workspace_asset_id
+    WHERE wa.workspace_id = ?
+      AND wa.is_active = 1
+      AND wv.is_active = 1
+      AND wvf.stored_file_id NOT IN (
+          SELECT stored_file_id FROM asset_version_files
+      )
+`);
+
+const fileSizeOf = db.prepare(`
+    SELECT id, file_size FROM stored_files WHERE id = ?
+`);
+
+// Used by the upload quota check, which runs before anything is written and so
+// has to work from hashes rather than from stored_file ids that do not exist
+// yet.
+const shaInGameStore = db.prepare(`
+    SELECT 1
+    FROM asset_version_files avf
+    JOIN stored_files sf ON sf.id = avf.stored_file_id
+    WHERE sf.sha256 = ?
+    LIMIT 1
+`);
+
+const shaHeldByWorkspace = db.prepare(`
+    SELECT 1
+    FROM workspace_version_files wvf
+    JOIN workspace_versions wv ON wv.id = wvf.workspace_version_id
+    JOIN workspace_assets   wa ON wa.id = wv.workspace_asset_id
+    JOIN stored_files       sf ON sf.id = wvf.stored_file_id
+    WHERE wa.workspace_id = ?
+      AND wa.is_active = 1
+      AND wv.is_active = 1
+      AND sf.sha256 = ?
+    LIMIT 1
+`);
+
+function workspaceUsage(workspaceId) {
+    const rows = workspaceStoredFileIds.all(workspaceId);
+
+    let bytes = 0;
+    for (const row of rows) {
+        const file = fileSizeOf.get(row.id);
+        if (file) bytes += file.file_size;
+    }
+
+    return {
+        bytes,
+        limit_bytes: WORKSPACE_LIMIT_BYTES,
+        remaining_bytes: Math.max(0, WORKSPACE_LIMIT_BYTES - bytes),
+        file_count: rows.length,
+        percent_used: WORKSPACE_LIMIT_BYTES > 0
+            ? Math.round((bytes / WORKSPACE_LIMIT_BYTES) * 1000) / 10
+            : 0
+    };
+}
+
+
+// ============================================================
 // GET /api/developer/workspace/assets
 // ============================================================
 //
@@ -82,6 +201,9 @@ router.get(
                 ORDER BY name COLLATE NOCASE
             `).all(workspace.id);
 
+            // Soft-deleted versions are excluded here, which is what makes
+            // deleting free quota and remove the version from the developer's
+            // view while the review history stays intact.
             const getVersions = db.prepare(`
                 SELECT
                     id,
@@ -94,6 +216,7 @@ router.get(
                     repository_version_id
                 FROM workspace_versions
                 WHERE workspace_asset_id = ?
+                  AND is_active = 1
                 ORDER BY version_number DESC
             `);
 
@@ -192,6 +315,10 @@ router.get(
 
             return res.json({
                 workspace,
+                // Lets the panel show "4.2 GB of 5 GB used" and warn about a
+                // pending upload BEFORE it is attempted. The client figure is
+                // advisory only; the server enforces on upload regardless.
+                usage: workspaceUsage(workspace.id),
                 assets
             });
 
@@ -204,6 +331,191 @@ router.get(
         }
     }
 );
+
+// ============================================================
+// DELETE /api/developer/workspace/assets/:assetId
+// DELETE /api/developer/workspace/assets/:assetId/versions/:versionId
+// ============================================================
+//
+// A developer can delete anything in their own workspace. Two constraints:
+//
+//   1. IT IS SOFT. The rows stay, marked inactive, so review history survives.
+//      A version cannot be hard-deleted once it has been checked or reviewed —
+//      technical_check_runs and creative_approvals reference it with foreign
+//      keys that have no ON DELETE clause, deliberately. Soft delete also means
+//      quota frees (accounting counts only live rows) without erasing anything.
+//
+//   2. IT TOUCHES ONLY THE WORKSPACE ROWS. stored_files, assets and
+//      asset_versions are never modified, so game-owned content, and content
+//      another workspace happens to share, are unaffected. The developer
+//      deletes what belongs to them — their own uploads and their own
+//      references — and nothing else.
+//
+// Refused while an approval is pending. What is being reviewed must not
+// disappear mid-review. A version already approved into the game store CAN be
+// deleted from the workspace: the game store holds its own copy, so only the
+// developer's copy goes.
+// ============================================================
+
+function pendingApprovalForAsset(assetId) {
+    return db.prepare(`
+        SELECT id
+        FROM creative_approvals
+        WHERE workspace_asset_id = ?
+          AND status = 'pending'
+        LIMIT 1
+    `).get(assetId);
+}
+
+function pendingApprovalForVersion(versionId) {
+    return db.prepare(`
+        SELECT id
+        FROM creative_approvals
+        WHERE workspace_version_id = ?
+          AND status = 'pending'
+        LIMIT 1
+    `).get(versionId);
+}
+
+router.delete(
+    '/assets/:assetId',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+        const assetId = Number(req.params.assetId);
+
+        if (!Number.isInteger(assetId)) {
+            return res.status(400).json({ error: 'Invalid asset ID' });
+        }
+
+        try {
+            const asset = db.prepare(`
+                SELECT wa.id, wa.name, wa.workspace_id
+                FROM workspace_assets wa
+                JOIN developer_workspaces dw ON dw.id = wa.workspace_id
+                WHERE wa.id = ?
+                  AND dw.developer_id = ?
+                  AND wa.is_active = 1
+            `).get(assetId, developerId);
+
+            if (!asset) {
+                return res.status(404).json({ error: 'Workspace asset not found' });
+            }
+
+            if (pendingApprovalForAsset(assetId)) {
+                return res.status(409).json({
+                    error:
+                        `"${asset.name}" is under review and cannot be deleted ` +
+                        `until the pending approval is decided.`
+                });
+            }
+
+            const remove = db.transaction(() => {
+                db.prepare(`
+                    UPDATE workspace_versions
+                    SET is_active = 0
+                    WHERE workspace_asset_id = ?
+                `).run(assetId);
+
+                db.prepare(`
+                    UPDATE workspace_assets
+                    SET is_active = 0,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).run(assetId);
+            });
+
+            remove();
+
+            return res.json({
+                status: 'deleted',
+                asset_id: assetId,
+                name: asset.name,
+                note: 'Content shared with the game store or another workspace is untouched.',
+                usage: workspaceUsage(asset.workspace_id)
+            });
+
+        } catch (err) {
+            console.error('Failed to delete workspace asset:', err);
+
+            return res.status(500).json({ error: 'Failed to delete workspace asset' });
+        }
+    }
+);
+
+router.delete(
+    '/assets/:assetId/versions/:versionId',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        try {
+            const version = db.prepare(`
+                SELECT
+                    wv.id,
+                    wv.version_number,
+                    wa.name AS asset_name,
+                    wa.workspace_id,
+                    wv.repository_version_id
+                FROM workspace_versions wv
+                JOIN workspace_assets wa     ON wa.id = wv.workspace_asset_id
+                JOIN developer_workspaces dw ON dw.id = wa.workspace_id
+                WHERE wv.id = ?
+                  AND wa.id = ?
+                  AND dw.developer_id = ?
+                  AND wa.is_active = 1
+                  AND wv.is_active = 1
+            `).get(versionId, assetId, developerId);
+
+            if (!version) {
+                return res.status(404).json({ error: 'Workspace version not found' });
+            }
+
+            if (pendingApprovalForVersion(versionId)) {
+                return res.status(409).json({
+                    error:
+                        `Version ${version.version_number} of "${version.asset_name}" ` +
+                        `is under review and cannot be deleted until the pending ` +
+                        `approval is decided.`
+                });
+            }
+
+            db.prepare(`
+                UPDATE workspace_versions
+                SET is_active = 0
+                WHERE id = ?
+            `).run(versionId);
+
+            return res.json({
+                status: 'deleted',
+                asset_id: assetId,
+                version_id: versionId,
+                version_number: version.version_number,
+                in_game_store: version.repository_version_id !== null,
+                note: version.repository_version_id !== null
+                    ? 'This version is in the game store; only your workspace copy was removed.'
+                    : 'Content shared elsewhere is untouched.',
+                usage: workspaceUsage(version.workspace_id)
+            });
+
+        } catch (err) {
+            console.error('Failed to delete workspace version:', err);
+
+            return res.status(500).json({ error: 'Failed to delete workspace version' });
+        }
+    }
+);
+
 
 // ============================================================
 // GET /api/developer/workspace/assets/:assetId/versions/:versionId/checks
@@ -1158,6 +1470,50 @@ router.post(
             for (const item of processedFiles) {
                 item.sha256 =
                     await calculateSha256(item.file.path);
+            }
+
+
+            // ----------------------------------------------------
+            // Quota check.
+            //
+            // Runs BEFORE anything is written, so a refusal leaves no partial
+            // state — no temp files moved, no rows inserted.
+            //
+            // The delta is the size of content this upload would newly commit
+            // the workspace to holding: not already held by the workspace, and
+            // not already game-owned. Duplicates within one upload are counted
+            // once.
+            // ----------------------------------------------------
+
+            const usage = workspaceUsage(workspace.id);
+
+            let addedBytes = 0;
+            const countedInThisUpload = new Set();
+
+            for (const item of processedFiles) {
+                const sha = item.sha256;
+
+                if (countedInThisUpload.has(sha)) continue;
+                if (shaInGameStore.get(sha)) continue;
+                if (shaHeldByWorkspace.get(workspace.id, sha)) continue;
+
+                addedBytes += item.file.size;
+                countedInThisUpload.add(sha);
+            }
+
+            const projectedBytes = usage.bytes + addedBytes;
+
+            if (projectedBytes > WORKSPACE_LIMIT_BYTES) {
+                const quotaError = new Error(
+                    `This upload would take the workspace to ${formatBytes(projectedBytes)}, ` +
+                    `over the ${formatBytes(WORKSPACE_LIMIT_BYTES)} limit. ` +
+                    `It is currently using ${formatBytes(usage.bytes)}, and this upload ` +
+                    `adds ${formatBytes(addedBytes)} of content the workspace does not ` +
+                    `already hold. Delete something from the workspace, or reduce ` +
+                    `what is being uploaded.`
+                );
+                quotaError.status = 413;
+                throw quotaError;
             }
 
 

@@ -263,6 +263,84 @@ missing content, traversal in relative_path, and header injection through a
 filename containing quotes and newlines.
 
 
+WORKSPACE QUOTA AND SOFT DELETE 2026-10-01
+-----------------------------------------
+A workspace is a STAGING AREA, not a store. Two additions that depend on each
+other — a limit with no way to free space would be a trap, so they shipped
+together.
+
+SOFT DELETE. A developer can delete anything in their own workspace.
+
+  DELETE /assets/:assetId                      (the asset and its versions)
+  DELETE /assets/:assetId/versions/:versionId  (one version)
+
+  * HARD delete is not available, and not by choice:
+    technical_check_runs.workspace_version_id and
+    creative_approvals.workspace_version_id are foreign keys with no ON DELETE
+    clause, so a version that has ever been checked or reviewed cannot be
+    deleted. That is arguably correct — the history of something submitted
+    should not be erasable. Soft delete sidesteps it: the rows stay, marked
+    is_active = 0, so review history survives and quota still frees, because
+    accounting counts live rows only.
+
+  * Only workspace rows are touched. stored_files, assets and asset_versions
+    are never modified, so game-owned content and content another workspace
+    happens to share are unaffected. The developer deletes what belongs to
+    them — their own uploads and their own references.
+
+  * Refused while an approval is pending (409), matching the freeze rule. A
+    version already approved into the game store CAN be deleted from the
+    workspace: the game store holds its own copy, and the response says so.
+
+  * NEW COLUMN: workspace_versions.is_active, added to db.js and to
+    applySchemaWorkflowPatches. check:schema confirmed the migration produces a
+    schema matching db.js. (Note it compares columns as a SET, not in order:
+    ALTER TABLE appends, so a migrated column always sits at the end while a
+    fresh build declares it mid-table. Order is meaningless in SQL and a
+    positional comparison would report that as drift on every migration.)
+
+QUOTA. WORKSPACE_LIMIT_BYTES, default 5 GiB, tunable without a code change.
+
+  usage = SUM(file_size) over DISTINCT stored_files referenced by this
+          workspace's ACTIVE assets and ACTIVE versions,
+          EXCLUDING anything referenced by asset_version_files (game store).
+
+  * Distinct, because content is addressed by SHA: re-uploading unchanged files
+    must not count again, or every iteration would appear to cost the full size
+    of the tree. Verified: identical content under a NEW asset name adds zero.
+
+  * Game-store content excluded, because it is not what the workspace is
+    staging, and pulling an approved asset back down to iterate must not
+    consume quota. Verified: approving an asset drops its bytes from the
+    developer's usage.
+
+  * Content shared with ANOTHER developer's workspace is NOT excluded — it is
+    not approved, so it is still staging, and it counts for both. Conservative,
+    and stops free-riding.
+
+  * Enforced in the upload route BEFORE anything is written, so a refusal
+    leaves no partial state. Verified: a refused upload writes no stored_files
+    row, does not change usage, and leaves no temp files.
+
+  * 413 with a readable message naming the projection, the limit, current usage
+    and the delta. NOTE: the first version divided by 1024 twice and reported a
+    2000-byte limit as "0.0 MB" — formatBytes() now picks the unit, so the
+    default reads "5.0 GB" and the sample message reads naturally.
+
+  * GET /assets returns a usage block (bytes, limit, remaining, percent) so the
+    panel can warn before an upload is attempted. The client figure is advisory;
+    the server enforces regardless, so a modified client cannot bypass it.
+
+Tested with 31 assertions across two runs (a normal limit and a 2000-byte
+limit), weighted toward the negative cases: dedup, the game-store exclusion,
+refusals leaving no trace, cross-developer and admin refusal, deletion blocked
+under review, and that soft delete never destroys shared bytes.
+
+STILL TO BUILD: the pre-flight UI. The upload preview should show per-file
+sizes, a running total, and current usage, warning before submit if the upload
+would exceed. Delete buttons in the panel too. Backend is ready for both.
+
+
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
 --------------------------------------------
 There used to be a second, unmanaged tree at backend/node_modules with no

@@ -103,6 +103,7 @@ const applyAssetRepositorySchema = () => {
       created_by INTEGER NOT NULL,
       version_note TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_active INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY (workspace_asset_id)
         REFERENCES workspace_assets(id)
         ON DELETE CASCADE,
@@ -334,6 +335,19 @@ const applyAssetWorkflowSchemaPatches = () => {
     db.exec(`
       ALTER TABLE workspace_versions
       ADD COLUMN repository_version_id INTEGER;
+    `);
+  }
+
+  // Soft delete. A version cannot be hard-deleted once it has been checked or
+  // reviewed — technical_check_runs and creative_approvals both reference it
+  // with foreign keys that have no ON DELETE clause, deliberately: the history
+  // of something submitted should not be erasable. Soft delete lets a developer
+  // clear their workspace without destroying that history, and quota
+  // accounting counts only live rows, so it does free space.
+  if (!workspaceVersionColumns.includes('is_active')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;
     `);
   }
 
