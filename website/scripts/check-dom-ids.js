@@ -53,6 +53,11 @@ const CHECKS = [
         pages: ['adminDashboard.html', 'superuserDashboard.html'],
     },
     {
+        // Built into BOTH dashboards, like sharedInvites.
+        client: 'frontend/src/adminUsers.js',
+        pages: ['adminDashboard.html', 'superuserDashboard.html'],
+    },
+    {
         // The sign-in form. Its ids live in the hand-written shopfront page,
         // not in a component.
         client: 'frontend/src/auth.js',

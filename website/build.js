@@ -9,7 +9,8 @@ const pageConfigurations = [
       scripts: [
       './src/header.js',          // Fill in login details	  
       './src/superuser.js',       // Superuser Core Panel logic
-      './src/sharedInvites.js'    // Single-instance shared developer invite code
+      './src/sharedInvites.js',   // Single-instance shared developer invite code
+      './src/adminUsers.js'       // Accounts table - shared with the admin dashboard
     ],
     styles: '/styles/styles.css',
     modules: [
@@ -28,7 +29,8 @@ const pageConfigurations = [
      scripts: [
       './src/header.js',          // Fill in login details
       './src/admin.js',    // Admin Core logic
-      './src/sharedInvites.js'    // Exact same single-instance file compiled here!
+      './src/sharedInvites.js',   // Exact same single-instance file compiled here!
+      './src/adminUsers.js'       // Accounts table - shared with the superuser dashboard
     ],
     styles: '/styles/styles.css',
     modules: [

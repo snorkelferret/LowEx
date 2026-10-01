@@ -1,8 +1,75 @@
+<!-- ============================================================
+     Admin operations
+     ============================================================
+
+     This panel is built into BOTH the admin and the superuser dashboard, so
+     the logic behind it lives in frontend/src/adminUsers.js, which is loaded
+     on both. Putting it in admin.js would leave the table empty on the
+     superuser dashboard, which is the same mistake the invite table made.
+
+     Who may act on whom is decided by the SERVER and arrives as
+     can_deactivate / can_reactivate per row. The buttons mirror that; they do
+     not re-derive it.
+     ============================================================ -->
 
 <section class="card superuser-module" id="admin-panel-module">
   <h3>🛡️ Admin Operations</h3>
+
   <div class="module-body">
+
     <p>User account management, roles, and order overviews.</p>
+
     <div id="adminStatsContainer">Loading admin stats...</div>
+
+
+    <!-- ---------------------------------------------------------------
+         Accounts
+         --------------------------------------------------------------- -->
+
+    <div class="mt-4">
+
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h4 class="h6 mb-0">Accounts</h4>
+
+        <select id="userStatusFilter" class="form-select form-select-sm w-auto">
+          <option value="all">All</option>
+          <option value="active">Active</option>
+          <option value="inactive">Deactivated</option>
+        </select>
+      </div>
+
+      <div id="userListAlert" class="alert py-2 small d-none"></div>
+
+      <div class="table-responsive">
+        <table class="table table-dark table-sm align-middle small mb-0">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th class="text-end"></th>
+            </tr>
+          </thead>
+          <tbody id="user-list-body">
+            <tr><td colspan="5" class="text-secondary py-3">Loading accounts...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="form-text mt-2 mb-0">
+        Deactivating revokes access <strong>immediately</strong> — their next
+        request is refused, even if they are already signed in. It deletes
+        nothing: their assets, versions and reviews stay, because that work
+        belongs to the project rather than to the account.
+      </p>
+
+      <p class="form-text mb-0">
+        You may only deactivate accounts below your own role, and never your
+        own.
+      </p>
+
+    </div>
+
   </div>
 </section>

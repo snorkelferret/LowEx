@@ -116,11 +116,18 @@ increasing order of value and effort:
     it means implementing an OIDC provider in the portal — and rung 2 does not
     have to be undone to get there.
 
-A DEPENDENCY WORTH NOTING: the portal currently has NO way to deactivate an
-account. authenticateToken reads is_active, but nothing writes it. So rung 2's
-deactivation path has nothing to hook into yet — the portal needs a deactivate
-feature before the sync has anything to propagate. That is small, and it is
-worth doing on its own merits.
+A DEPENDENCY, NOW RESOLVED: the portal had no way to deactivate an account —
+authenticateToken read is_active and nothing wrote it, so rung 2's deactivation
+path had nothing to hook into.
+
+That is done (2026-10-01). POST /api/admin/users/:id/deactivate sets
+is_active = 0 and takes effect IMMEDIATELY — the next request from that account
+is refused even if it is already signed in, because authenticateToken re-reads
+is_active rather than trusting the token. Verified against an existing session.
+
+So rung 2 now has exactly the hook it needs: Synapse's admin API call belongs
+alongside that UPDATE, in the same transaction, and the audit record alongside
+both.
 
 
 ================================================================================
