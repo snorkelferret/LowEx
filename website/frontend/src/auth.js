@@ -140,46 +140,20 @@ function saveSessionAndFinish(user) {
       break;
   }
 }
-
-export async function handleDeveloperReissueRequest() {
-  const btn = document.getElementById('btn-request-reissue');
-  const statusMsg = document.getElementById('reissue-status-msg');
-  
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('token');
-
-  btn.disabled = true;
-  btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Requesting...`;
-
-  try {
-    // ✅ CLEANED: Headers no longer manually attach the Bearer token
-    const res = await fetch('/api/invites/request-reissue', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      if (data.error === 'LIMIT_REACHED') {
-        document.getElementById('reissue-allowed-state').classList.add('d-none');
-        document.getElementById('reissue-limit-state').classList.remove('d-none');
-        return;
-      }
-      throw new Error(data.message || 'Failed to request reissue.');
-    }
-
-    statusMsg.className = 'alert alert-success mt-3 mb-0 py-2 small';
-    statusMsg.textContent = data.message;
-    statusMsg.classList.remove('d-none');
-    btn.textContent = 'Request Sent!';
-
-  } catch (err) {
-    statusMsg.className = 'alert alert-danger mt-3 mb-0 py-2 small';
-    statusMsg.textContent = err.message;
-    statusMsg.classList.remove('d-none');
-    btn.disabled = false;
-    btn.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i> Retry Request`;
-  }
-}
+// REMOVED: handleDeveloperReissueRequest(), which reissued an invitation from
+// the developer dashboard.
+//
+// It was dead four times over, so it is deleted rather than moved:
+//
+//   1. nothing called it — the inline onclick that did lived in
+//      developerInviteExp.html, which is gone;
+//   2. two of the ids it reached for, reissue-allowed-state and
+//      reissue-limit-state, exist nowhere at all;
+//   3. the two that DO exist, btn-request-reissue and reissue-status-msg, are
+//      on the REGISTER page — and this file is not loaded there;
+//   4. it fetched /api/invites/request-reissue. The route is
+//      /api/inviteDevs/request-reissue; /api/invites/ has never existed.
+//
+// The working reissue lives in frontend/src/register.js, on the page where an
+// expired invitation actually lands — which is the only place it can work,
+// since an expired-invite holder has no account to sign in with.

@@ -52,6 +52,20 @@ const CHECKS = [
         client: 'frontend/src/sharedInvites.js',
         pages: ['adminDashboard.html', 'superuserDashboard.html'],
     },
+    {
+        // The sign-in form. Its ids live in the hand-written shopfront page,
+        // not in a component.
+        client: 'frontend/src/auth.js',
+        pages: ['shopfront.html'],
+    },
+    {
+        client: 'frontend/src/userLanding.js',
+        pages: ['user.html'],
+    },
+    {
+        client: 'frontend/src/discussion.js',
+        pages: ['discussion.html'],
+    },
 ];
 
 // Ids that are genuinely absent, with the reason. These are NOT typos: the

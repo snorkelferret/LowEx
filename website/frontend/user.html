@@ -1,1 +1,125 @@
-<h1> User Hello </h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Low Expectations - Your Account</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/styles.css">
+
+    <script type="module" src="./src/userLanding.js"></script>
+</head>
+<body class="bg-dark text-light min-vh-100 d-flex flex-column">
+
+    <!--
+      Where a `user` account lands after signing in — which, by definition, is
+      who a tester is: a login with no extra privileges.
+
+      This page is deliberately honest about what exists. Almost none of the
+      tester features are built, and a landing page that implied otherwise
+      would have people looking for downloads that are not there. See
+      docs/onboarding-users.
+    -->
+
+    <nav class="navbar navbar-dark bg-black border-bottom border-secondary border-opacity-25 sticky-top px-3">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold text-uppercase" href="index.html">Low Expectations</a>
+
+            <div class="d-flex align-items-center gap-2">
+                <a class="btn btn-sm btn-outline-secondary" href="discussion.html">
+                    <i class="bi bi-chat-square-text me-1"></i> Discussion
+                </a>
+                <button id="logoutBtn" type="button" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-box-arrow-right me-1"></i> Sign out
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-5" style="max-width: 800px;">
+
+        <div class="mb-5">
+            <h1 class="h3 fw-bold mb-1">
+                Welcome<span id="user-greeting"></span>
+            </h1>
+            <p class="text-secondary mb-0">
+                You are signed in as <span id="user-role-line">a tester</span>.
+            </p>
+        </div>
+
+        <div class="row g-3 mb-4">
+
+            <div class="col-md-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-body">
+                        <i class="bi bi-download text-secondary fs-4"></i>
+                        <h2 class="h6 fw-bold mt-2 mb-2">Play a build</h2>
+                        <p class="text-secondary small mb-0">
+                            Download a build of the game and see where it is up
+                            to.
+                        </p>
+                        <span class="badge text-bg-secondary mt-2">Not built yet</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-body">
+                        <i class="bi bi-bug text-secondary fs-4"></i>
+                        <h2 class="h6 fw-bold mt-2 mb-2">Report a problem</h2>
+                        <p class="text-secondary small mb-0">
+                            Say what broke, and follow up on what you have
+                            already reported.
+                        </p>
+                        <span class="badge text-bg-secondary mt-2">Not built yet</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-body">
+                        <i class="bi bi-chat-square-text text-secondary fs-4"></i>
+                        <h2 class="h6 fw-bold mt-2 mb-2">Talk to the team</h2>
+                        <p class="text-secondary small mb-0">
+                            Channels, direct messages and mentions, on the
+                            discussion board.
+                        </p>
+                        <a class="btn btn-sm btn-outline-secondary mt-2" href="discussion.html">
+                            Take a look
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="alert alert-secondary py-3 small">
+            <strong>Most of this is not built yet.</strong>
+            The account works and the discussion board has a page describing
+            itself, but downloading a build and reporting problems do not exist
+            yet — there is no build to download. This page will fill in as those
+            arrive, rather than describing things that are not there.
+        </div>
+
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <h2 class="h6 fw-bold mb-2">Your account</h2>
+                <dl class="row small mb-0">
+                    <dt class="col-sm-3 text-secondary fw-normal">Username</dt>
+                    <dd class="col-sm-9" id="account-username">—</dd>
+
+                    <dt class="col-sm-3 text-secondary fw-normal">Role</dt>
+                    <dd class="col-sm-9" id="account-role">—</dd>
+                </dl>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

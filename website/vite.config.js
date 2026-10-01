@@ -44,6 +44,9 @@ export default defineConfig(({ mode }) => {
           // The invitation landing page. Not behind the app shell — whoever
           // arrives has no account yet.
           register: path.resolve(rootDir, 'frontend/register.html'),
+          // The discussion board. A stub today, so the links to it from the
+          // sign-in page and the tester landing page do not 404.
+          discussion: path.resolve(rootDir, 'frontend/discussion.html'),
         },
       },
     },
