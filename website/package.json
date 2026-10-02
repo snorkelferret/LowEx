@@ -10,12 +10,13 @@
     "check:naming": "node scripts/check-naming.js",
     "check:dom": "node scripts/check-dom-ids.js",
     "check:store": "node scripts/check-store.js",
-    "predev": "npm run generate:pages",
-    "prebuild": "npm run generate:pages",
+    "predev": "npm run generate:pages && npm run generate:manual",
+    "prebuild": "npm run generate:pages && npm run generate:manual",
     "build": "vite build",
     "start:backend": "node backend/server.js",
     "start:frontend": "vite",
-    "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+    "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "generate:manual": "node scripts/build-manual.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "marked": "^18.0.14",
     "vite": "^8.2.0"
   }
 }

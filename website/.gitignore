@@ -58,5 +58,14 @@ frontend/superuserDashboard.html
 frontend/devDashboard.html
 frontend/register.html
 
+# The manual, assembled by scripts/build-manual.js from ../docs/manual/*.md.
+#
+# Generated under backend/ rather than frontend/dist/ ON PURPOSE. Everything in
+# dist is served statically, before any route runs, so a page placed there is
+# fetchable by anyone whatever guards the route meant to protect it. The manual
+# contains how the server is run and what administrators can do, so it is built
+# outside the static tree and served only through GET /app/manual.
+backend/generated/
+
 # Stray empty directory at the repo root, superseded by frontend/dist.
 /dist/
