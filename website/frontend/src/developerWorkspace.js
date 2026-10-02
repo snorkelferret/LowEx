@@ -8,6 +8,7 @@ import {
 } from '../../shared/assetRules.mjs';
 import { $, escapeHtml, formatFileSize } from './utils.js';
 import { addUtility } from './utilityBar.js';
+import { apiFetch } from './api.js';
 
 const API_URL = '/api/developer/workspace';
 
@@ -372,7 +373,7 @@ async function checkUploadName() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/assets/check-name`, {
+        const response = await apiFetch(`${API_URL}/assets/check-name`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -1102,7 +1103,7 @@ async function uploadAsset() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `${API_URL}/upload`,
                 {
                     method: 'POST',
@@ -1297,7 +1298,7 @@ async function loadDeveloperWorkspace() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `${API_URL}/assets`,
                 {
                     method: 'GET',
@@ -1546,7 +1547,7 @@ async function runTechnicalCheck(asset, version, button, block) {
     block?.querySelector('.check-error')?.remove();
 
     try {
-        const response = await fetch(
+        const response = await apiFetch(
             `${API_URL}/assets/${asset.id}/versions/${version.id}/technical-check`,
             { method: 'POST', credentials: 'include' }
         );
@@ -1589,7 +1590,7 @@ async function runTechnicalCheck(asset, version, button, block) {
 
 async function sendWorkspaceDelete(url, successMessage) {
     try {
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             method: 'DELETE',
             credentials: 'include'
         });
@@ -2128,7 +2129,7 @@ async function purgeVersion(asset, version, button, wrapper) {
     button.textContent = 'Removing…';
 
     try {
-        const response = await fetch(
+        const response = await apiFetch(
             `${API_URL}/assets/${asset.id}/versions/${version.id}/purge`,
             { method: 'POST', credentials: 'include' }
         );
@@ -2249,7 +2250,7 @@ async function loadAssetHistory() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/assets/history`, {
+        const response = await apiFetch(`${API_URL}/assets/history`, {
             credentials: 'include',
         });
 
@@ -2486,7 +2487,7 @@ async function loadBin() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/assets/bin`, {
+        const response = await apiFetch(`${API_URL}/assets/bin`, {
             credentials: 'include',
         });
 
@@ -2514,7 +2515,7 @@ async function sendRestore(url, button, verb) {
     button.textContent = 'Restoring…';
 
     try {
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             method: 'POST',
             credentials: 'include',
         });

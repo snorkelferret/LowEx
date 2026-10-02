@@ -132,6 +132,21 @@
         </div>
     </nav>
 
+    <!-- Why you are here, when you did not choose to be.
+
+         An expired session used to drop you nowhere: the dashboard would render
+         from a stale localStorage profile while every API call was refused, and
+         nothing said what had happened. Now the session ending brings you here,
+         and this says why — a page that bounces you with no explanation reads as
+         a bug rather than as a timeout.
+
+         Shown by frontend/src/auth.js when the URL says the session expired. -->
+    <div id="session-notice" class="alert alert-warning rounded-0 border-0 text-center py-2 small mb-0 d-none" role="status">
+        <i class="bi bi-clock-history me-1"></i>
+        <strong>Your session expired.</strong>
+        You are still signed out of the portal — please sign in again below.
+    </div>
+
     <!-- Main Content -->
     <main class="flex-grow-1">
 

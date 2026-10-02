@@ -16,6 +16,7 @@
 // and the panel does not re-derive that; it shows what it is given.
 
 import { $, escapeHtml } from './utils.js';
+import { apiFetch } from './api.js';
 
 const API = '/api';
 
@@ -233,7 +234,7 @@ async function loadReports() {
     list.textContent = 'Loading reports...';
 
     try {
-        const response = await fetch(
+        const response = await apiFetch(
             `${API}/feedback?status=${encodeURIComponent(status)}`,
             { credentials: 'include' }
         );
@@ -260,7 +261,7 @@ async function resolveReport(report, note, button) {
     button.textContent = 'Closing…';
 
     try {
-        const response = await fetch(`${API}/feedback/${report.id}/resolve`, {
+        const response = await apiFetch(`${API}/feedback/${report.id}/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',

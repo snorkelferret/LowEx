@@ -1,5 +1,6 @@
 // frontend/src/superuser.js
 import { checkAuthGuard, executeGlobalLogout } from './authUtils.js';
+import { apiFetch } from './api.js';
 
 // ==========================================
 // 1. Strict Module-Level Configuration
@@ -67,7 +68,7 @@ function setupAdminStats() {
 
   (async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/stats`, {
+      const res = await apiFetch(`${API_URL}/api/admin/stats`, {
         credentials: 'include'
       });
       const data = await res.json();
@@ -95,7 +96,7 @@ function setupDiagnostics() {
     runDiagnosticsBtn.textContent = 'Running Diagnostics...';
 
     try {
-      const res = await fetch(`${API_URL}/api/superuser/developer/diagnostics`, {
+      const res = await apiFetch(`${API_URL}/api/superuser/developer/diagnostics`, {
         method: 'POST',
         credentials: 'include'
       });
@@ -123,7 +124,7 @@ function setupGitHubModule() {
       const tokenInput = document.getElementById('ghToken').value;
 
       try {
-        const res = await fetch(`${API_URL}/api/superuser/github/keys`, {
+        const res = await apiFetch(`${API_URL}/api/superuser/github/keys`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: tokenInput }),
@@ -140,7 +141,7 @@ function setupGitHubModule() {
   if (triggerSyncBtn) {
     triggerSyncBtn.addEventListener('click', async () => {
       try {
-        const res = await fetch(`${API_URL}/api/superuser/github/sync`, {
+        const res = await apiFetch(`${API_URL}/api/superuser/github/sync`, {
           method: 'POST',
           credentials: 'include'
         });
@@ -155,7 +156,7 @@ function setupGitHubModule() {
   if (triggerBuildBtn) {
     triggerBuildBtn.addEventListener('click', async () => {
       try {
-        const res = await fetch(`${API_URL}/api/superuser/github/deploy`, {
+        const res = await apiFetch(`${API_URL}/api/superuser/github/deploy`, {
           method: 'POST',
           credentials: 'include'
         });

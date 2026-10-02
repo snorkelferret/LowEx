@@ -157,3 +157,35 @@ function saveSessionAndFinish(user) {
 // The working reissue lives in frontend/src/register.js, on the page where an
 // expired invitation actually lands — which is the only place it can work,
 // since an expired-invite holder has no account to sign in with.
+
+// ---------------------------------------------------------------------------
+// Arriving here because a session ended
+//
+// frontend/src/api.js sends you to this page with ?session=expired when an API
+// call is refused for having no session. Without this the redirect would be
+// unexplained, and a page that moves you without saying why reads as a bug.
+//
+// FROM THE URL, not from a query of localStorage: localStorage is exactly the
+// thing that was stale, and is already cleared by the time we get here.
+// ---------------------------------------------------------------------------
+
+(function explainExpiredSession() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('session') !== 'expired') return;
+
+  const notice = document.getElementById('session-notice');
+  if (notice) notice.classList.remove('d-none');
+
+  // Open the sign-in panel, so the next step is in front of them rather than
+  // behind a button they have to find. The notice above says why it is open.
+  const dropdown = document.getElementById('loginDropdown');
+  if (dropdown && window.bootstrap) {
+    window.bootstrap.Dropdown.getOrCreateInstance(dropdown).show();
+  }
+
+  // Drop the parameter, so a reload or a shared link does not keep claiming a
+  // session just expired.
+  params.delete('session');
+  const query = params.toString();
+  window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+})();

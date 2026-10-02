@@ -1,3 +1,4 @@
+import { apiFetch } from './api.js';
 // frontend/src/admin.js
 // No import from sharedInvites.js any more: reissueInvite and getInviteStatus
 // were only used by the dead block removed below.
@@ -36,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function fetchAdminMetrics() {
   try {
-    const res = await fetch(`${API_URL}/admin/stats`, {
+    const res = await apiFetch(`${API_URL}/admin/stats`, {
       credentials: 'include'
     });
       

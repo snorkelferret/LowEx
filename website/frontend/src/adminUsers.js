@@ -13,6 +13,7 @@
 // rule that can disagree with the server.
 
 import { $, escapeHtml } from './utils.js';
+import { apiFetch } from './api.js';
 
 const API = '/api';
 
@@ -44,7 +45,7 @@ async function loadUsers() {
     const status = $('userStatusFilter')?.value || 'all';
 
     try {
-        const response = await fetch(`${API}/admin/users?status=${encodeURIComponent(status)}`, {
+        const response = await apiFetch(`${API}/admin/users?status=${encodeURIComponent(status)}`, {
             credentials: 'include',
         });
 
@@ -121,7 +122,7 @@ async function setActive(id, name, active) {
     clearAlert();
 
     try {
-        const response = await fetch(`${API}/admin/users/${id}/${verb}`, {
+        const response = await apiFetch(`${API}/admin/users/${id}/${verb}`, {
             method: 'POST',
             credentials: 'include',
         });

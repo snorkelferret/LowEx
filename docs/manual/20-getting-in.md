@@ -45,6 +45,19 @@ that a session is a token with an expiry rather than a record the server keeps,
 so signing out on one machine does not sign you out on another. Sessions are not
 individually revocable yet.
 
+### Being signed out without asking
+
+**A session lasts 8 hours.** After that the portal will bring you back to the
+sign-in page and tell you it expired — which is expected, not a fault, and you
+simply sign in again.
+
+Nothing is lost when it happens: work in progress stays where it is, and the
+8 hours restarts from each sign-in.
+
+If you see *"Your session expired"* and did not expect it, it means more than
+8 hours passed since you last signed in — leaving a tab open overnight is the
+usual way.
+
 ## If your access is taken away
 
 An administrator can deactivate your account. That takes effect **immediately** —

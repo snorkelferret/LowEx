@@ -14,6 +14,7 @@
 // SQLite timestamps have a space instead of a T and are UTC.
 
 import { escapeHtml } from './utils.js';
+import { apiFetch } from './api.js';
 
 const API_URL = '/api';
 
@@ -73,7 +74,7 @@ export function getInviteStatus(value) {
  */
 export async function reissueInvite(inviteId) {
     try {
-        const response = await fetch(`${API_URL}/inviteDevs/${inviteId}/reissue`, {
+        const response = await apiFetch(`${API_URL}/inviteDevs/${inviteId}/reissue`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include'
@@ -99,7 +100,7 @@ export async function reissueInvite(inviteId) {
  */
 async function revokeInvite(inviteId) {
     try {
-        const response = await fetch(`${API_URL}/inviteDevs/${inviteId}/revoke`, {
+        const response = await apiFetch(`${API_URL}/inviteDevs/${inviteId}/revoke`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include'
@@ -174,7 +175,7 @@ async function refreshInvitationsList() {
     if (!listBody) return;
 
     try {
-        const response = await fetch(`${API_URL}/inviteDevs/list`, {
+        const response = await apiFetch(`${API_URL}/inviteDevs/list`, {
             credentials: 'include'
         });
 
@@ -301,7 +302,7 @@ async function populateAssignableRoles() {
     if (!select) return;
 
     try {
-        const response = await fetch(`${API_URL}/inviteDevs/assignable-roles`, {
+        const response = await apiFetch(`${API_URL}/inviteDevs/assignable-roles`, {
             credentials: 'include'
         });
 
@@ -363,7 +364,7 @@ export function initInviteDeveloper() {
         if (generateButton) generateButton.disabled = true;
 
         try {
-            const response = await fetch(`${API_URL}/inviteDevs/generate-invite`, {
+            const response = await apiFetch(`${API_URL}/inviteDevs/generate-invite`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
