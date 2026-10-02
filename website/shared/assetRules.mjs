@@ -34,36 +34,70 @@
 //     blocking for names that are unambiguously wrong.
 
 // ---------------------------------------------------------------------------
-// Reserved file extensions
+// Asset types — WHAT a file is
 // ---------------------------------------------------------------------------
 //
-// A name ending in one of these is a file, not an asset or a directory. Kept
-// deliberately as an explicit list rather than "contains a dot", which would
-// wrongly reject legitimate names -- `tree.v2` is not a file.
+// THE ONE PLACE THE TYPE OF A FILE IS DECIDED. There is one function for this
+// and it is assetTypeOf(); nothing anywhere else classifies a file, and nothing
+// anywhere else keeps its own list of extensions.
 //
-// This list will need maintaining. That is the cost of the list approach, and
-// it is cheaper than the false rejections the alternative produces.
-const RESERVED_EXTENSIONS = new Set([
-    // DCC / engine
-    'blend', 'nk', 'ma', 'mb', 'fbx', 'obj', 'abc', 'usd', 'usda', 'usdc',
-    'uasset', 'umap', 'upk', 'uproject', 'sbsar',
-    // images
-    'png', 'jpg', 'jpeg', 'tga', 'exr', 'tif', 'tiff', 'psd', 'hdr', 'dds',
-    'bmp', 'gif', 'svg', 'webp', 'ico',
-    // interchange / 3d
-    'glb', 'gltf', 'dae', 'stl', 'ply',
-    // documents
-    'pdf', 'txt', 'md', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'rtf',
-    // archives
-    'zip', 'rar', '7z', 'tar', 'gz', 'bz2',
-    // media
-    'mp4', 'mov', 'avi', 'mkv', 'wav', 'mp3', 'ogg', 'flac',
-    // code / config
-    'js', 'mjs', 'cjs', 'json', 'py', 'cpp', 'h', 'hpp', 'cs', 'ini', 'cfg',
-    'toml', 'yaml', 'yml', 'xml', 'sh', 'bat', 'ps1',
-    // documents people actually upload
-    'exe', 'dll', 'so', 'db', 'sqlite', 'log',
-]);
+// It replaced a form field that asked the developer to choose between content
+// types and TOOLS. The tool is a property of the file, so the machine reads it
+// rather than a human restating it — and a field a human fills in from memory
+// is a field that is wrong at a predictable rate.
+//
+// THESE EXTENSION LISTS ARE ALSO THE SOURCE OF RESERVED_EXTENSIONS, which
+// answers a different question about the same vocabulary — "is this name a file
+// or a folder?". Writing the extensions out twice would guarantee the two
+// drifted, so the reserved set is DERIVED from here. One list, two questions.
+//
+// Extensions are written without the dot, lowercase.
+const ASSET_TYPE_EXTENSIONS = {
+    Blender:    ['blend'],
+    Nuke:       ['nk'],
+    Maya:       ['ma', 'mb'],
+    Unreal:     ['uasset', 'umap', 'upk', 'uproject'],
+    Substance:  ['sbsar'],
+    '3D model': ['fbx', 'obj', 'abc', 'usd', 'usda', 'usdc',
+                 'glb', 'gltf', 'dae', 'stl', 'ply'],
+    Image:      ['png', 'jpg', 'jpeg', 'tga', 'exr', 'tif', 'tiff', 'psd',
+                 'hdr', 'dds', 'bmp', 'gif', 'svg', 'webp', 'ico'],
+    Video:      ['mp4', 'mov', 'avi', 'mkv'],
+    Audio:      ['wav', 'mp3', 'ogg', 'flac'],
+    Document:   ['pdf', 'txt', 'md', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'rtf'],
+    Archive:    ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'],
+    Code:       ['js', 'mjs', 'cjs', 'json', 'py', 'cpp', 'h', 'hpp', 'cs',
+                 'ini', 'cfg', 'toml', 'yaml', 'yml', 'xml', 'sh', 'bat', 'ps1'],
+    Other:      ['exe', 'dll', 'so', 'db', 'sqlite', 'log'],
+};
+
+// A name ending in one of these is a file, not an asset or a directory. Kept as
+// an explicit list rather than "contains a dot", which would wrongly reject
+// legitimate names — `tree.v2` is not a file.
+//
+// DERIVED, NOT DECLARED. See above: the type map is the list.
+const RESERVED_EXTENSIONS = new Set(
+    Object.values(ASSET_TYPE_EXTENSIONS).flat()
+);
+
+// Extension -> type, built once. The reverse of the map above.
+const TYPE_BY_EXTENSION = new Map(
+    Object.entries(ASSET_TYPE_EXTENSIONS)
+        .flatMap(([type, extensions]) => extensions.map(ext => [ext, type]))
+);
+
+// WHAT TYPE A FILE IS, or null if the extension is not one we recognise.
+//
+// null IS A REAL ANSWER, not a failure. An unrecognised extension means the
+// system cannot classify the file — which the technical check reports, rather
+// than the function guessing. Callers decide whether that is acceptable; this
+// one does not decide it for them.
+function assetTypeOf(filename) {
+    const extension = extensionOf(filename);
+    if (!extension) return null;
+
+    return TYPE_BY_EXTENSION.get(extension) || null;
+}
 
 // ---------------------------------------------------------------------------
 // Version suffix
@@ -375,6 +409,8 @@ function normaliseCategory(value) {
 
 export {
     RESERVED_EXTENSIONS,
+    ASSET_TYPE_EXTENSIONS,
+    assetTypeOf,
     NEAR_MATCH_MAX_DISTANCE,
     BACKUP_PATTERNS,
     ASSET_CATEGORIES,

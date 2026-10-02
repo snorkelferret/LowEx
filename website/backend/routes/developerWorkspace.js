@@ -21,7 +21,8 @@ const {
     matchAssetName,
     deriveUploadRoot,
     isBackupFile,
-    normaliseCategory
+    normaliseCategory,
+    assetTypeOf
 } = require('../../shared/assetRules.mjs');
 
 
@@ -2966,6 +2967,74 @@ router.post(
                         ? 'Duplicate logical file paths detected.'
                         : 'All logical file paths are unique.'
             });
+
+
+            // ----------------------------------------------------
+            // Check: every file is a type we recognise.
+            //
+            // ONE FUNCTION DECIDES WHAT A FILE IS — assetTypeOf() in
+            // shared/assetRules.mjs. This does not keep its own list of
+            // extensions and neither does anywhere else; the check is simply
+            // where the answer gets recorded and reported.
+            //
+            // An unrecognised extension FAILS the run rather than being
+            // ignored. It means nobody can say what the file is, and a
+            // technical check that shrugs at that is not checking anything.
+            // ----------------------------------------------------
+
+            const typeCounts = new Map();
+            const unrecognised = [];
+
+            for (const file of files) {
+                const type = assetTypeOf(file.filename);
+
+                if (!type) {
+                    unrecognised.push(file.filename);
+                    continue;
+                }
+
+                typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+            }
+
+            const typesFound = [...typeCounts.keys()].sort();
+
+            results.push({
+                name: 'asset_types_recognised',
+
+                status: unrecognised.length ? 'failed' : 'passed',
+
+                message: unrecognised.length
+                    ? `Unrecognised file type(s): ${unrecognised.join(', ')}`
+                    : `${files.length} file(s) recognised: ${typesFound.join(', ')}.`
+            });
+
+
+            // ----------------------------------------------------
+            // Record the asset's type, WHEN THERE IS ONE ANSWER.
+            //
+            // Only when every file in the version is the same type. An asset
+            // holding a .blend and forty .png textures has no single type, and
+            // picking the most common would report "Image" for something
+            // everybody would call a Blender asset — a confident wrong answer,
+            // which is worse than none. The per-file types are in the check
+            // message above, so nothing is lost by leaving the column null.
+            // ----------------------------------------------------
+
+            const singleType =
+                typeCounts.size === 1 ? [...typeCounts.keys()][0] : null;
+
+            // COALESCE, so an ambiguous version cannot WIPE a type an earlier
+            // version established. Mixed content means "no new answer", not
+            // "the answer is now nothing".
+            db.prepare(`
+                UPDATE workspace_assets
+                SET asset_type = COALESCE(?, asset_type)
+                WHERE id = (
+                    SELECT workspace_asset_id
+                    FROM workspace_versions
+                    WHERE id = ?
+                )
+            `).run(singleType, versionId);
 
 
             // ----------------------------------------------------

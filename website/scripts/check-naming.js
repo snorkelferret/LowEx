@@ -221,6 +221,52 @@ check('a value off the list is KEPT, not discarded',
 check('every listed category round-trips',
     N.ASSET_CATEGORIES.every(c => N.normaliseCategory(c) === c));
 
+// ------------------------------------------------------- asset types
+
+console.log('\n  -- asset types --');
+
+// ONE function decides what a file is, and it is the only place with a list of
+// extensions. RESERVED_EXTENSIONS is DERIVED from the same map, so these tests
+// pin both halves of that: the types are right, and the two lists cannot drift
+// because there is only one.
+
+check('a known extension maps to its type',
+    N.assetTypeOf('tree.blend') === 'Blender' &&
+    N.assetTypeOf('shot.nk') === 'Nuke' &&
+    N.assetTypeOf('sky.exr') === 'Image');
+
+check('every declared extension maps BACK to its own type',
+    Object.entries(N.ASSET_TYPE_EXTENSIONS).every(([type, exts]) =>
+        exts.every(ext => N.assetTypeOf(`file.${ext}`) === type)));
+
+check('RESERVED_EXTENSIONS is exactly the union of the type map',
+    N.RESERVED_EXTENSIONS.size ===
+        new Set(Object.values(N.ASSET_TYPE_EXTENSIONS).flat()).size &&
+    [...N.RESERVED_EXTENSIONS].every(
+        ext => Object.values(N.ASSET_TYPE_EXTENSIONS).flat().includes(ext)),
+    `${N.RESERVED_EXTENSIONS.size} extensions`);
+
+check('no extension appears in two types',
+    (() => {
+        const all = Object.values(N.ASSET_TYPE_EXTENSIONS).flat();
+        return all.length === new Set(all).size;
+    })());
+
+check('case does not matter',
+    N.assetTypeOf('SHOT.NK') === 'Nuke' &&
+    N.assetTypeOf('Tree.Blend') === 'Blender');
+
+// null is a real answer, not a failure — an unknown type is reported by the
+// technical check rather than guessed at here.
+check('an unknown extension is null, not a guess',
+    N.assetTypeOf('thing.qqq') === null &&
+    N.assetTypeOf('README') === null &&
+    N.assetTypeOf('archive.tar.gz') === 'Archive',
+    'the last one proves it reads the final extension');
+
+check('a dotted NAME that is not an extension is still null',
+    N.assetTypeOf('tree.v2') === null);
+
 // ------------------------------------------------------- feedback rules
 
 console.log('\n  -- feedback rules --');

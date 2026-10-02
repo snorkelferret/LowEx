@@ -81,6 +81,24 @@ function optionalAuth(req, res, next) {
   next();
 }
 
+// THE ROLE RULE, and it is the rule every route in this project depends on:
+//
+//   SUPERUSER CAN DO EVERYTHING AN ADMIN CAN DO, plus more.
+//
+// The "plus more" is superuser-only — deploying the game, creating branches.
+// The "everything an admin can do" part is the one that gets broken by
+// accident, because the failure is silent: a route that lists 'admin' and
+// forgets 'superuser' does not error, it just refuses the most privileged
+// account in the system.
+//
+// SO WHEN A ROUTE NAMES 'admin' IT MUST NAME 'superuser' TOO. Verified
+// 2026-10-02: no requireRole call anywhere allows admin without superuser.
+// Keep it that way — requireAdmin() below enforces the same rule for the
+// boolean form, and admin/superuser pass together everywhere else.
+//
+// The one thing NOT covered here: ADMIN CAN DELETE. Deleting from the game
+// store is an admin capability, not a superuser one, so a delete route naming
+// only 'admin' is not the mistake this note is about.
 function requireRole(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user?.role) {

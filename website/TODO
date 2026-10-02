@@ -617,8 +617,23 @@ WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
   * THERE IS NO SCHEDULER. Nothing in this system runs on a timer, so "after 14
     days" has no moment to happen at. See item 32.
 
-  * IS 14 DAYS FIXED OR CONFIGURED? WORKSPACE_LIMIT_BYTES is configurable, so an
-    env var with a default is consistent.
+  * HOW LONG — SETTLED 2026-10-02: CONFIGURABLE BY THE ADMIN, from the admin
+    page. 14 days is the default, not the rule. So it is a SETTING, not an env
+    var: the admin changes it without a deploy, and the change is visible to
+    whoever looks at the page rather than hidden in a file on the box.
+
+    THAT MEANS A SETTINGS MECHANISM, WHICH DOES NOT EXIST. Nothing in the
+    schema holds an admin-editable value today — every tunable so far is an env
+    var read at boot (WORKSPACE_LIMIT_BYTES, the SMTP settings). This is the
+    first setting that has to be changeable while the server is running, and
+    the first that needs an audit trail of who changed it. Worth building
+    properly rather than as a one-off: a key/value table with an audit record
+    covers the retention window and whatever the admin page needs next
+    (thresholds for the storage and health warnings, item 28).
+
+    Note the worker must READ it rather than cache it at boot, or an admin
+    change does not take effect until the next restart — which is exactly the
+    kind of silent no-op that makes people distrust a settings page.
 
   * WHEN DOES THE CLOCK START — at delete, or at last view? Delete is simpler
     and more honest.
@@ -1193,20 +1208,39 @@ They MUST be dealt with before any real user data exists.
     one — which is the whole point of this item, and the reason the check
     belongs with the import path rather than bolted on separately.
 
-    TWO THINGS TO DECIDE WHEN BUILDING, and neither is obvious:
+    --- DECIDED 2026-10-02: REFUSE THE TRANSFER, POINT AT THE EXISTING FILE ---
 
-      * REFUSE OR WARN. A hard 409 is consistent with the near-match prompt and
-        the naming tiers, which all guide rather than block. But a legitimate
-        case exists for uploading it anyway — iterating on approved work in a
-        form that will diverge — so a warning may be the honest answer. Note
-        the near-match prompt already establishes the pattern: ask, offer the
-        options, and accept a confirmed choice.
+    If a file's content is ALREADY IN THE GAME STORE — same sha256 — the upload
+    is REFUSED and the developer is TOLD WHY. What they get instead is a
+    reference: their own file name, pointing at the stored file that already
+    exists.
 
-      * WHAT COUNTS AS "THE ASSET ALREADY EXISTS". The evidence is per FILE —
-        a matching sha256 — but the claim is about an ASSET. One matching file
-        out of fifty is not the same as all fifty matching. Decide which
-        threshold the message is making a claim about, because "this asset is
-        already in the store" is a strong sentence to say on weak evidence.
+    So the bytes are never transferred and never stored twice. The developer
+    keeps their name for it, the store keeps its one copy, and the developer is
+    told what happened rather than the system silently doing something clever.
+
+    WHY REFUSE RATHER THAN ACCEPT QUIETLY, which is what happens today: the
+    current behaviour already reuses the stored file, but says nothing. The
+    developer sees a successful upload and has no idea the content they just
+    sent is already approved — so they carry on iterating on a copy of
+    something the game already has. Refusing costs them one round trip and
+    tells them the thing worth knowing.
+
+    A NOTE ON THE WORDING, because this is a refusal that still produces a
+    result — the file entry exists afterwards, pointing at the existing
+    content. It is the TRANSFER that is refused, not the operation. If that is
+    the wrong reading, it is the message and the linking step that change, not
+    the detection.
+
+    THIS SETTLES THE EARLIER OPEN QUESTION. Warn-or-refuse is answered: refuse.
+    The near-match prompt remains the pattern for genuinely ambiguous cases;
+    this is not one, because a matching SHA is not a judgement call.
+
+    STILL TO SETTLE WHEN BUILDING: what "already in the store" means when only
+    SOME of an upload's files match. Per-file it is unambiguous — this file's
+    bytes are already approved. Per-asset it is not, and the message must not
+    claim more than the evidence: "these 3 files are already in the store" is
+    supportable, "this asset already exists" may not be.
 
 26) LEAK PREVENTION — stopping a build escaping into the wild.
 
@@ -1560,15 +1594,42 @@ They MUST be dealt with before any real user data exists.
 
     --- STILL OPEN ---
 
-    * THE RESET SCRIPTS ARE UNGUARDED. backend/reset/resetAssetData.js deletes
-      every asset table AND every file in the store, with NO confirmation, no
-      dry run and no environment check. Its own comment records that a path bug
-      once made it delete every stored_files row while reporting "nothing to
-      delete", orphaning the physical files it had just untracked. That is the
-      exact failure mode this item exists to prevent, and it has already
-      happened once. These need a confirmation prompt, a printed summary of
-      what will be destroyed, and a refusal unless the paths resolve inside the
-      project.
+    * THE RESET SCRIPTS ARE UNGUARDED — DECIDED 2026-10-02: REPLACE THEM WITH A
+      DEVELOPMENT-MODE RESET OF THE ASSET STORE.
+
+      The scripts do a real job — a clean store to test against — and they do it
+      badly: backend/reset/resetAssetData.js deletes every asset table AND every
+      file in the store, with NO confirmation, no dry run and no environment
+      check. Its own comment records that a path bug once made it delete every
+      stored_files row while reporting "nothing to delete", orphaning the
+      physical files it had just untracked. That is the exact failure this item
+      exists to prevent, and it has already happened once.
+
+      The replacement is not a better script, it is THE SAME FACILITY AS ITEM 31
+      behind a development-mode switch. It already has to:
+        * be told what it is about to destroy, and agree to that specific list
+        * refuse to run where it should not — and "where it should not" is now
+          the point of the switch, not a path guess
+        * leave an audit record
+
+      SO THE DIFFERENCE FROM A NORMAL DELETE IS ONE THING: SCOPE, and the mode.
+      Development mode resets the WHOLE store; a normal delete removes one
+      asset. Both show what will go and both need agreement — the whole-store
+      one just shows a great deal more.
+
+      HARD RULE: IT MUST REFUSE TO RUN OUTSIDE DEVELOPMENT MODE. A production
+      box that can be emptied by an admin clicking the wrong button is a worse
+      failure than the scripts it replaces. Whatever the mode is read from — an
+      explicit flag rather than NODE_ENV, so a mis-set environment cannot arm it
+      — production must not be able to select it at all.
+
+      AND IT MUST GO THROUGH THE SAME SAFETY AS GARBAGE COLLECTION: refuse to
+      run if check:store reports the store inconsistent, because destroying a
+      store you cannot trust is how a repairable problem becomes an unrepairable
+      one. Note the symmetry — check:store tells you the store is sound,
+      garbage collection removes what nothing references, and this removes
+      everything. Only the last one is destructive by intent, and it is the one
+      that most needs the other two to have run clean first.
 
     * A lost blob is only repaired by someone re-uploading identical content.
       check:store detects it; nothing repairs it. Acceptable while the store is
@@ -1707,8 +1768,18 @@ They MUST be dealt with before any real user data exists.
       difficulty tells them apart. Two controls, deliberately different weight;
       see the DECIDED section above.
 
-    * WHO. Admin, superuser, or either. Item 28's other destructive control,
-      the category retag, is admin/superuser, which is the obvious default.
+    * WHO — SETTLED 2026-10-02: ADMIN CAN DELETE. Not superuser-only. Deleting
+      from the store is an admin capability, and superuser can do it too by the
+      standing rule below. The superuser-only capabilities are the bigger,
+      outward-facing ones: deploying the game, creating branches.
+
+      THE ROLE RULE, and it is worth stating once in full because it is easy to
+      break silently: SUPERUSER CAN DO EVERYTHING AN ADMIN CAN DO, plus more.
+      A route naming 'admin' must name 'superuser' too. The failure mode is
+      not an error — it is the most privileged account in the system being
+      refused. Verified 2026-10-02: no requireRole call anywhere allows admin
+      without superuser. The rule is now also written at requireRole() in
+      backend/middleware/auth.js, which is where someone would look.
 
     --- AND THE TESTING CASE IS ALREADY HALF-BUILT, BADLY ---
 
@@ -1867,41 +1938,44 @@ They MUST be dealt with before any real user data exists.
     somewhere they actually arrive at.
 
 
-34) FILE TYPE VERIFICATION — planned, never recorded, not built.
+34) FILE TYPE VERIFICATION — BUILT 2026-10-02. ONE function, one list.
 
-    The asset-type field was taken OFF the upload page on the grounds that a
+    The asset-type field was taken off the upload page on the grounds that a
     developer should not be asked to restate what the file already says: Maya,
-    Blender and Nuke are TOOLS, and the tool is a property of the file. The plan
-    stated at the time was that a FILE TYPE VERIFIER, running as part of the
-    technical checks, determines it.
+    Blender and Nuke are TOOLS, and the tool is a property of the file. That was
+    done; the verifier that was supposed to replace it was NOT, and the plan had
+    never been written down anywhere. Both halves are now done.
 
-    THAT PLAN WAS NEVER WRITTEN DOWN ANYWHERE ELSE, and nothing implements it.
-    Which matters because of a consequence that is easy to walk past:
+    ONE AND ONLY ONE FUNCTION. assetTypeOf(filename) in shared/assetRules.mjs.
+    Nothing anywhere else classifies a file and nothing anywhere else keeps a
+    list of extensions. It is the function the project asked for, in the place
+    the project puts shared rules.
 
-      workspace_assets.asset_type and assets.asset_type BOTH STILL EXIST. They
-      are still SELECTed by the asset queries, still written by the upload path,
-      and still carried across on acceptance. And they are now ALWAYS NULL —
-      every one of those reads and writes is plumbing for a value nothing
-      produces.
+    THE LIST OF EXTENSIONS EXISTS ONCE, NOT TWICE. RESERVED_EXTENSIONS — the
+    list answering "is this name a file or a folder?" — is now DERIVED from the
+    type map, because both need the same vocabulary and two hand-kept copies of
+    it would have drifted. One list, two questions. check:naming asserts the
+    two agree, and that no extension appears under two types.
 
-    So this is a decision, not an omission: either the verifier gets built, or
-    those columns and all their plumbing come out as dead weight. What is not
-    acceptable is leaving it, because the schema and the queries then claim a
-    field the system cannot fill — which is exactly how the last person to read
-    this code concludes it is broken.
+    WHERE IT RUNS: the technical check, as a real check with a pass/fail and a
+    message, recorded like every other check. An UNRECOGNISED EXTENSION FAILS
+    THE RUN rather than being shrugged at — it means nobody can say what the
+    file is, and a check that ignores that is not checking anything.
 
-    WHAT IT WOULD DO: identify each uploaded file — by extension first, by
-    content where that is cheap and reliable — and record the result. It is also
-    the natural place to catch a file whose extension LIES about its contents,
-    which happens with exported assets and is the failure a human eyeballing a
-    filename would miss.
+    AND IT FILLS THE COLUMN, WHEN THERE IS ONE ANSWER. workspace_assets.
+    asset_type is set from the check — but ONLY when every file in the version
+    is the same type. An asset holding a .blend and forty .png textures has no
+    single type, and reporting the most common would call it an Image asset when
+    everyone would call it a Blender one. A confident wrong answer is worse than
+    none, so it stays null and the per-file types are in the check message.
+    COALESCE, so an ambiguous version cannot wipe a type an earlier one set.
 
-    WHERE IT BELONGS: the technical check run. technical_check_runs and
-    technical_check_results already exist, already record per-check pass/fail
-    with a message, and already belong to a workspace version. A verifier that
-    cannot identify a file should be able to FAIL THE RUN with a reason rather
-    than quietly recording nothing.
+    VERIFIED against a running server, three cases: one type sets the column
+    ("Blender"); mixed content reports "Blender, Image" and leaves the column
+    alone; an unknown extension fails the run and names the file.
 
-    Note it is the same shape of job as the game-store upload check in item 25:
-    something the system can determine for itself, currently left to a human or
-    to nobody.
+    STILL OPEN: it identifies by EXTENSION only. That is the cheap and reliable
+    half, and it cannot catch a file whose extension lies about its contents —
+    a renamed .exe, or an exported asset with the wrong suffix. Content sniffing
+    (magic bytes) is the answer and is a separate job; the function is shaped so
+    that it would change in ONE place when it happens.
