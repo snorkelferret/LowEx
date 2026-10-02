@@ -149,6 +149,7 @@ const applyAssetRepositorySchema = () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_active INTEGER NOT NULL DEFAULT 1,
+      deleted_at DATETIME,
       FOREIGN KEY (workspace_id)
         REFERENCES developer_workspaces(id)
         ON DELETE CASCADE,
@@ -165,6 +166,9 @@ const applyAssetRepositorySchema = () => {
       version_note TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_active INTEGER NOT NULL DEFAULT 1,
+      deleted_at DATETIME,
+      files_purged_at DATETIME,
+      purged_file_manifest TEXT,
       FOREIGN KEY (workspace_asset_id)
         REFERENCES workspace_assets(id)
         ON DELETE CASCADE,
@@ -398,6 +402,19 @@ const applyAssetWorkflowSchemaPatches = () => {
     `);
   }
 
+  // WHEN it was deleted, which nothing recorded before.
+  //
+  // is_active = 0 says a thing is gone; it never said how long it had been
+  // gone, so a retention window had nothing to measure from. This is the column
+  // the wastebin counts its 14 days with, and the reason it could not be built
+  // before now.
+  if (!workspaceAssetColumns.includes('deleted_at')) {
+    db.exec(`
+      ALTER TABLE workspace_assets
+      ADD COLUMN deleted_at DATETIME;
+    `);
+  }
+
 
   /*
    * ----------------------------------------------------------
@@ -464,16 +481,51 @@ const applyAssetWorkflowSchemaPatches = () => {
     `);
   }
 
-  // Soft delete. A version cannot be hard-deleted once it has been checked or
-  // reviewed — technical_check_runs and creative_approvals both reference it
-  // with foreign keys that have no ON DELETE clause, deliberately: the history
-  // of something submitted should not be erasable. Soft delete lets a developer
-  // clear their workspace without destroying that history, and quota
-  // accounting counts only live rows, so it does free space.
+  // Soft delete. The ROW cannot be removed once the version has been checked or
+  // reviewed — technical_check_runs and creative_approvals reference it with
+  // foreign keys that have no ON DELETE clause — and that turns out not to
+  // matter, because the row is worth keeping and the FILES are not.
+  //
+  // An earlier note here said the constraint was deliberate because "the
+  // history of something submitted should not be erasable". That reasoning was
+  // wrong for a staging area: a failed check is a record OF AN ATTEMPT, and
+  // when the attempt goes it has nothing left to describe. What the developer
+  // wants gone is the CONTENT, which is what these two columns are for.
   if (!workspaceVersionColumns.includes('is_active')) {
     db.exec(`
       ALTER TABLE workspace_versions
       ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;
+    `);
+  }
+
+  // WHEN it was deleted — see the note on workspace_assets.deleted_at above.
+  if (!workspaceVersionColumns.includes('deleted_at')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN deleted_at DATETIME;
+    `);
+  }
+
+  // WHEN its files were actually removed, and WHAT they were.
+  //
+  // These two are physical delete. Removing the file rows is what frees the
+  // content — they hold the only reference to the blob — and the manifest is
+  // the record kept in their place, so the version still says what it was made
+  // of after the files are gone.
+  //
+  // The manifest holds NAMES, PATHS, SIZES and HASHES only. If it ever starts
+  // holding content, the point has been undone.
+  if (!workspaceVersionColumns.includes('files_purged_at')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN files_purged_at DATETIME;
+    `);
+  }
+
+  if (!workspaceVersionColumns.includes('purged_file_manifest')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN purged_file_manifest TEXT;
     `);
   }
 

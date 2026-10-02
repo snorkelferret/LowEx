@@ -1961,7 +1961,7 @@ function renderHistoryTotals(totals) {
 }
 
 // One version of one asset, as a line in the history.
-function renderHistoryVersion(version) {
+function renderHistoryVersion(asset, version) {
     const row = document.createElement('div');
     row.className = 'border-top border-secondary pt-2 mt-2';
 
@@ -2016,7 +2016,135 @@ function renderHistoryVersion(version) {
         row.appendChild(line);
     }
 
+    row.appendChild(renderPurgeState(asset, version));
+
     return row;
+}
+
+// Removing the content of a version that has already been deleted.
+//
+// This is the second half of the wastebin. The first half — deleting, which is
+// reversible — is on the workspace card where the version used to be. This is
+// the part that cannot be undone, so it lives in the history, next to a record
+// of what the version was made of.
+function renderPurgeState(asset, version) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mt-2';
+
+    // Already purged: say so, and say what it was. The manifest is the reason
+    // the record survives the content, and showing it is the whole point of
+    // having kept it.
+    if (version.files_purged_at) {
+        const when = document.createElement('p');
+        when.className = 'small text-secondary mb-1';
+        when.textContent =
+            `Files removed ${formatWorkspaceDate(version.files_purged_at)}. ` +
+            'The record above is all that is left of this version.';
+        wrapper.appendChild(when);
+
+        let manifest = [];
+
+        try {
+            manifest = JSON.parse(version.purged_file_manifest || '[]');
+        } catch {
+            manifest = [];
+        }
+
+        if (manifest.length) {
+            const details = document.createElement('details');
+            details.className = 'small';
+
+            const summary = document.createElement('summary');
+            summary.className = 'text-secondary';
+            summary.textContent =
+                `${manifest.length} file${manifest.length === 1 ? '' : 's'} removed`;
+            details.appendChild(summary);
+
+            const list = document.createElement('ul');
+            list.className = 'list-unstyled mb-0 mt-1 ps-2';
+
+            for (const file of manifest) {
+                const item = document.createElement('li');
+                item.className = 'font-monospace text-secondary';
+
+                const path = file.path ? `${file.path}/${file.filename}` : file.filename;
+                item.textContent = `${path} — ${formatFileSize(file.size)}`;
+                item.title = file.sha256;
+
+                list.appendChild(item);
+            }
+
+            details.appendChild(list);
+            wrapper.appendChild(details);
+        }
+
+        return wrapper;
+    }
+
+    // Still in the workspace: purging is the wrong action, and offering it
+    // would skip the reversible step. Deleting comes first.
+    if (version.is_active) {
+        return wrapper;
+    }
+
+    const line = document.createElement('p');
+    line.className = 'small text-secondary mb-2';
+    line.textContent = version.deleted_at
+        ? `Deleted ${formatWorkspaceDate(version.deleted_at)}. The files are still here.`
+        : 'Deleted. The files are still here.';
+    wrapper.appendChild(line);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm btn-outline-danger py-0 px-2';
+    button.textContent = 'Remove the files permanently';
+
+    button.addEventListener('click', () => {
+        const confirmed = window.confirm(
+            'Remove the files for this version permanently?\n\n' +
+            'The version and what happened to it are kept. The files are not, ' +
+            'and this cannot be undone.'
+        );
+
+        if (confirmed) purgeVersion(asset, version, button, wrapper);
+    });
+
+    wrapper.appendChild(button);
+
+    return wrapper;
+}
+
+async function purgeVersion(asset, version, button, wrapper) {
+    button.disabled = true;
+    button.textContent = 'Removing…';
+
+    try {
+        const response = await fetch(
+            `${API_URL}/assets/${asset.id}/versions/${version.id}/purge`,
+            { method: 'POST', credentials: 'include' }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not remove the files.');
+        }
+
+        // Reloads the history, which re-renders this version with what is left
+        // of it — the same path any other refresh takes.
+        await loadAssetHistory();
+
+    } catch (err) {
+        console.error('Purge failed:', err);
+
+        button.disabled = false;
+        button.textContent = 'Remove the files permanently';
+
+        const message = document.createElement('div');
+        message.className = 'small text-danger mt-1';
+        message.textContent = err.message;
+        wrapper.appendChild(message);
+    }
 }
 
 function renderHistoryAsset(asset) {
@@ -2070,7 +2198,7 @@ function renderHistoryAsset(asset) {
         versions.appendChild(none);
     } else {
         for (const version of asset.versions) {
-            versions.appendChild(renderHistoryVersion(version));
+            versions.appendChild(renderHistoryVersion(asset, version));
         }
     }
 

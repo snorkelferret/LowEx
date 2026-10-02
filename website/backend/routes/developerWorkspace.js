@@ -320,7 +320,8 @@ router.get(
                     created_at,
                     creative_locked,
                     locked_at,
-                    repository_version_id
+                    repository_version_id,
+                    files_purged_at
                 FROM workspace_versions
                 WHERE workspace_asset_id = ?
                   AND is_active = 1
@@ -475,7 +476,10 @@ router.get(
                     creative_locked,
                     locked_at,
                     repository_version_id,
-                    is_active
+                    is_active,
+                    deleted_at,
+                    files_purged_at,
+                    purged_file_manifest
                 FROM workspace_versions
                 WHERE workspace_asset_id = ?
                 ORDER BY version_number DESC
@@ -730,16 +734,22 @@ router.delete(
                 });
             }
 
+            // deleted_at is stamped at the same moment as is_active, and only
+            // if it is not already set: re-deleting something already deleted
+            // must not restart its retention clock, or a developer could keep
+            // an asset alive for ever by deleting it again every thirteen days.
             const remove = db.transaction(() => {
                 db.prepare(`
                     UPDATE workspace_versions
-                    SET is_active = 0
+                    SET is_active = 0,
+                        deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
                     WHERE workspace_asset_id = ?
                 `).run(assetId);
 
                 db.prepare(`
                     UPDATE workspace_assets
                     SET is_active = 0,
+                        deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP),
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 `).run(assetId);
@@ -808,9 +818,12 @@ router.delete(
                 });
             }
 
+            // COALESCE for the same reason as the asset delete above: deleting
+            // something twice must not restart its retention clock.
             db.prepare(`
                 UPDATE workspace_versions
-                SET is_active = 0
+                SET is_active = 0,
+                    deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
                 WHERE id = ?
             `).run(versionId);
 
@@ -830,6 +843,187 @@ router.delete(
             console.error('Failed to delete workspace version:', err);
 
             return res.status(500).json({ error: 'Failed to delete workspace version' });
+        }
+    }
+);
+
+
+// ============================================================
+// THE PHYSICAL DELETE
+// ============================================================
+//
+// Removes a version's CONTENT while keeping the RECORD of it.
+//
+// This is the operation the wastebin's 14-day purge will call, and it is also
+// what "empty the bin now" does. It is deliberately NOT wired to a timer yet —
+// there is no scheduler (TODO 32) — so today it runs only when asked.
+//
+// WHAT ACTUALLY GETS DELETED: the workspace_version_files rows. That is the
+// whole of it, and it is the step that matters — those rows hold the only
+// reference from this workspace to the stored content. Everything else stays:
+// the version, its note, its technical checks, its approval and its history.
+//
+// WHAT DELETING THOSE ROWS DOES NOT DO is remove the content itself. A blob is
+// freed only when NOTHING references it, and if the version went into the game
+// store then asset_version_files still does. So a developer physically deleting
+// their copy of approved work cannot remove it from the game — not because a
+// check refuses, but because the store's own reference keeps it alive. That is
+// the rule enforcing itself rather than being asserted.
+//
+// The manifest is the record kept in the files' place: names, paths, sizes and
+// hashes, so the version still says what it was made of. Names and hashes only
+// — if it ever starts holding content, the point has been undone.
+// ============================================================
+
+function purgeVersionFiles(versionId, actorId) {
+    const files = db.prepare(`
+        SELECT
+            wvf.filename,
+            wvf.relative_path,
+            sf.file_size,
+            sf.sha256
+        FROM workspace_version_files wvf
+        JOIN stored_files sf ON sf.id = wvf.stored_file_id
+        WHERE wvf.workspace_version_id = ?
+        ORDER BY COALESCE(wvf.relative_path, '') COLLATE NOCASE, wvf.filename COLLATE NOCASE
+    `).all(versionId);
+
+    const manifest = files.map(file => ({
+        filename: file.filename,
+        path: file.relative_path || null,
+        size: file.file_size,
+        sha256: file.sha256,
+    }));
+
+    const bytes = files.reduce((total, file) => total + (file.file_size || 0), 0);
+
+    const purge = db.transaction(() => {
+        db.prepare(`
+            DELETE FROM workspace_version_files
+            WHERE workspace_version_id = ?
+        `).run(versionId);
+
+        db.prepare(`
+            UPDATE workspace_versions
+            SET
+                files_purged_at = COALESCE(files_purged_at, CURRENT_TIMESTAMP),
+                purged_file_manifest = ?
+            WHERE id = ?
+        `).run(JSON.stringify(manifest), versionId);
+
+        audit.record(
+            actorId,
+            'workspace_version.purge',
+            `workspace_version:${versionId}`,
+            { files: manifest.length, bytes }
+        );
+    });
+
+    purge();
+
+    return { files: manifest.length, bytes };
+}
+
+
+// ============================================================
+// POST /api/developer/workspace/assets/:assetId/versions/:versionId/purge
+// ============================================================
+//
+// Removes the content of one DELETED version, permanently.
+//
+// ONLY ALREADY-DELETED VERSIONS. This is the second half of the wastebin rather
+// than a way around it: a version must have been deleted first, so the
+// reversible step is never skipped by accident. Deleting and purging in one
+// action is a different feature with different wording, and it is not this.
+//
+// Scoped to the caller's own workspace, like every other route here.
+// ============================================================
+
+router.post(
+    '/assets/:assetId/versions/:versionId/purge',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        try {
+            const version = db.prepare(`
+                SELECT
+                    wv.id,
+                    wv.version_number,
+                    wv.is_active,
+                    wv.deleted_at,
+                    wv.files_purged_at,
+                    wv.repository_version_id,
+                    wa.id         AS asset_id,
+                    wa.name       AS asset_name,
+                    wa.workspace_id
+                FROM workspace_versions wv
+                JOIN workspace_assets wa     ON wa.id = wv.workspace_asset_id
+                JOIN developer_workspaces dw ON dw.id = wa.workspace_id
+                WHERE wv.id = ?
+                  AND wa.id = ?
+                  AND dw.developer_id = ?
+            `).get(versionId, assetId, developerId);
+
+            if (!version) {
+                return res.status(404).json({ error: 'Workspace version not found' });
+            }
+
+            if (version.is_active) {
+                return res.status(409).json({
+                    error:
+                        'This version is still in your workspace. Delete it first — ' +
+                        'that is reversible, and this is not.'
+                });
+            }
+
+            // Idempotent rather than an error: asking twice should not be a
+            // failure, and the answer is the same either way.
+            if (version.files_purged_at) {
+                return res.json({
+                    status: 'already purged',
+                    version_id: version.id,
+                    version_number: version.version_number,
+                    purged_at: version.files_purged_at,
+                    files_removed: 0,
+                    bytes_removed: 0,
+                });
+            }
+
+            const freed = purgeVersionFiles(versionId, developerId);
+
+            // Said plainly, because it is the thing a developer will otherwise
+            // get wrong: the bytes are now unreferenced, NOT yet reclaimed.
+            // Nothing in this route touches the store.
+            const note = version.repository_version_id !== null
+                ? 'Your copy of the files is gone. This version is in the game ' +
+                  'store, which keeps its own, so the content has not been removed.'
+                : 'The files are gone and the content is no longer referenced. ' +
+                  'The space is reclaimed when the store is next collected.';
+
+            return res.json({
+                status: 'purged',
+                version_id: version.id,
+                version_number: version.version_number,
+                files_removed: freed.files,
+                bytes_removed: freed.bytes,
+                in_game_store: version.repository_version_id !== null,
+                note,
+                usage: workspaceUsage(version.workspace_id),
+            });
+
+        } catch (err) {
+            console.error('Failed to purge workspace version:', err);
+
+            return res.status(500).json({ error: 'Failed to remove the version content' });
         }
     }
 );
