@@ -1017,6 +1017,38 @@ They MUST be dealt with before any real user data exists.
     staging. That is already implemented, so importing approved work is free —
     which is the point.
 
+    --- THE OTHER HALF: TELL THEM ON THE WAY IN ---
+
+    NOT IMPLEMENTED, and it is the sentence this item opens with. The lookup
+    exists — shaInGameStore in routes/developerWorkspace.js — but it is used in
+    exactly ONE place, the quota projection, and only to avoid charging for
+    content the store already holds. It never refuses and never says anything.
+
+    SO TODAY: a developer can upload a byte-identical copy of approved content
+    into their workspace, and nothing tells them. It is stored, referenced from
+    their version, and costs no quota. Silent, and the developer has no way to
+    learn that the thing they just uploaded is already in the game store.
+
+    WHAT IT SHOULD DO: detect it and say so, naming the asset it already exists
+    as. Then the developer pulls the approved copy instead of keeping a second
+    one — which is the whole point of this item, and the reason the check
+    belongs with the import path rather than bolted on separately.
+
+    TWO THINGS TO DECIDE WHEN BUILDING, and neither is obvious:
+
+      * REFUSE OR WARN. A hard 409 is consistent with the near-match prompt and
+        the naming tiers, which all guide rather than block. But a legitimate
+        case exists for uploading it anyway — iterating on approved work in a
+        form that will diverge — so a warning may be the honest answer. Note
+        the near-match prompt already establishes the pattern: ask, offer the
+        options, and accept a confirmed choice.
+
+      * WHAT COUNTS AS "THE ASSET ALREADY EXISTS". The evidence is per FILE —
+        a matching sha256 — but the claim is about an ASSET. One matching file
+        out of fifty is not the same as all fifty matching. Decide which
+        threshold the message is making a claim about, because "this asset is
+        already in the store" is a strong sentence to say on weak evidence.
+
 26) LEAK PREVENTION — stopping a build escaping into the wild.
 
     Put on the list as a topic, not yet a task. No build distribution exists
