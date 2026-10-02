@@ -71,8 +71,20 @@ function buildLaunchButton() {
     button.className =
         'btn btn-sm btn-outline-secondary position-fixed shadow-sm ' +
         'd-flex align-items-center gap-2';
+    // --page-inset, not a number of its own. It was `1rem`, which put the
+    // button 16px from the window edge while every panel sat at 24px — so it
+    // hung outside the content it belongs to, visibly out of line with the
+    // right-hand edge of every card above it.
+    //
+    // The same variable the header and the page container use, so the button
+    // lines up with them and stays lined up if the inset ever changes.
+    // The fallback is not decoration: index.html carries this button but does
+    // NOT load styles.css, so the variable is undefined there and the whole
+    // `right` declaration would be dropped, leaving the button positioned by
+    // `bottom` alone. A var() with no fallback fails silently; this cannot.
     button.style.cssText =
-        'right:1rem; bottom:1rem; z-index:1040; border-radius:2rem; padding:.4rem .9rem;';
+        'right:var(--page-inset, 1.5rem); bottom:var(--page-inset, 1.5rem);' +
+        ' z-index:1040; border-radius:2rem; padding:.4rem .9rem;';
     button.setAttribute('data-bs-toggle', 'modal');
     button.setAttribute('data-bs-target', `#${ID.modal}`);
     button.setAttribute('aria-label', 'Report a problem');
