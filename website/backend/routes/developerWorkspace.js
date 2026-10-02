@@ -56,9 +56,16 @@ fs.mkdirSync(tempUploadDir, { recursive: true });
 //     to iterate on it must not consume quota — that round trip is the workflow
 //     the portal exists to support.
 //
-//   * NOT excluded: content shared with another developer's workspace. It is
-//     not approved, so it is still staging, and it counts for both. That is the
-//     conservative direction and avoids free-riding on someone else's work.
+//   * A WORKSPACE IS PRIVATE. Nothing in it is visible to, or shared with,
+//     another developer. The GAME STORE is the only shared content in the
+//     system, which is why it is the only thing the exclusion above is about.
+//
+//   * The store is content-addressed, so it cannot tell "the same bytes" from
+//     "the same file". If two developers independently upload identical
+//     content, it is stored ONCE and counted against BOTH. That is not sharing
+//     — neither can see the other's work — it is deduplication, and each is
+//     still staging their own copy. Which is exactly why the accounting is per
+//     workspace and not per stored file.
 //
 //   * SOFT-DELETED rows do not count, which is precisely how deleting frees
 //     quota without destroying review history.

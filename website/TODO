@@ -506,9 +506,21 @@ QUOTA. WORKSPACE_LIMIT_BYTES, default 5 GiB, tunable without a code change.
     consume quota. Verified: approving an asset drops its bytes from the
     developer's usage.
 
-  * Content shared with ANOTHER developer's workspace is NOT excluded — it is
-    not approved, so it is still staging, and it counts for both. Conservative,
-    and stops free-riding.
+  * A WORKSPACE IS PRIVATE. Nothing in it is visible to, or shared with,
+    another developer. The game store is the only shared content in the system,
+    and so it is the only thing the exclusion above is about.
+
+  * The store is content-addressed, so it cannot tell "the same bytes" from
+    "the same file". If two developers INDEPENDENTLY upload identical content,
+    it is stored once and counted against both. That is not sharing — neither
+    can see the other's work — it is deduplication, and each is still staging
+    their own copy. Which is why the accounting is per workspace rather than
+    per stored file.
+
+    (An earlier version of this note called that "free-riding on someone else's
+    work", which described a mechanism that does not exist. Nothing lets one
+    developer reach into another's workspace; the only way content enters one is
+    that its owner uploads it, or it comes from the game store.)
 
   * Enforced in the upload route BEFORE anything is written, so a refusal
     leaves no partial state. Verified: a refused upload writes no stored_files
@@ -1150,11 +1162,12 @@ They MUST be dealt with before any real user data exists.
     already implemented; the admin panel just needs to display it per developer
     and biggest-first.
 
-    See WORKSPACE QUOTA AND SOFT DELETE above for the full rule, including the
-    part that is easy to get wrong later: content shared with ANOTHER
-    DEVELOPER'S workspace is NOT excluded, because it is not approved and so is
-    still staging. It counts for both. That is deliberate — conservative, and it
-    stops free-riding.
+    See WORKSPACE QUOTA AND SOFT DELETE above for the full rule. One part of it
+    is easy to get wrong later, so it is repeated here: a workspace is PRIVATE,
+    and the game store is the only shared content in the system. Two developers
+    uploading identical bytes get one copy on disk — content addressing cannot
+    tell the same bytes from the same file — but that is deduplication, not
+    sharing, and both are still charged, because each is staging their own copy.
 
     STORAGE, IN TOTAL — A DIFFERENT NUMBER, AND A DIFFERENT TOOL. The real
     question "are we about to run out of disk" is a HARDWARE question, not an
