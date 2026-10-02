@@ -19,18 +19,21 @@
      changing it touches the superuser dashboard too.)
      ============================================================ -->
 
-<section class="card superuser-module" id="admin-reports-module">
-  <h3>📨 Reports</h3>
+<section class="card superuser-module mb-4" id="admin-reports-module">
 
-  <div class="module-body">
+  <div class="card-header">
+    <h2 class="h5 mb-0">📨 Reports</h2>
+  </div>
 
-    <p>Bug reports and suggestions, sent from the button on every page.</p>
+  <div class="card-body">
 
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h4 class="h6 mb-0">
-        Reports
+    <p class="text-secondary">Bug reports and suggestions, sent from the button on every page.</p>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="h6 mb-0">
+        Open and closed
         <span id="reportCounts" class="text-secondary fw-normal small ms-1"></span>
-      </h4>
+      </h3>
 
       <select id="reportStatusFilter" class="form-select form-select-sm w-auto">
         <option value="open">Open</option>
@@ -39,7 +42,7 @@
       </select>
     </div>
 
-    <div id="reportListAlert" class="alert py-2 small d-none"></div>
+    <div id="reportListAlert" class="alert py-2 px-3 small d-none"></div>
 
     <div id="reportList" class="text-secondary">
       Loading reports...

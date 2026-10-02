@@ -192,3 +192,59 @@ body {
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* ==========================================================================
+   Spacing — the rules, so this does not drift again
+   ==========================================================================
+
+   The margins were inconsistent because there were three conventions in use at
+   once: admin panels had an unstyled `module-body` wrapper that gave them NO
+   inner padding at all, the invite panels used `card-body p-4`, and the
+   developer panels used a plain `card-body`. Three answers to the same
+   question, and the difference was visible.
+
+   THE SCALE. Bootstrap's, unchanged, so nothing here is a number invented
+   locally:
+
+     .25rem  m*-1      .5rem  m*-2      1rem  m*-3
+     1.5rem  m*-4      3rem   m*-5
+
+   WHAT EACH STEP IS FOR:
+
+     m*-4 (1.5rem)   between PANELS. Also the header's own bottom margin, so
+                     the first panel lines up with the same rhythm.
+     m*-3 (1rem)     between blocks INSIDE a panel.
+     m*-2 (.5rem)    between a heading and the thing it heads, and inside
+                     stacked items.
+     m*-1 (.25rem)   between an icon and its label.
+
+   BOTTOM MARGINS, NOT TOP. Use `mb-*` on the element above rather than `mt-*`
+   on the element below. Both work until the order changes or something is
+   hidden, and then only one of them still does — the top margin travels with
+   the wrong element. `mt-*` is for the case the rule cannot cover: space after
+   something that has none of its own, such as a bare button.
+
+   THE PANEL SHAPE. Every panel on every page is the same:
+
+     <section class="card superuser-module mb-4" id="...">
+       <div class="card-header d-flex justify-content-between align-items-center">
+         <h2 class="h5 mb-0">Title</h2>
+         <optional control on the right>
+       </div>
+       <div class="card-body">
+         <p class="text-secondary">One line saying what this is.</p>
+         ... blocks, separated by mb-3 or mb-4 ...
+       </div>
+     </section>
+
+   The dark background and border come from `data-bs-theme="dark"` on <html>,
+   so `bg-dark` and `border-secondary` are NOT needed and are not used — adding
+   them by hand is how two panels end up a slightly different shade.
+
+   Alerts are always `alert alert-<variant> py-2 px-3 small`, plus `d-none`
+   when they start hidden and a margin only when it is not the standard one.
+
+   Tables are always `table table-hover align-middle small mb-0` inside a
+   `.table-responsive`. `table-dark` is deliberately absent: it is for a dark
+   table on a LIGHT page, and in a dark theme it fights the theme's own
+   variables. */

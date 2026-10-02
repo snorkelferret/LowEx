@@ -125,7 +125,7 @@ function buildModal() {
 
           <div class="modal-body" id="${ID.body}">
 
-            <div class="alert alert-danger py-2 small d-none" id="${ID.error}"></div>
+            <div class="alert alert-danger py-2 px-3 small d-none" id="${ID.error}"></div>
 
             <p class="text-secondary small mb-3" id="${ID.identity}">${identity}</p>
 

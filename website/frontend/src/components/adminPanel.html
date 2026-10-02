@@ -85,12 +85,15 @@
 </nav>
 
 
-<section class="card superuser-module" id="admin-panel-module">
-  <h3>🛡️ Admin Operations</h3>
+<section class="card superuser-module mb-4" id="admin-panel-module">
 
-  <div class="module-body">
+  <div class="card-header">
+    <h2 class="h5 mb-0">🛡️ Admin Operations</h2>
+  </div>
 
-    <p>User account management, roles, and order overviews.</p>
+  <div class="card-body">
+
+    <p class="text-secondary">User account management, roles, and order overviews.</p>
 
     <div id="adminStatsContainer">Loading admin stats...</div>
 
@@ -111,11 +114,11 @@
         </select>
       </div>
 
-      <div id="userListAlert" class="alert py-2 small d-none"></div>
+      <div id="userListAlert" class="alert py-2 px-3 small d-none"></div>
 
       <div class="table-responsive">
-        <table class="table table-dark table-sm align-middle small mb-0">
-          <thead>
+        <table class="table table-hover align-middle small mb-0">
+          <thead class="text-uppercase">
             <tr>
               <th>Username</th>
               <th>Email</th>

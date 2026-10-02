@@ -207,7 +207,7 @@ $('btn-request-reissue')?.addEventListener('click', async () => {
         message.classList.remove('d-none');
 
         if (!response.ok) {
-            message.className = 'alert alert-danger mt-3 mb-0 py-2 small';
+            message.className = 'alert alert-danger py-2 px-3 small mb-0 mt-3';
             message.textContent =
                 data.message || data.error || 'Could not request a new link.';
 
@@ -218,7 +218,7 @@ $('btn-request-reissue')?.addEventListener('click', async () => {
             return;
         }
 
-        message.className = 'alert alert-success mt-3 mb-0 py-2 small';
+        message.className = 'alert alert-success py-2 px-3 small mb-0 mt-3';
         message.textContent = data.message || 'A new link has been generated.';
 
         // No mail transport yet, so the link is shown here rather than sent.
@@ -238,7 +238,7 @@ $('btn-request-reissue')?.addEventListener('click', async () => {
 
         if (message) {
             message.classList.remove('d-none');
-            message.className = 'alert alert-danger mt-3 mb-0 py-2 small';
+            message.className = 'alert alert-danger py-2 px-3 small mb-0 mt-3';
             message.textContent = 'Could not reach the server. Please try again.';
         }
 

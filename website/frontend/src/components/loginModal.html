@@ -1,8 +1,16 @@
 <div id="loginModal" class="modal-overlay hidden">
   <div class="modal-content card">
-    <h3>👤 Sign in as another user</h3>
-    <p>Enter credentials to switch your active session context.</p>
-    
+
+    <!-- card-header and card-body, like every other panel. Without them this
+         dialog had NO padding at all — .card and .modal-content both carry
+         none, and the heading and form sat flush against the border. -->
+    <div class="card-header">
+      <h2 class="h5 mb-0">👤 Sign in as another user</h2>
+    </div>
+
+    <div class="card-body">
+    <p class="text-secondary">Enter credentials to switch your active session context.</p>
+
     <form id="modalLoginForm">
       <div class="form-group">
         <label for="modalUsername">Username</label>
@@ -19,5 +27,7 @@
         <button type="submit" class="btn btn-primary">Sign In</button>
       </div>
     </form>
+
+    </div><!-- /card-body -->
   </div>
 </div>

@@ -128,7 +128,7 @@ async function revokeInvite(inviteId) {
  * element that nothing ever rendered, so it silently did nothing.
  */
 function showLink(container, message, link, variant) {
-    container.className = `alert alert-${variant} py-2 px-3 small mb-3`;
+    container.className = `alert alert-${variant} py-2 px-3 small`;
     container.textContent = '';
 
     const line = document.createElement('div');
@@ -161,7 +161,7 @@ function showLink(container, message, link, variant) {
 }
 
 function showMessage(container, message, variant) {
-    container.className = `alert alert-${variant} py-2 px-3 small mb-3`;
+    container.className = `alert alert-${variant} py-2 px-3 small`;
     container.textContent = message;
     container.classList.remove('d-none');
 }

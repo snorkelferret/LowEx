@@ -461,8 +461,8 @@ function renderAssetNameArea() {
         nameCheck.code !== 'no_name') {
         const notice = document.createElement('div');
         notice.className = nameCheck.verdict === 'block'
-            ? 'alert alert-danger mt-2 mb-0 py-2 small'
-            : 'alert alert-warning mt-2 mb-0 py-2 small';
+            ? 'alert alert-danger py-2 px-3 small mb-0 mt-2'
+            : 'alert alert-warning py-2 px-3 small mb-0 mt-2';
         notice.textContent = nameCheck.reason;
         area.appendChild(notice);
     }
@@ -498,7 +498,7 @@ function renderDerivedName(area, label) {
 
 function renderNearMatchPrompt(check, current, onChoose) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'alert alert-warning mt-2 mb-0 py-2 small';
+    wrapper.className = 'alert alert-warning py-2 px-3 small mb-0 mt-2';
 
     const question = document.createElement('div');
     question.className = 'mb-2';
@@ -1183,7 +1183,7 @@ function showUploadStatus(
 
 
     status.innerHTML = `
-        <div class="alert alert-${type}" role="alert">
+        <div class="alert alert-${type} py-2 px-3 small" role="alert">
             ${escapeHtml(message)}
         </div>
     `;
@@ -1365,7 +1365,7 @@ async function loadDeveloperWorkspace() {
 
         if (list) {
             list.innerHTML = `
-                <div class="alert alert-danger">
+                <div class="alert alert-danger py-2 px-3 small mb-0">
                     ${escapeHtml(err.message)}
                 </div>
             `;

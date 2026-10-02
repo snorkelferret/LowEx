@@ -38,7 +38,7 @@ function showAlert(message, variant = 'danger') {
         return;
     }
 
-    box.className = `alert alert-${variant} py-2 small`;
+    box.className = `alert alert-${variant} py-2 px-3 small`;
     box.textContent = message;
     box.classList.remove('d-none');
 }
