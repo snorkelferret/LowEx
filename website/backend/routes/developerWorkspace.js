@@ -352,6 +352,207 @@ router.get(
 
 
 // ============================================================
+// GET /api/developer/workspace/assets/history
+// ============================================================
+//
+// EVERYTHING this developer has ever worked on — every asset, live or not, and
+// every version of it, live or not — with what happened to each.
+//
+// WHY IT IS SEPARATE FROM GET /assets. That route filters to is_active = 1, and
+// that is correct for what it is for: it is the workspace, the thing a developer
+// is working IN right now. This is the opposite question — what have I done —
+// and it is the half that carries the value after the work has moved on: what
+// was uploaded, what the checks said, what the reviewer decided, and which
+// versions ended up in the game store.
+//
+// SCOPE IS THE CALLER'S OWN WORKSPACE, exactly as everywhere else in this
+// router. There is no admin bypass and there should not be; an admin who needs
+// to see inside a developer's workspace does it by impersonation. A history view
+// is more tempting than most to open up, because it is read-only and looks
+// harmless — but it is the developer's whole working record, so the rule holds.
+//
+// READ ONLY. Nothing here writes. The rows it reports on are the ones the
+// purge (see TODO) will keep while dropping the files, which is why this can be
+// built before that exists and still be correct afterwards.
+// ============================================================
+
+router.get(
+    '/assets/history',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+
+        if (!developerId) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        try {
+            const workspace = db.prepare(`
+                SELECT id
+                FROM developer_workspaces
+                WHERE developer_id = ?
+            `).get(developerId);
+
+            // No workspace means nothing has ever been uploaded, which is an
+            // empty history rather than an error.
+            if (!workspace) {
+                return res.json({
+                    totals: { assets: 0, versions: 0, in_game_store: 0 },
+                    assets: []
+                });
+            }
+
+            // EVERY asset — no is_active filter. Live ones first, then the
+            // rest, so the current work is at the top of the list without the
+            // past being hidden.
+            const assets = db.prepare(`
+                SELECT
+                    id,
+                    name,
+                    asset_type,
+                    category,
+                    description,
+                    created_at,
+                    updated_at,
+                    is_active,
+                    repository_asset_id
+                FROM workspace_assets
+                WHERE workspace_id = ?
+                ORDER BY is_active DESC, name COLLATE NOCASE
+            `).all(workspace.id);
+
+            const getVersions = db.prepare(`
+                SELECT
+                    id,
+                    version_number,
+                    version_note,
+                    created_by,
+                    created_at,
+                    creative_locked,
+                    locked_at,
+                    repository_version_id,
+                    is_active
+                FROM workspace_versions
+                WHERE workspace_asset_id = ?
+                ORDER BY version_number DESC
+            `);
+
+            const getLatestCheck = db.prepare(`
+                SELECT
+                    id,
+                    status,
+                    summary,
+                    started_at,
+                    completed_at
+                FROM technical_check_runs
+                WHERE workspace_version_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            `);
+
+            // The reason a check failed lives here, not in runs.summary —
+            // that is only ever "Technical validation failed.".
+            const getCheckReasons = db.prepare(`
+                SELECT
+                    check_name,
+                    status,
+                    message
+                FROM technical_check_results
+                WHERE technical_check_run_id = ?
+                  AND status <> 'passed'
+                ORDER BY id
+            `);
+
+            const getLatestApproval = db.prepare(`
+                SELECT
+                    id,
+                    status,
+                    request_comment,
+                    requested_at,
+                    decision_comment,
+                    decided_at,
+                    decided_by
+                FROM creative_approvals
+                WHERE workspace_version_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            `);
+
+            const getUsername = db.prepare(`
+                SELECT username FROM users WHERE id = ?
+            `);
+
+            const totals = { assets: 0, versions: 0, in_game_store: 0 };
+
+            for (const asset of assets) {
+                const versions = getVersions.all(asset.id);
+
+                for (const version of versions) {
+                    const check = getLatestCheck.get(version.id) || null;
+
+                    if (check) {
+                        check.reasons = getCheckReasons.all(check.id);
+                    }
+
+                    const approval = getLatestApproval.get(version.id) || null;
+
+                    if (approval && approval.decided_by) {
+                        approval.decided_by_username =
+                            getUsername.get(approval.decided_by)?.username || null;
+                    }
+
+                    // Named latest_check / latest_approval to match GET /assets,
+                    // so the same client renderer handles both views rather
+                    // than a second one growing beside it.
+                    version.latest_check = check;
+                    version.latest_approval = approval;
+
+                    // Which versions are in the game store. This is the fact
+                    // the workspace has never shown and the one a developer
+                    // actually wants: this work is finished, and this is where
+                    // it went.
+                    version.in_game_store = version.repository_version_id !== null;
+
+                    if (version.in_game_store) totals.in_game_store++;
+                }
+
+                asset.versions = versions;
+                asset.in_game_store = asset.repository_asset_id !== null;
+                asset.live_versions = versions.filter(v => v.is_active).length;
+
+                totals.assets++;
+                totals.versions += versions.length;
+            }
+
+            return res.json({
+                totals,
+                // Said once, here, so the UI does not have to invent wording
+                // and cannot disagree with the server about what these mean.
+                notes: {
+                    staging_area:
+                        'A workspace is a staging area, not permanent storage.',
+                    ownership:
+                        'Accepted versions belong to the game store. You can download a copy.',
+                },
+                assets
+            });
+
+        } catch (err) {
+            console.error('Failed to load asset history:', err);
+
+            return res.status(500).json({
+                error: 'Failed to load the asset history'
+            });
+        }
+    }
+);
+
+
+// ============================================================
 // POST /api/developer/workspace/assets/:assetId/category
 // ============================================================
 //

@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fillCategoryOptions();
     initialiseUploadUI();
+    initialiseHistoryTab();
     loadDeveloperWorkspace();
 
 });
@@ -1770,3 +1771,239 @@ function formatWorkspaceDate(value) {
 
 // formatFileSize() and escapeHtml() moved to ./utils.js, where they are defined
 // once for every client file rather than once each.
+
+
+// ============================================================
+// Asset history
+// ============================================================
+//
+// Everything the developer has worked on, including versions that are no longer
+// in the workspace.
+//
+// WHY IT IS A SEPARATE VIEW FROM "My Workspace". That card shows what is IN the
+// workspace, which by definition cannot show anything that has left it. The
+// moment a version is deleted or superseded it vanished from sight, and the
+// record of what happened to it — the checks, the review, the reason — went
+// with it. The record was never actually lost; it simply had nowhere to be
+// seen. This is that place.
+//
+// Loaded lazily, when the tab is first opened. It is a second round trip, and
+// most visits to this page are to upload something, not to look back.
+
+let historyLoaded = false;
+
+function historyAlert(message) {
+    const box = $('historyAlert');
+    if (!box) return;
+
+    if (!message) {
+        box.textContent = '';
+        box.classList.add('d-none');
+        return;
+    }
+
+    box.textContent = message;
+    box.classList.remove('d-none');
+}
+
+function renderHistoryTotals(totals) {
+    const el = $('historyTotals');
+    if (!el || !totals) return;
+
+    const parts = [
+        `${totals.assets} asset${totals.assets === 1 ? '' : 's'}`,
+        `${totals.versions} version${totals.versions === 1 ? '' : 's'}`,
+    ];
+
+    if (totals.in_game_store > 0) {
+        parts.push(`${totals.in_game_store} in the game store`);
+    }
+
+    el.textContent = parts.join(' · ');
+}
+
+// One version of one asset, as a line in the history.
+function renderHistoryVersion(version) {
+    const row = document.createElement('div');
+    row.className = 'border-top border-secondary pt-2 mt-2';
+
+    const heading = document.createElement('div');
+    heading.className = 'd-flex flex-wrap align-items-baseline gap-2 mb-1';
+
+    const number = document.createElement('span');
+    number.className = 'fw-semibold';
+    number.textContent = `v${version.version_number}`;
+    heading.appendChild(number);
+
+    const note = document.createElement('span');
+    note.className = 'text-secondary small';
+    note.textContent = version.version_note || '';
+    heading.appendChild(note);
+
+    const when = document.createElement('span');
+    when.className = 'text-secondary small ms-auto';
+    when.textContent = version.created_at
+        ? formatWorkspaceDate(version.created_at)
+        : '';
+    heading.appendChild(when);
+
+    row.appendChild(heading);
+
+    // Same renderer the workspace uses, so a version reads identically in both
+    // views and there is no second implementation to drift.
+    row.appendChild(renderVersionState(version));
+
+    // The reviewer's words, which the workspace shows while a decision is live
+    // and this keeps afterwards — that is most of the point of the view.
+    const approval = version.latest_approval;
+
+    if (approval && approval.decision_comment) {
+        const comment = document.createElement('p');
+        comment.className = 'small mb-1';
+        comment.textContent =
+            `${approval.decided_by_username || 'A reviewer'} said: ` +
+            approval.decision_comment;
+        row.appendChild(comment);
+    }
+
+    // Where the finished work went. There is no download here yet — see TODO:
+    // the manifest endpoint exists but nothing client-side calls it, and a
+    // link that does nothing is worse than saying so.
+    if (version.in_game_store) {
+        const line = document.createElement('p');
+        line.className = 'small text-info mb-0';
+        line.textContent =
+            'This version is in the game store. The files belong to the game ' +
+            'now — download is not built yet.';
+        row.appendChild(line);
+    }
+
+    return row;
+}
+
+function renderHistoryAsset(asset) {
+    const item = document.createElement('div');
+    item.className = 'border border-secondary rounded mb-3';
+
+    const header = document.createElement('div');
+    header.className = 'p-3 d-flex flex-wrap align-items-center gap-2';
+
+    const name = document.createElement('span');
+    name.className = 'fw-semibold';
+    name.textContent = asset.name;
+    header.appendChild(name);
+
+    if (asset.category) {
+        header.appendChild(statusBadge(asset.category, 'info'));
+    }
+
+    if (asset.in_game_store) {
+        header.appendChild(statusBadge('In the game store', 'primary'));
+    }
+
+    // Work that has left the workspace is the whole reason this view exists, so
+    // it is marked rather than merely listed alongside everything else.
+    if (!asset.is_active) {
+        header.appendChild(statusBadge('No longer in your workspace', 'secondary'));
+    }
+
+    const count = document.createElement('span');
+    count.className = 'text-secondary small ms-auto';
+    count.textContent =
+        `${asset.versions.length} version${asset.versions.length === 1 ? '' : 's'}`;
+    header.appendChild(count);
+
+    item.appendChild(header);
+
+    if (asset.description) {
+        const description = document.createElement('p');
+        description.className = 'text-secondary small px-3 mb-2';
+        description.textContent = asset.description;
+        item.appendChild(description);
+    }
+
+    const versions = document.createElement('div');
+    versions.className = 'px-3 pb-3';
+
+    if (asset.versions.length === 0) {
+        const none = document.createElement('p');
+        none.className = 'text-secondary small mb-0';
+        none.textContent = 'No versions were recorded.';
+        versions.appendChild(none);
+    } else {
+        for (const version of asset.versions) {
+            versions.appendChild(renderHistoryVersion(version));
+        }
+    }
+
+    item.appendChild(versions);
+
+    return item;
+}
+
+function renderAssetHistory(data) {
+    const list = $('historyList');
+    if (!list) return;
+
+    renderHistoryTotals(data.totals);
+
+    list.innerHTML = '';
+
+    if (!data.assets || data.assets.length === 0) {
+        list.className = 'text-secondary';
+        list.textContent =
+            'You have not uploaded anything yet. Work you upload will be ' +
+            'recorded here, including versions no longer in your workspace.';
+        return;
+    }
+
+    list.className = '';
+
+    for (const asset of data.assets) {
+        list.appendChild(renderHistoryAsset(asset));
+    }
+}
+
+async function loadAssetHistory() {
+    const list = $('historyList');
+    historyAlert('');
+
+    if (list) {
+        list.className = 'text-secondary';
+        list.textContent = 'Loading history...';
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/assets/history`, {
+            credentials: 'include',
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not load your history.');
+        }
+
+        renderAssetHistory(data);
+
+    } catch (err) {
+        console.error('Failed to load asset history:', err);
+        historyAlert(err.message);
+
+        if (list) {
+            list.className = 'text-secondary';
+            list.textContent = '';
+        }
+    }
+}
+
+function initialiseHistoryTab() {
+    const button = $('tab-history-btn');
+    if (!button) return;
+
+    button.addEventListener('shown.bs.tab', () => {
+        if (historyLoaded) return;
+        historyLoaded = true;
+        loadAssetHistory();
+    });
+}

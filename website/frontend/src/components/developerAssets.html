@@ -1,5 +1,49 @@
 <section class="developer-assets-section">
 
+  <!-- ========================================================
+       The developer's two views.
+
+       There was no navigation here at all before this — the dashboard was one
+       page with everything on it. Two tabs, because the two jobs are genuinely
+       different: uploading is what you are doing now, history is what you have
+       done, and the second one needs to still make sense when the first has
+       moved on.
+       ======================================================== -->
+  <ul class="nav nav-tabs mb-3" id="developerTabs" role="tablist">
+
+    <li class="nav-item" role="presentation">
+      <button
+        class="nav-link active"
+        id="tab-upload-btn"
+        data-bs-toggle="tab"
+        data-bs-target="#tab-upload"
+        type="button"
+        role="tab"
+      >
+        <i class="bi bi-cloud-arrow-up me-1"></i>Upload
+      </button>
+    </li>
+
+    <li class="nav-item" role="presentation">
+      <button
+        class="nav-link"
+        id="tab-history-btn"
+        data-bs-toggle="tab"
+        data-bs-target="#tab-history"
+        type="button"
+        role="tab"
+      >
+        <i class="bi bi-clock-history me-1"></i>History
+      </button>
+    </li>
+
+  </ul>
+
+
+  <div class="tab-content">
+
+  <div class="tab-pane fade show active" id="tab-upload" role="tabpanel">
+
   <div class="card bg-dark border-secondary">
 
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -369,5 +413,51 @@
     </div>
 
   </div>
+
+  </div><!-- /tab-upload -->
+
+
+  <!-- ========================================================
+       History — everything, including work that is no longer live.
+
+       This is the view the workspace could never give: the workspace shows what
+       is in it, and the moment a version is deleted or superseded that record
+       vanished from sight. The work is not gone — it is all still recorded —
+       it simply had nowhere to be seen.
+       ======================================================== -->
+  <div class="tab-pane fade" id="tab-history" role="tabpanel">
+
+    <div class="card bg-dark border-secondary">
+
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h2 class="h5 mb-1">
+            <i class="bi bi-clock-history"></i>
+            Everything you have worked on
+          </h2>
+          <p class="text-secondary small mb-0">
+            Including versions no longer in your workspace. Choose an asset to
+            see what happened to each version of it.
+          </p>
+        </div>
+
+        <div id="historyTotals" class="small text-secondary text-end"></div>
+      </div>
+
+      <div class="card-body">
+
+        <div id="historyAlert" class="alert alert-danger py-2 small d-none"></div>
+
+        <div id="historyList" class="text-secondary">
+          Loading history...
+        </div>
+
+      </div>
+
+    </div>
+
+  </div><!-- /tab-history -->
+
+  </div><!-- /tab-content -->
 
 </section>
