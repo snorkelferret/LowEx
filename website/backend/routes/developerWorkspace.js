@@ -4,6 +4,7 @@ const router = express.Router();
 
 const db = require('../db');
 const audit = require('../lib/audit');
+const { RETENTION_DAYS, retentionFor } = require('../lib/retention');
 const {
     authenticateToken,
     requireRole
@@ -372,12 +373,30 @@ router.get(
                 }
             }
 
+            // How much is in the bin. A COUNT here rather than a second request
+            // from the client, so the badge on the Bin tab is right when the
+            // page loads and the tab itself can still be filled in lazily.
+            const binCounts = db.prepare(`
+                SELECT
+                    (SELECT COUNT(*) FROM workspace_assets
+                      WHERE workspace_id = ? AND is_active = 0) AS assets,
+                    (SELECT COUNT(*) FROM workspace_versions wv
+                       JOIN workspace_assets wa ON wa.id = wv.workspace_asset_id
+                      WHERE wa.workspace_id = ?
+                        AND wa.is_active = 1
+                        AND wv.is_active = 0)                     AS versions
+            `).get(workspace.id, workspace.id);
+
             return res.json({
                 workspace,
                 // Lets the panel show "4.2 GB of 5 GB used" and warn about a
                 // pending upload BEFORE it is attempted. The client figure is
                 // advisory only; the server enforces on upload regardless.
                 usage: workspaceUsage(workspace.id),
+                bin: {
+                    assets: binCounts.assets,
+                    versions: binCounts.versions,
+                },
                 assets
             });
 
@@ -1024,6 +1043,383 @@ router.post(
             console.error('Failed to purge workspace version:', err);
 
             return res.status(500).json({ error: 'Failed to remove the version content' });
+        }
+    }
+);
+
+
+// ============================================================
+// THE WASTEBIN
+// ============================================================
+//
+// What a developer has deleted, and what can still be taken back.
+//
+// Deleting is reversible for RETENTION_DAYS; after that the files are removed
+// and it is not. The bin exists so that grace period is visible — something a
+// developer can get back but cannot see is a grace period nobody can use.
+//
+// TWO KINDS OF THING, and they behave differently:
+//
+//   * A deleted ASSET takes its versions with it. Restoring it brings back the
+//     asset and every version whose files are still there.
+//
+//   * A deleted VERSION of a live asset is restored on its own.
+//
+// A version whose files have been purged CANNOT come back, in either case — the
+// content is gone. It is listed rather than hidden, because "this is gone for
+// good" is something a developer needs to be able to see, and a bin that
+// silently omits things is one nobody can trust.
+// ============================================================
+
+// What each version is still holding, so a developer can see what is at stake
+// before the clock runs out. Read from the file rows, not from the manifest —
+// the manifest describes what WAS there, and after a purge says nothing about
+// what is.
+const versionFileTotals = db.prepare(`
+    SELECT
+        COUNT(*)                        AS file_count,
+        COALESCE(SUM(sf.file_size), 0)  AS bytes
+    FROM workspace_version_files wvf
+    JOIN stored_files sf ON sf.id = wvf.stored_file_id
+    WHERE wvf.workspace_version_id = ?
+`);
+
+function binVersion(version) {
+    const totals = versionFileTotals.get(version.id);
+
+    return {
+        id: version.id,
+        version_number: version.version_number,
+        version_note: version.version_note,
+        deleted_at: version.deleted_at,
+        files_purged_at: version.files_purged_at,
+        file_count: totals.file_count,
+        bytes: totals.bytes,
+        // Says plainly whether restore is even possible, so the UI does not
+        // offer a button that will be refused.
+        can_restore: !version.files_purged_at,
+        ...retentionFor(version.deleted_at),
+    };
+}
+
+router.get(
+    '/assets/bin',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+
+        if (!developerId) {
+            return res.status(401).json({ error: 'Authenticated user ID not found' });
+        }
+
+        try {
+            const workspace = db.prepare(`
+                SELECT id FROM developer_workspaces WHERE developer_id = ?
+            `).get(developerId);
+
+            if (!workspace) {
+                return res.json({
+                    retention_days: RETENTION_DAYS,
+                    totals: { assets: 0, versions: 0, bytes: 0 },
+                    assets: [],
+                    versions: [],
+                });
+            }
+
+            const getVersions = db.prepare(`
+                SELECT
+                    id,
+                    version_number,
+                    version_note,
+                    deleted_at,
+                    files_purged_at
+                FROM workspace_versions
+                WHERE workspace_asset_id = ?
+                ORDER BY version_number DESC
+            `);
+
+            // Whole assets that were deleted, with everything they took with
+            // them.
+            const deletedAssets = db.prepare(`
+                SELECT id, name, category, description, deleted_at
+                FROM workspace_assets
+                WHERE workspace_id = ?
+                  AND is_active = 0
+                ORDER BY deleted_at DESC, name COLLATE NOCASE
+            `).all(workspace.id);
+
+            const assets = deletedAssets.map(asset => {
+                const versions = getVersions.all(asset.id).map(binVersion);
+
+                return {
+                    id: asset.id,
+                    name: asset.name,
+                    category: asset.category,
+                    description: asset.description,
+                    deleted_at: asset.deleted_at,
+                    versions,
+                    // An asset can only come back if something in it can.
+                    can_restore: versions.some(v => v.can_restore),
+                    ...retentionFor(asset.deleted_at),
+                };
+            });
+
+            // Versions deleted on their own, where the asset is still live.
+            // These are NOT included above, because above is for assets that
+            // are entirely gone.
+            const looseVersions = db.prepare(`
+                SELECT
+                    wv.id,
+                    wv.version_number,
+                    wv.version_note,
+                    wv.deleted_at,
+                    wv.files_purged_at,
+                    wa.id   AS asset_id,
+                    wa.name AS asset_name
+                FROM workspace_versions wv
+                JOIN workspace_assets wa ON wa.id = wv.workspace_asset_id
+                WHERE wa.workspace_id = ?
+                  AND wa.is_active = 1
+                  AND wv.is_active = 0
+                ORDER BY wv.deleted_at DESC
+            `).all(workspace.id);
+
+            const versions = looseVersions.map(version => ({
+                ...binVersion(version),
+                asset_id: version.asset_id,
+                asset_name: version.asset_name,
+            }));
+
+            const bytes = [...assets, ...versions]
+                .flatMap(item => item.versions ? item.versions : [item])
+                .reduce((total, version) => total + version.bytes, 0);
+
+            return res.json({
+                retention_days: RETENTION_DAYS,
+                totals: {
+                    assets: assets.length,
+                    versions: versions.length,
+                    bytes,
+                },
+                assets,
+                versions,
+            });
+
+        } catch (err) {
+            console.error('Failed to load the wastebin:', err);
+
+            return res.status(500).json({ error: 'Failed to load the bin' });
+        }
+    }
+);
+
+
+// ============================================================
+// POST .../assets/:assetId/restore
+// POST .../assets/:assetId/versions/:versionId/restore
+// ============================================================
+//
+// Takes something back out of the bin.
+//
+// A RESTORE IS AN UPDATE, not a move — nothing was ever removed from the row.
+// That is the whole reward for having built deletion as a flag rather than a
+// delete: bringing something back is one column, and it works exactly as long
+// as the files are still there.
+//
+// PURGED VERSIONS DO NOT COME BACK, and are skipped rather than failing the
+// whole restore. Restoring an asset whose third version was purged should
+// return the other two and SAY that one could not, rather than refusing
+// everything because part of it is gone.
+//
+// The deletion is REFUSED while an approval is pending, so nothing in the bin
+// can be under review — there is no equivalent check needed here.
+// ============================================================
+
+function restoreVersions(versionIds) {
+    const restore = db.prepare(`
+        UPDATE workspace_versions
+        SET is_active = 1,
+            deleted_at = NULL
+        WHERE id = ?
+    `);
+
+    for (const id of versionIds) restore.run(id);
+}
+
+router.post(
+    '/assets/:assetId/restore',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+        const assetId = Number(req.params.assetId);
+
+        if (!Number.isInteger(assetId)) {
+            return res.status(400).json({ error: 'Invalid asset ID' });
+        }
+
+        try {
+            const asset = db.prepare(`
+                SELECT wa.id, wa.name, wa.is_active, wa.workspace_id
+                FROM workspace_assets wa
+                JOIN developer_workspaces dw ON dw.id = wa.workspace_id
+                WHERE wa.id = ?
+                  AND dw.developer_id = ?
+            `).get(assetId, developerId);
+
+            if (!asset) {
+                return res.status(404).json({ error: 'Workspace asset not found' });
+            }
+
+            if (asset.is_active) {
+                return res.status(409).json({
+                    error: 'That asset is not in the bin — it is already in your workspace.'
+                });
+            }
+
+            const versions = db.prepare(`
+                SELECT id, files_purged_at
+                FROM workspace_versions
+                WHERE workspace_asset_id = ?
+            `).all(assetId);
+
+            const restorable = versions.filter(v => !v.files_purged_at);
+            const lost = versions.length - restorable.length;
+
+            if (restorable.length === 0) {
+                return res.status(409).json({
+                    error:
+                        'Every version of that asset has had its files removed. ' +
+                        'There is nothing left to restore.'
+                });
+            }
+
+            db.transaction(() => {
+                restoreVersions(restorable.map(v => v.id));
+
+                db.prepare(`
+                    UPDATE workspace_assets
+                    SET is_active = 1,
+                        deleted_at = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).run(assetId);
+
+                audit.record(
+                    developerId,
+                    'workspace_asset.restore',
+                    asset.name,
+                    { versions_restored: restorable.length, versions_lost: lost }
+                );
+            })();
+
+            return res.json({
+                status: 'restored',
+                asset_id: asset.id,
+                name: asset.name,
+                versions_restored: restorable.length,
+                versions_lost: lost,
+                note: lost
+                    ? `${lost} version(s) had their files removed and could not come back.`
+                    : 'Everything came back.',
+                usage: workspaceUsage(asset.workspace_id),
+            });
+
+        } catch (err) {
+            console.error('Failed to restore workspace asset:', err);
+
+            return res.status(500).json({ error: 'Failed to restore the asset' });
+        }
+    }
+);
+
+router.post(
+    '/assets/:assetId/versions/:versionId/restore',
+    authenticateToken,
+    requireRole('developer', 'admin', 'superuser'),
+
+    async (req, res) => {
+        const developerId = req.user?.id;
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        try {
+            const version = db.prepare(`
+                SELECT
+                    wv.id,
+                    wv.version_number,
+                    wv.is_active,
+                    wv.files_purged_at,
+                    wa.name       AS asset_name,
+                    wa.is_active  AS asset_active,
+                    wa.workspace_id
+                FROM workspace_versions wv
+                JOIN workspace_assets wa     ON wa.id = wv.workspace_asset_id
+                JOIN developer_workspaces dw ON dw.id = wa.workspace_id
+                WHERE wv.id = ?
+                  AND wa.id = ?
+                  AND dw.developer_id = ?
+            `).get(versionId, assetId, developerId);
+
+            if (!version) {
+                return res.status(404).json({ error: 'Workspace version not found' });
+            }
+
+            if (version.is_active) {
+                return res.status(409).json({
+                    error: 'That version is not in the bin.'
+                });
+            }
+
+            // If the whole asset is in the bin, restoring one version of it out
+            // of turn would leave a live version inside a deleted asset — a
+            // state nothing else in the system expects. Restore the asset.
+            if (!version.asset_active) {
+                return res.status(409).json({
+                    error:
+                        `"${version.asset_name}" is itself in the bin. ` +
+                        'Restore the asset, and this version comes back with it.'
+                });
+            }
+
+            if (version.files_purged_at) {
+                return res.status(409).json({
+                    error:
+                        'The files for that version have been removed, so it cannot ' +
+                        'come back. The record of it stays in your history.'
+                });
+            }
+
+            db.transaction(() => {
+                restoreVersions([versionId]);
+
+                audit.record(
+                    developerId,
+                    'workspace_version.restore',
+                    `${version.asset_name} v${version.version_number}`,
+                    null
+                );
+            })();
+
+            return res.json({
+                status: 'restored',
+                asset_id: assetId,
+                version_id: versionId,
+                version_number: version.version_number,
+                usage: workspaceUsage(version.workspace_id),
+            });
+
+        } catch (err) {
+            console.error('Failed to restore workspace version:', err);
+
+            return res.status(500).json({ error: 'Failed to restore the version' });
         }
     }
 );

@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillCategoryOptions();
     initialiseUploadUI();
     initialiseHistoryTab();
+    initialiseBinTab();
     loadDeveloperWorkspace();
 
 });
@@ -1333,6 +1334,13 @@ async function loadDeveloperWorkspace() {
 
         renderQuotaPanel();
 
+        // The bin badge comes from the workspace payload, so it is right on
+        // load. The tab's contents are still fetched only when it is opened —
+        // the count is cheap, the list is not.
+        setBinCount(
+            (data.bin?.assets || 0) + (data.bin?.versions || 0)
+        );
+
 
         renderWorkspaceAssets(
             data.assets || []
@@ -2279,5 +2287,274 @@ function initialiseHistoryTab() {
     button.addEventListener('shown.bs.tab', () => {
         if (historyLoaded) return;
         loadAssetHistory();
+    });
+}
+
+
+// ============================================================
+// The bin
+// ============================================================
+//
+// Deleted work that can still be taken back.
+//
+// THE CLOCK IS THE POINT, so the countdown is shown per item rather than as a
+// single line of explanation. "You have 14 days" is not useful when what you
+// want to know is which of these is about to go.
+//
+// The server sends expires_at and days_remaining rather than the retention
+// period for the browser to do arithmetic with: a countdown computed from the
+// client's clock is a countdown that depends on a clock that may be wrong.
+//
+// Every tab reloads this, because a restore or a purge changes the count — and
+// a badge that says 3 when the bin holds 2 is worse than no badge.
+
+let binLoaded = false;
+
+function binAlert(message) {
+    const box = $('binAlert');
+    if (!box) return;
+
+    if (!message) {
+        box.textContent = '';
+        box.classList.add('d-none');
+        return;
+    }
+
+    box.textContent = message;
+    box.classList.remove('d-none');
+}
+
+function setBinCount(count) {
+    const badge = $('binCount');
+    if (!badge) return;
+
+    badge.textContent = count;
+    badge.classList.toggle('d-none', count === 0);
+}
+
+// How long is left, in words. Used on every row, because the difference
+// between "13 days" and "1 day" is the whole reason someone opens this tab.
+function binCountdown(item) {
+    if (item.days_remaining === null) return '';
+
+    if (item.days_remaining <= 0) {
+        return 'Due to be emptied — the files go on the next clean-up.';
+    }
+
+    if (item.days_remaining === 1) {
+        return 'Files removed tomorrow.';
+    }
+
+    return `Files removed in ${item.days_remaining} days.`;
+}
+
+function binRow({ title, subtitle, item, onRestore }) {
+    const row = document.createElement('div');
+    row.className = 'border-top border-secondary pt-3 mt-3';
+
+    const heading = document.createElement('div');
+    heading.className = 'd-flex flex-wrap align-items-baseline gap-2';
+
+    const name = document.createElement('span');
+    name.className = 'fw-semibold';
+    name.textContent = title;
+    heading.appendChild(name);
+
+    if (subtitle) {
+        const sub = document.createElement('span');
+        sub.className = 'text-secondary small';
+        sub.textContent = subtitle;
+        heading.appendChild(sub);
+    }
+
+    const deleted = document.createElement('span');
+    deleted.className = 'text-secondary small ms-auto';
+    deleted.textContent = item.deleted_at
+        ? `Deleted ${formatWorkspaceDate(item.deleted_at)}`
+        : 'Deleted';
+    heading.appendChild(deleted);
+
+    row.appendChild(heading);
+
+    // What is at stake, and what is left of it.
+    const state = document.createElement('p');
+    state.className = 'small mb-1';
+
+    if (item.files_purged_at) {
+        state.className += ' text-secondary';
+        state.textContent =
+            `Files removed ${formatWorkspaceDate(item.files_purged_at)}. ` +
+            'This cannot be restored — the record of it stays in your History.';
+    } else {
+        state.textContent =
+            `${item.file_count} file${item.file_count === 1 ? '' : 's'}, ` +
+            `${formatFileSize(item.bytes)}. The files are still here. ` +
+            binCountdown(item);
+    }
+
+    row.appendChild(state);
+
+    if (item.can_restore && onRestore) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-sm btn-outline-success py-0 px-2';
+        button.textContent = 'Restore';
+        button.addEventListener('click', () => onRestore(button));
+        row.appendChild(button);
+    }
+
+    return row;
+}
+
+function renderBin(data) {
+    const list = $('binList');
+    if (!list) return;
+
+    setBinCount((data.totals?.assets || 0) + (data.totals?.versions || 0));
+
+    const line = $('binRetentionLine');
+    if (line) {
+        line.textContent =
+            `Deleting is reversible for ${data.retention_days} days. After that ` +
+            'the files are removed and the record is all that stays.';
+    }
+
+    list.innerHTML = '';
+    list.className = '';
+
+    const empty = data.assets.length === 0 && data.versions.length === 0;
+
+    if (empty) {
+        list.className = 'text-secondary';
+        list.textContent = 'The bin is empty.';
+        return;
+    }
+
+    // Whole assets first — they are the bigger loss, and there is more to say
+    // about them.
+    for (const asset of data.assets) {
+        const versions = asset.versions || [];
+
+        const restorable = versions.filter(v => v.can_restore).length;
+
+        list.appendChild(binRow({
+            title: asset.name,
+            subtitle:
+                `${versions.length} version${versions.length === 1 ? '' : 's'}` +
+                (asset.category ? ` · ${asset.category}` : ''),
+            item: asset,
+            onRestore: asset.can_restore
+                ? (button) => restoreAsset(asset, button)
+                : null,
+        }));
+
+        // Say which versions will not come back, before the button is pressed
+        // rather than after.
+        const lost = versions.length - restorable;
+        if (lost > 0 && restorable > 0) {
+            const warning = document.createElement('p');
+            warning.className = 'small text-warning mb-0 ps-2';
+            warning.textContent =
+                `${lost} of these had their files removed and will not come back.`;
+            list.appendChild(warning);
+        }
+    }
+
+    // Then versions deleted on their own, whose asset is still live.
+    for (const version of data.versions) {
+        list.appendChild(binRow({
+            title: `${version.asset_name} v${version.version_number}`,
+            subtitle: version.version_note || '',
+            item: version,
+            onRestore: version.can_restore
+                ? (button) => restoreVersion(version, button)
+                : null,
+        }));
+    }
+}
+
+async function loadBin() {
+    const list = $('binList');
+    binAlert('');
+
+    if (list) {
+        list.className = 'text-secondary';
+        list.textContent = 'Loading bin...';
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/assets/bin`, {
+            credentials: 'include',
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not load the bin.');
+        }
+
+        binLoaded = true;
+        renderBin(data);
+
+    } catch (err) {
+        console.error('Failed to load the bin:', err);
+        binAlert(err.message);
+
+        if (list) {
+            list.className = 'text-secondary';
+            list.textContent = 'Could not load the bin. Switch tabs to try again.';
+        }
+    }
+}
+
+async function sendRestore(url, button, verb) {
+    button.disabled = true;
+    button.textContent = 'Restoring…';
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || `Could not restore the ${verb}.`);
+        }
+
+        // The workspace has to be reloaded as well as the bin: a restored asset
+        // reappears there, and its quota comes back with it.
+        await loadDeveloperWorkspace();
+        await loadBin();
+
+    } catch (err) {
+        console.error('Restore failed:', err);
+
+        button.disabled = false;
+        button.textContent = 'Restore';
+        binAlert(err.message);
+    }
+}
+
+function restoreAsset(asset, button) {
+    sendRestore(`${API_URL}/assets/${asset.id}/restore`, button, 'asset');
+}
+
+function restoreVersion(version, button) {
+    sendRestore(
+        `${API_URL}/assets/${version.asset_id}/versions/${version.id}/restore`,
+        button,
+        'version'
+    );
+}
+
+function initialiseBinTab() {
+    const button = $('tab-bin-btn');
+    if (!button) return;
+
+    button.addEventListener('shown.bs.tab', () => {
+        if (binLoaded) return;
+        loadBin();
     });
 }

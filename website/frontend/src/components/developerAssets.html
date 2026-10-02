@@ -37,6 +37,24 @@
       </button>
     </li>
 
+    <!-- The bin. Deleting is reversible for a fortnight, and something a
+         developer can get back but cannot see is a grace period nobody can
+         use — so it gets its own place rather than being hidden in History,
+         which is a record rather than a place to act. -->
+    <li class="nav-item" role="presentation">
+      <button
+        class="nav-link"
+        id="tab-bin-btn"
+        data-bs-toggle="tab"
+        data-bs-target="#tab-bin"
+        type="button"
+        role="tab"
+      >
+        <i class="bi bi-trash3 me-1"></i>Bin
+        <span id="binCount" class="badge text-bg-secondary ms-1 d-none">0</span>
+      </button>
+    </li>
+
     <!-- NOT BUILT. These carry no data-bs-toggle, deliberately: a stub must not
          switch to an empty pane, because an empty pane looks like a broken
          page. Clicking one says what it is and where the work is recorded. -->
@@ -482,6 +500,45 @@
     </div>
 
   </div><!-- /tab-history -->
+
+
+  <!-- ========================================================
+       Bin — deleted work that can still come back.
+
+       Separate from History on purpose. History is a record: it is for reading
+       what happened. The bin is a place to ACT, and it has a clock attached —
+       which is the one thing that distinguishes the two, and the reason
+       burying it under a history list would be wrong.
+       ======================================================== -->
+  <div class="tab-pane fade" id="tab-bin" role="tabpanel">
+
+    <div class="card bg-dark border-secondary">
+
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h2 class="h5 mb-1">
+            <i class="bi bi-trash3"></i>
+            Recently deleted
+          </h2>
+          <p class="text-secondary small mb-0" id="binRetentionLine">
+            Deleting is reversible. After that the files are removed.
+          </p>
+        </div>
+      </div>
+
+      <div class="card-body">
+
+        <div id="binAlert" class="alert alert-danger py-2 small d-none"></div>
+
+        <div id="binList" class="text-secondary">
+          Loading bin...
+        </div>
+
+      </div>
+
+    </div>
+
+  </div><!-- /tab-bin -->
 
   </div><!-- /tab-content -->
 
