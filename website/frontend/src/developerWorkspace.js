@@ -1462,7 +1462,110 @@ function renderVersionState(version) {
         wrapper.appendChild(decision);
     }
 
+    // EVERY check that ran, not only the failures.
+    //
+    // The badges above say whether the version passed. They cannot say what was
+    // checked, and "nothing failed" and "nothing was checked" look identical
+    // from a badge — which are very different pieces of news. So the full list
+    // is available, folded away until asked for.
+    const allResults = version.latest_check?.results || [];
+
+    if (allResults.length) {
+        const details = document.createElement('details');
+        details.className = 'small mb-2';
+
+        const summary = document.createElement('summary');
+        summary.className = 'text-secondary';
+        summary.textContent =
+            `${allResults.length} check${allResults.length === 1 ? '' : 's'} run`;
+        details.appendChild(summary);
+
+        const list = document.createElement('ul');
+        list.className = 'list-unstyled mb-0 mt-1 ps-2';
+
+        for (const result of allResults) {
+            const item = document.createElement('li');
+            item.className = 'mb-1';
+
+            const passed = result.status === 'passed';
+
+            const mark = document.createElement('i');
+            mark.className = passed
+                ? 'bi bi-check-circle text-success me-1'
+                : 'bi bi-exclamation-circle text-danger me-1';
+            item.appendChild(mark);
+
+            const name = document.createElement('span');
+            name.className = 'font-monospace';
+            name.textContent = result.check_name || 'check';
+            item.appendChild(name);
+
+            item.appendChild(document.createTextNode(` — ${result.message || ''}`));
+
+            list.appendChild(item);
+        }
+
+        details.appendChild(list);
+        wrapper.appendChild(details);
+    }
+
     return wrapper.childElementCount ? wrapper : null;
+}
+
+// ---------------------------------------------------------------------------
+// Running the technical check
+//
+// On any version, whenever it is wanted — a check is a judgement of ONE
+// submitted version, and re-running it after fixing something is the normal way
+// to use it. So the control is per version, not per asset.
+//
+// The results are the point. A pass/fail badge is not the outcome: the check
+// reports every check it ran with a message for each, including the ones that
+// could not be verified. All of it is shown, because "nothing failed" and
+// "nothing was checked" are very different news and a badge cannot tell them
+// apart.
+// ---------------------------------------------------------------------------
+
+async function runTechnicalCheck(asset, version, button, block) {
+    const originalLabel = button.textContent;
+
+    button.disabled = true;
+    button.textContent = 'Checking…';
+
+    // Any error from a previous attempt goes before this one runs, so a stale
+    // message cannot look like the result of the run that just happened.
+    block?.querySelector('.check-error')?.remove();
+
+    try {
+        const response = await fetch(
+            `${API_URL}/assets/${asset.id}/versions/${version.id}/technical-check`,
+            { method: 'POST', credentials: 'include' }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'The technical check could not be run.');
+        }
+
+        // Reloads the workspace, which is what puts the new badges and the new
+        // results on screen — the same rendering path as any other refresh,
+        // rather than a second one that could disagree with it.
+        await loadDeveloperWorkspace();
+
+    } catch (err) {
+        console.error('Technical check failed:', err);
+
+        button.disabled = false;
+        button.textContent = originalLabel;
+
+        if (block) {
+            const message = document.createElement('div');
+            message.className = 'check-error alert alert-danger py-2 small mt-2 mb-0';
+            message.textContent = `Could not run the check: ${err.message}`;
+            block.appendChild(message);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1666,13 +1769,48 @@ function renderWorkspaceAssets(assets) {
 
                 versionMeta.appendChild(versionDate);
 
+                // Declared once, used by both controls below. An asset under
+                // review is frozen: no new versions, no metadata changes, and
+                // no new check result — the reviewer must be looking at
+                // something that cannot move underneath them.
+                const versionUnderReview =
+                    version.latest_approval?.status === 'pending';
+
+                // RUN THE TECHNICAL CHECK, on any version, whenever wanted.
+                // Per version rather than per asset, because a check is a
+                // judgement of one submitted version — and re-running it after
+                // fixing something is the normal way to use it.
+                const checkButton = document.createElement('button');
+                checkButton.type = 'button';
+                checkButton.className = 'btn btn-sm btn-outline-info py-0 px-2';
+
+                const hasBeenChecked = Boolean(version.latest_check);
+
+                checkButton.textContent =
+                    hasBeenChecked ? 'Re-run check' : 'Run check';
+                checkButton.title = hasBeenChecked
+                    ? 'Run the technical check again on this version'
+                    : 'Run the technical check on this version';
+
+                // Disabled while an approval is pending, matching the freeze:
+                // the version being reviewed must not change underneath the
+                // reviewer, and a new check result is a change.
+                if (versionUnderReview) {
+                    checkButton.disabled = true;
+                    checkButton.title =
+                        'Under review — the check cannot be re-run until the approval is decided.';
+                } else {
+                    checkButton.addEventListener('click', () => {
+                        runTechnicalCheck(asset, version, checkButton, versionBlock);
+                    });
+                }
+
+                versionMeta.appendChild(checkButton);
+
                 const deleteVersionButton = document.createElement('button');
                 deleteVersionButton.type = 'button';
                 deleteVersionButton.className = 'btn btn-sm btn-outline-danger py-0 px-1';
                 deleteVersionButton.innerHTML = '<i class="bi bi-trash"></i>';
-
-                const versionUnderReview =
-                    version.latest_approval?.status === 'pending';
 
                 if (versionUnderReview) {
                     deleteVersionButton.disabled = true;

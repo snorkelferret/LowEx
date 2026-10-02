@@ -120,6 +120,91 @@ const fileSizeOf = db.prepare(`
     SELECT id, file_size FROM stored_files WHERE id = ?
 `);
 
+// ---------------------------------------------------------------------------
+// A version's review state — DEFINED ONCE
+// ---------------------------------------------------------------------------
+//
+// GET /assets and GET /assets/history both report what happened to a version:
+// its latest technical check, why anything failed, and the latest approval.
+// They were each carrying their own copy of these four queries, which is two
+// things to keep in step for no benefit — the same reasoning that put the file
+// rules in shared/ rather than in both halves of the app.
+//
+// The distinction that matters between the two result queries: reasons are the
+// FAILURES, which is what goes red on the page. results are EVERYTHING the
+// check said, which is what tells a developer which checks actually ran.
+
+const latestCheckForVersion = db.prepare(`
+    SELECT
+        id,
+        status,
+        summary,
+        started_at,
+        completed_at
+    FROM technical_check_runs
+    WHERE workspace_version_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+`);
+
+// The reason a check failed lives here, not in runs.summary — that is only
+// ever "Technical validation failed.".
+const checkReasonsForRun = db.prepare(`
+    SELECT
+        check_name,
+        status,
+        message
+    FROM technical_check_results
+    WHERE technical_check_run_id = ?
+      AND status <> 'passed'
+    ORDER BY id
+`);
+
+const checkResultsForRun = db.prepare(`
+    SELECT
+        check_name,
+        status,
+        message
+    FROM technical_check_results
+    WHERE technical_check_run_id = ?
+    ORDER BY id
+`);
+
+const latestApprovalForVersion = db.prepare(`
+    SELECT
+        id,
+        status,
+        request_comment,
+        requested_at,
+        decision_comment,
+        decided_at,
+        decided_by
+    FROM creative_approvals
+    WHERE workspace_version_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+`);
+
+const usernameById = db.prepare(`
+    SELECT username FROM users WHERE id = ?
+`);
+
+// Attaches the review state to one version object. Shared by both routes so
+// they cannot describe a version differently.
+function withReviewState(version) {
+    const check = latestCheckForVersion.get(version.id) || null;
+
+    if (check) {
+        check.reasons = checkReasonsForRun.all(check.id);
+        check.results = checkResultsForRun.all(check.id);
+    }
+
+    version.latest_check = check;
+    version.latest_approval = latestApprovalForVersion.get(version.id) || null;
+
+    return version;
+}
+
 // Used by the upload quota check, which runs before anything is written and so
 // has to work from hashes rather than from stored_file ids that do not exist
 // yet.
@@ -246,46 +331,6 @@ router.get(
             // from anywhere: a developer could submit for review and had no way
             // to learn the outcome. See the review's Phase 1 notes.
 
-            const getLatestCheck = db.prepare(`
-                SELECT
-                    id,
-                    status,
-                    summary,
-                    started_at,
-                    completed_at
-                FROM technical_check_runs
-                WHERE workspace_version_id = ?
-                ORDER BY id DESC
-                LIMIT 1
-            `);
-
-            // The reason a check failed lives here, not in runs.summary —
-            // that is only ever "Technical validation failed.".
-            const getCheckReasons = db.prepare(`
-                SELECT
-                    check_name,
-                    status,
-                    message
-                FROM technical_check_results
-                WHERE technical_check_run_id = ?
-                  AND status <> 'passed'
-                ORDER BY id
-            `);
-
-            const getLatestApproval = db.prepare(`
-                SELECT
-                    id,
-                    status,
-                    request_comment,
-                    decision_comment,
-                    requested_at,
-                    decided_at
-                FROM creative_approvals
-                WHERE workspace_version_id = ?
-                ORDER BY id DESC
-                LIMIT 1
-            `);
-
             // An asset with a pending approval is frozen: no new versions and no
             // metadata changes until it is decided. Surfaced per asset so the
             // panel can explain why, rather than only failing on submit.
@@ -322,16 +367,7 @@ router.get(
 
                 for (const version of asset.versions) {
                     version.files = getFiles.all(version.id);
-
-                    const check = getLatestCheck.get(version.id) || null;
-
-                    if (check) {
-                        check.reasons = getCheckReasons.all(check.id);
-                    }
-
-                    version.latest_check = check;
-                    version.latest_approval =
-                        getLatestApproval.get(version.id) || null;
+                    withReviewState(version);
                 }
             }
 
@@ -445,75 +481,22 @@ router.get(
                 ORDER BY version_number DESC
             `);
 
-            const getLatestCheck = db.prepare(`
-                SELECT
-                    id,
-                    status,
-                    summary,
-                    started_at,
-                    completed_at
-                FROM technical_check_runs
-                WHERE workspace_version_id = ?
-                ORDER BY id DESC
-                LIMIT 1
-            `);
-
-            // The reason a check failed lives here, not in runs.summary —
-            // that is only ever "Technical validation failed.".
-            const getCheckReasons = db.prepare(`
-                SELECT
-                    check_name,
-                    status,
-                    message
-                FROM technical_check_results
-                WHERE technical_check_run_id = ?
-                  AND status <> 'passed'
-                ORDER BY id
-            `);
-
-            const getLatestApproval = db.prepare(`
-                SELECT
-                    id,
-                    status,
-                    request_comment,
-                    requested_at,
-                    decision_comment,
-                    decided_at,
-                    decided_by
-                FROM creative_approvals
-                WHERE workspace_version_id = ?
-                ORDER BY id DESC
-                LIMIT 1
-            `);
-
-            const getUsername = db.prepare(`
-                SELECT username FROM users WHERE id = ?
-            `);
-
             const totals = { assets: 0, versions: 0, in_game_store: 0 };
 
             for (const asset of assets) {
                 const versions = getVersions.all(asset.id);
 
                 for (const version of versions) {
-                    const check = getLatestCheck.get(version.id) || null;
+                    // Shared with GET /assets, so a version cannot be described
+                    // one way in the workspace and another in the history.
+                    withReviewState(version);
 
-                    if (check) {
-                        check.reasons = getCheckReasons.all(check.id);
+                    if (version.latest_approval?.decided_by) {
+                        version.latest_approval.decided_by_username =
+                            usernameById.get(
+                                version.latest_approval.decided_by
+                            )?.username || null;
                     }
-
-                    const approval = getLatestApproval.get(version.id) || null;
-
-                    if (approval && approval.decided_by) {
-                        approval.decided_by_username =
-                            getUsername.get(approval.decided_by)?.username || null;
-                    }
-
-                    // Named latest_check / latest_approval to match GET /assets,
-                    // so the same client renderer handles both views rather
-                    // than a second one growing beside it.
-                    version.latest_check = check;
-                    version.latest_approval = approval;
 
                     // Which versions are in the game store. This is the fact
                     // the workspace has never shown and the one a developer
