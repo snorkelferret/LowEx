@@ -1354,6 +1354,46 @@ They MUST be dealt with before any real user data exists.
     about the onboarding docs; those are gone and the manual carries the same
     text.)
 
+    --- WHO CAN SEE THE BOARD, WHICH IS NOT THE SAME AS WHO CAN SIGN IN ---
+
+    The board has its own membership and its own idea of which rooms you belong
+    to. Being signed in to the portal does not mean being a member, and it
+    certainly does not mean being a member of everything on it.
+
+    A discussion block used to sit on the SIGN-IN FORM and the INVITATION PAGE —
+    two pages seen ONLY by people who are not signed in — describing channels,
+    direct messages and @mentions as though they were waiting inside. Removed
+    from both. It promised the thing the portal cannot promise, to the one
+    audience least able to check.
+
+    IT IS STILL REACHABLE, and removing the links did not change that:
+
+      * /discussion.html is served from frontend/dist like every other page, so
+        a request for it gets a 200 with no session at all.
+      * The board's URL is baked into the JavaScript bundle by VITE_ at build
+        time, so when the board is configured the address will be readable by
+        anyone who fetches the bundle — gating the page would not hide it.
+
+    THE FIX IS NOT A PAGE GUARD. The URL has to come from an AUTHENTICATED
+    ENDPOINT at runtime rather than being compiled into the bundle, and the page
+    that displays it has to be served the way the manual is — outside
+    frontend/dist, because express.static is mounted first and anything in that
+    directory is fetchable by anyone whatever guards the route. Same reasoning
+    as the manual, same shape of answer.
+
+    --- AND DIRECT MESSAGES SHOULD BE VISIBLE WITHOUT GOING TO THE BOARD ---
+
+    A direct message on the board should show at the TOP OF EVERY SIGNED-IN
+    PAGE, as a note saying there are messages — so nobody has to remember to go
+    and look. This is what the utility bar was built to have room for, and it is
+    the first thing that belongs in it after the manual and the bin.
+
+    BLOCKED ON THE BOARD EXISTING, and on the portal being able to ask it
+    anything: this needs an API on the portal side that talks to the board, not
+    a page that links to it. Do not build a placeholder that shows nothing —
+    an indicator that is always empty is worse than no indicator, because
+    people stop looking at it.
+
 
 28) ADMIN AND SUPERUSER PAGES — to build. WHAT GOES ON THEM.
 
