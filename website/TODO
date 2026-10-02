@@ -1432,21 +1432,68 @@ They MUST be dealt with before any real user data exists.
       protecting history; deleting from the store has to be reconciled with it
       rather than quietly reversing it.
 
-    --- OPEN, AND THE FIRST IS THE REAL QUESTION ---
+    --- DECIDED 2026-10-02: THEY ARE NOT THE SAME ACT ---
 
-    * IS DELETING TEST DATA THE SAME ACT AS WITHDRAWING SOMETHING THAT SHIPPED?
-      They are not obviously the same operation. Removing a test asset that
-      never left the building is housekeeping. Removing one that went out in a
-      released build has consequences outside this system. If releases exist by
-      the time this is built, the panel should distinguish them — the
-      confirmation wording has to be honest about which one is happening.
+    WITHDRAWING SOMETHING THAT SHIPPED IS VERY EXTREME. It is a last resort,
+    not a maintenance operation, and there should be LOTS OF BARS between the
+    admin and the action — enough that the difficulty itself communicates how
+    serious it is before anyone gets near it.
+
+    REMOVING TEST DATA IS ORDINARY AND SHOULD BE NEARLY ONE STEP, especially
+    when it is in the SANDBOX: nothing has been approved, nobody outside has
+    seen it, and the only person affected is the developer who put it there.
+
+    SO THE PANEL NEEDS TWO OPERATIONS OF DELIBERATELY DIFFERENT WEIGHT, not one
+    delete with a severity setting. If they share a button and a confirmation
+    dialog, that dialog becomes the only thing separating housekeeping from
+    undoing a release — and no dialog can carry that distinction.
+
+    --- THE SANDBOX HALF IS BUILT, AND IT FREES NOTHING ---
+
+    Worth knowing before designing around it, because it is not what it looks
+    like from the outside. A developer can already delete their own workspace
+    content, and it is a SOFT delete: rows marked inactive, quota freed, and
+    NOTHING REMOVED FROM DISK. And because nothing in the codebase ever deletes
+    a stored_files row, the bytes stay forever — even after every reference to
+    them is gone.
+
+    So "just remove it from the sandbox" today is instant, safe, and frees no
+    disk at all. For test data pushed through repeatedly that adds up, and it
+    is invisible: the workspace shows empty while the store keeps every version
+    of every abandoned experiment, charged to nobody.
+
+    WHAT IS MISSING IS GARBAGE COLLECTION, not another delete button. A pass
+    that finds stored_files rows referenced by NEITHER workspace_version_files
+    NOR asset_version_files, and removes the row and the blob together.
+    check:store already finds the mirror image of this — an orphan blob is the
+    case where the FILE is present and the row is gone; this is the case where
+    both are present and nothing points at either.
+
+    SAFETY, because this is the one operation in the system that can destroy
+    content outright:
+
+      * It must run inside an IMMEDIATE transaction and RE-CHECK the references
+        immediately before unlinking. A concurrent upload can find a
+        stored_files row and be about to reference it; the check and the unlink
+        cannot have a gap between them.
+
+      * It should REFUSE TO RUN AT ALL if check:store reports the store
+        inconsistent. Collecting garbage from a store you cannot trust is how a
+        repairable problem becomes an unrepairable one.
+
+      * Consider a grace period — only collect blobs older than, say, a day —
+        so that a file written moments ago by an upload that is still in flight
+        cannot be swept up by a pass running at the wrong moment.
+
+    --- STILL OPEN, FOR THE STORE ITSELF ---
 
     * HARD OR SOFT. Soft needs asset_versions to gain an is_active column
-      (assets already has an unused one) and leaves the blob on disk. Hard
-      actually frees the space but erases the approval and comment history that
-      references it. The workspace chose soft, for the reason recorded in
-      WORKSPACE QUOTA AND SOFT DELETE. The store probably wants the same, plus
-      a separate hard purge for test data — which is the case raised here.
+      (assets already has an unused one) and leaves the blob on disk — but the
+      collector described above frees the bytes once nothing references them,
+      which makes soft-plus-collection very nearly as good as hard. Hard frees
+      the space immediately and erases the approval and comment history, which
+      is exactly what the workspace was careful not to do. Likely answer: soft
+      by default, and let the collector handle the bytes.
 
     * WHAT HAPPENS TO THE APPROVAL AND COMMENT HISTORY. Keep it and the
       deletion is really a soft one and nothing is freed. Drop it and an
