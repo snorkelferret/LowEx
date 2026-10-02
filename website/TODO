@@ -549,6 +549,34 @@ buttons on each asset and each version.
   nobody has looked at it. Worth a visual pass.
 
 
+SHARED CODE — ONE FUNCTION PER TASK
+-----------------------------------
+Two places, and nothing should be written twice:
+
+  shared/*.mjs            rules BOTH sides need. The backend require()s them
+                          (Node 22 allows require() of an ES module) and the
+                          frontend imports them (vite resolves the sibling
+                          directory, in dev and in build — both verified).
+
+  frontend/src/utils.js   client-only helpers.
+
+If a rule is needed in more than one place it goes in one of those. If it is
+needed in one place only it stays there — moving it for symmetry is relocation,
+not consolidation.
+
+WHAT THIS FIXED: the backup-file rule was written twice, once per side, with a
+test asserting the two agreed. `$` was defined in five client files and
+escapeHtml in three. All identical, all by luck, and the failure mode of copies
+is that they diverge silently in the one that matters. A test that catches
+divergence is a poor substitute for not having two copies to diverge, so the
+copies are gone rather than policed.
+
+STILL DUPLICATED, on purpose: several client files call getElementById directly
+where $ would do. That is the platform API used directly, not a second
+implementation of anything, so converting it would be churn. Worth tidying if
+those files are touched anyway.
+
+
 ONE DEPENDENCY TREE NOW (RESOLVED 2026-09-29)
 --------------------------------------------
 There used to be a second, unmanaged tree at backend/node_modules with no

@@ -1,5 +1,8 @@
 // frontend/src/developerWorkspace.js
 
+// The same rules the server uses. shared/ is the one copy.
+import { isBackupFile } from '../../shared/assetRules.mjs';
+import { $, escapeHtml, formatFileSize } from './utils.js';
 
 const API_URL = '/api/developer/workspace';
 
@@ -19,7 +22,8 @@ let skippedBackupCount = 0;
 // DOM helpers
 // ============================================================
 
-const $ = id => document.getElementById(id);
+// $, escapeHtml and formatFileSize come from ./utils.js. They were defined here
+// as well as in three other client files — identical, but only by luck.
 
 
 // ============================================================
@@ -127,33 +131,12 @@ function initialiseUploadUI() {
 // is not tidiness: Blender's .blend1 is a FULL COPY of the .blend beside it, so
 // on a 500 MB asset it is half a gigabyte of upload for nothing.
 //
-// MUST STAY IN STEP with isBackupFile() in backend/lib/assetNaming.js, which is
-// authoritative and enforces the same rule server-side. The duplication is
-// deliberate — filtering here saves the bandwidth, filtering there is what
-// makes it true — and scripts/check-naming.js asserts the two agree.
+// isBackupFile() comes from shared/assetRules.mjs — the SAME function the
+// server uses. It used to be written twice, once per side, with a test
+// asserting the copies agreed; a test that catches divergence is a poor
+// substitute for not having two copies to diverge.
 // ---------------------------------------------------------------------------
 
-const BACKUP_PATTERNS = [
-    /~$/,               // hereiam.txt~   Emacs, gedit; Nuke and Maya autosaves
-    /^#.*#$/,           // #file#         Emacs autosave
-    /\.bak$/i,
-    /\.orig$/i,
-    /\.rej$/i,
-    /\.swp$/i,
-    /\.swo$/i,
-    /\.tmp$/i,
-    /\.blend\d+$/i,     // Blender numbered backups: file.blend1, file.blend2
-    /\.blend@$/i,
-    /^\._/,             // macOS resource forks
-    /^\.DS_Store$/i,
-    /^Thumbs\.db$/i,
-];
-
-function isBackupFile(name) {
-    const base = String(name || '').replace(/\\/g, '/').split('/').pop();
-    if (!base) return false;
-    return BACKUP_PATTERNS.some(pattern => pattern.test(base));
-}
 
 
 function addSelectedFiles(files) {
@@ -1645,60 +1628,5 @@ function formatWorkspaceDate(value) {
     return date.toLocaleString();
 }
 
-// ============================================================
-// Formatting
-// ============================================================
-
-function formatFileSize(bytes) {
-
-    if (!Number.isFinite(bytes) || bytes <= 0) {
-        return '0 B';
-    }
-
-
-    const units = [
-        'B',
-        'KB',
-        'MB',
-        'GB',
-        'TB'
-    ];
-
-
-    const exponent =
-        Math.min(
-            Math.floor(
-                Math.log(bytes) /
-                Math.log(1024)
-            ),
-            units.length - 1
-        );
-
-
-    const value =
-        bytes /
-        Math.pow(
-            1024,
-            exponent
-        );
-
-
-    return `${value.toFixed(
-        exponent === 0 ? 0 : 2
-    )} ${units[exponent]}`;
-}
-
-
-// ============================================================
-// HTML escaping
-// ============================================================
-
-function escapeHtml(value) {
-
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
+// formatFileSize() and escapeHtml() moved to ./utils.js, where they are defined
+// once for every client file rather than once each.

@@ -13,9 +13,9 @@
 // No header and no auth guard on this page: whoever arrives here has no
 // account yet, which is the whole reason they are here.
 
-const API = '/api';
+import { $ } from './utils.js';
 
-const $ = (id) => document.getElementById(id);
+const API = '/api';
 
 const SECTIONS = [
     'register-checking',

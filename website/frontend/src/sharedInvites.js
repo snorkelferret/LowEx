@@ -13,12 +13,9 @@
 // and `new Date('2026-09-07 13:08:31')` is an Invalid Date in Safari because
 // SQLite timestamps have a space instead of a T and are UTC.
 
-const API_URL = '/api';
+import { escapeHtml } from './utils.js';
 
-const escapeHtml = (value) => String(value ?? '').replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-);
+const API_URL = '/api';
 
 // The four states the server reports. Expiry is derived there, on read, so
 // this never has to decide whether something has expired.

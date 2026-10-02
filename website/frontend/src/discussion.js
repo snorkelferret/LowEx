@@ -10,7 +10,7 @@
 // Two jobs: show the join link if configured, and point the nav action
 // somewhere sensible depending on whether you are signed in.
 
-const $ = (id) => document.getElementById(id);
+import { $ } from './utils.js';
 
 const BOARD_URL = import.meta.env.VITE_DISCUSSION_URL || '';
 

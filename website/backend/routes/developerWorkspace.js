@@ -20,7 +20,7 @@ const {
     matchAssetName,
     deriveUploadRoot,
     isBackupFile
-} = require('../lib/assetNaming');
+} = require('../../shared/assetRules.mjs');
 
 
 // ============================================================

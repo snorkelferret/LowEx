@@ -12,14 +12,9 @@
 // the rule, because a client-side copy of a permission rule is a permission
 // rule that can disagree with the server.
 
+import { $, escapeHtml } from './utils.js';
+
 const API = '/api';
-
-const $ = (id) => document.getElementById(id);
-
-const escapeHtml = (value) => String(value ?? '').replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-);
 
 const ROLE_BADGES = {
     superuser: 'bg-danger',

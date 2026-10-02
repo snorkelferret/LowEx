@@ -1,3 +1,24 @@
+// shared/assetRules.mjs
+//
+// THE asset and file rules, in ONE place, used by both sides.
+//
+//   backend  require()s it   (Node 22 supports require() of an ES module)
+//   frontend imports it      (vite resolves the sibling directory)
+//
+// WHY IT LIVES HERE AND NOT IN EITHER HALF. These rules are needed on both
+// sides and they must agree: a backup file has to be dropped by the browser
+// before it is transferred, AND by the server, which is what makes dropping it
+// true. Two copies of that would drift, and the drift would be silent.
+//
+// ONE FUNCTION PER TASK. If a rule is needed in more than one place it belongs
+// here rather than being written again; if it is needed in one place only, it
+// does not.
+//
+// The previous arrangement had the backup patterns written twice, in
+// backend/lib/assetNaming.js and frontend/src/developerWorkspace.js, with a
+// test asserting the two agreed. A test that catches divergence is a poor
+// substitute for not having two copies to diverge.
+
 // backend/lib/assetNaming.js
 //
 // Deriving an asset name and version from the folder a developer uploads.
@@ -293,7 +314,7 @@ function deriveUploadRoot(filePaths) {
     return roots.size === 1 ? [...roots][0] : null;
 }
 
-module.exports = {
+export {
     RESERVED_EXTENSIONS,
     NEAR_MATCH_MAX_DISTANCE,
     BACKUP_PATTERNS,

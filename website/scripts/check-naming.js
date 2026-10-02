@@ -14,7 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const N = require(path.join(__dirname, '../backend/lib/assetNaming.js'));
+const N = require(path.join(__dirname, '../shared/assetRules.mjs'));
 
 let pass = 0;
 let fail = 0;
@@ -140,69 +140,46 @@ check('single nested file still yields its root',
 check('the chain: paths -> root -> asset name',
     N.parseAssetName(R(['bigTree_v04/scripts/nuke.nk', 'bigTree_v04/x.blend'])).name === 'bigTree');
 
-// ------------------------------------------------- the duplicated backup rule
+// ---------------------------------------------------------- backup files
 
-console.log('\n  -- backup files (the rule exists in two places) --');
+console.log('\n  -- backup files --');
 
-// isBackupFile() is implemented twice on purpose: in backend/lib/assetNaming.js,
-// which is authoritative, and in frontend/src/developerWorkspace.js, which
-// filters before upload so backups are not transferred at all. A .blend1 is a
-// full copy of its .blend, so that is bandwidth, not tidiness.
+// The rule is in shared/assetRules.mjs and is used by BOTH sides: the browser
+// drops backups before transferring them, and the server drops what arrives.
 //
-// Two copies of a rule drift. This asserts they agree, so the duplication is
-// safe rather than a liability.
-const CLIENT = path.join(__dirname, '../frontend/src/developerWorkspace.js');
-const clientSource = fs.readFileSync(CLIENT, 'utf8');
+// It used to be written TWICE — once per side — with a test asserting the two
+// copies agreed. A test that catches divergence is a poor substitute for not
+// having two copies to diverge, so there is one now. What is worth testing is
+// that it does its job.
 
-const extracted = /const BACKUP_PATTERNS = \[([\s\S]*?)\n\];/.exec(clientSource);
+const BACKUP = [
+    'hereiam.txt~', 'shot.nk~', 'rig.ma~', '#autosave#', 'file.bak',
+    'thing.orig', 'x.rej', 'a.swp', 'b.tmp', 'OakTree.blend1',
+    'OakTree.blend2', 'OakTree.blend@', '._resource', '.DS_Store', 'Thumbs.db',
+];
+
+// These matter MORE than the matches above: discarding a real file because of
+// its name would be worse than keeping a backup.
+const KEEP = [
+    'OakTree.blend', 'nuke_v10.nk', 'photo.png', 'tree.ma', 'notes.txt',
+    'model.fbx', 'README', 'backup_notes.txt', 'tildes~inside.txt',
+];
 
 check(
-    'the client pattern list could be read (a rename would disable this check)',
-    !!extracted,
-    extracted ? `${(extracted[1].match(/\/.*\//g) || []).length} patterns` : 'NOT FOUND'
+    `drops all ${BACKUP.length} kinds of backup`,
+    BACKUP.every(N.isBackupFile),
+    BACKUP.filter(n => !N.isBackupFile(n)).join(', ')
 );
 
-if (extracted) {
-    // The array literal only - no identifiers, no calls. Parsed rather than
-    // eval'd in the usual sense, and it is our own source either way.
-    const clientPatterns = new Function(`return [${extracted[1]}];`)();
+check(
+    `keeps all ${KEEP.length} real files`,
+    KEEP.every(n => !N.isBackupFile(n)),
+    KEEP.filter(N.isBackupFile).join(', ')
+);
 
-    const SAMPLES = [
-        // should be dropped
-        'hereiam.txt~', 'shot.nk~', 'rig.ma~', '#autosave#', 'file.bak',
-        'thing.orig', 'x.rej', 'a.swp', 'b.tmp', 'OakTree.blend1',
-        'OakTree.blend2', 'OakTree.blend@', '._resource', '.DS_Store', 'Thumbs.db',
-        // should NOT be dropped - the false positives matter more
-        'OakTree.blend', 'nuke_v10.nk', 'photo.png', 'tree.ma', 'notes.txt',
-        'model.fbx', 'README', 'backup_notes.txt', 'tildes~inside.txt',
-    ];
-
-    const disagree = [];
-
-    for (const name of SAMPLES) {
-        const server = N.isBackupFile(name);
-        const client = clientPatterns.some(p => p.test(name));
-
-        if (server !== client) {
-            disagree.push(`${name}: server=${server} client=${client}`);
-        }
-    }
-
-    check(
-        `both copies agree on all ${SAMPLES.length} samples`,
-        disagree.length === 0,
-        disagree.length ? disagree.slice(0, 3).join(' | ') : ''
-    );
-
-    // And the rule does what it is for, rather than merely agreeing with itself.
-    check('it drops a plain editor backup', N.isBackupFile('hereiam.txt~'));
-    check('it drops a Blender numbered backup', N.isBackupFile('OakTree.blend1'));
-    check("it does NOT drop a real Blender file", !N.isBackupFile('OakTree.blend'));
-    check('it does NOT drop a file merely containing a tilde',
-        !N.isBackupFile('tildes~inside.txt'));
-    check('a path is judged on its filename, not its directory',
-        N.isBackupFile('bigTree_v04/scripts/nuke.nk~'));
-}
+check('a path is judged on its filename, not its directory',
+    N.isBackupFile('bigTree_v04/scripts/nuke.nk~') &&
+    !N.isBackupFile('bigTree_v04/backup.nk'));
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 console.log(fail === 0 ? '\n  PASS' : '\n  FAIL');

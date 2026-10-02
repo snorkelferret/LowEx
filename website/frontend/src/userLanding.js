@@ -9,8 +9,7 @@
 // otherwise would have people hunting for downloads that are not there.
 
 import { executeGlobalLogout } from './authUtils.js';
-
-const $ = (id) => document.getElementById(id);
+import { $ } from './utils.js';
 
 const ROLE_LABELS = {
     user: 'a tester',
