@@ -1400,12 +1400,15 @@ They MUST be dealt with before any real user data exists.
     the impersonation rule. That reasoning has to survive being put behind a
     button.
 
-    BUG REPORTS. GET /api/feedback and POST /api/feedback/:id/resolve exist and
-    are tested (see item 29) — and nothing calls either. Reports currently go
-    somewhere nobody looks, which is worse than not collecting them, because
-    people think they have been heard. A list, a reader, and a resolve button.
-    The resolve route takes an optional note; use it, because a report closed
-    with no record of what was done is barely better than one never read.
+    BUG REPORTS — [DONE 2026-10-02]. A list with a status filter, each report
+    showing its kind, who sent it and when, what they wrote, the page they were
+    on as a link, and a reply address where one was left. Resolving takes an
+    optional note, and the panel says when one is skipped. Anonymous reports
+    are shown as information — "sent without signing in" — rather than as
+    missing data.
+
+    frontend/src/adminReports.html + adminReports.js, listed in build.js for
+    BOTH dashboards the same way the accounts table is.
 
     --- NEEDED, AND BLOCKED ON SOMETHING ELSE ---
 
@@ -1486,8 +1489,27 @@ They MUST be dealt with before any real user data exists.
 
     The Accounts table (built), the invite list (built), GET /api/admin/stats
     (built: active/total users, pending invitations). The audit log is written
-    by deactivation and by every category retag and feedback resolve, and is
-    readable by nothing at all — worth a view for the same reason as the rest.
+    by deactivation and by every category retag, feedback resolve, restore,
+    purge and daily job run — and is readable by nothing at all. Worth a view
+    for the same reason as the rest, and it is now the last of the
+    "we already record this and nobody can see it" group.
+
+    --- A LAYOUT INCONSISTENCY WORTH SETTLING ---
+
+    The admin page is a stack of sections with a menu that ANCHORS to them.
+    The developer page is a set of TABS. Both work; they do not match, and
+    "keep the look consistent across the pages" was the instruction.
+
+    Converting the admin page to tabs is a real restructure rather than a
+    tweak: adminPanel.html, devInvites.html and adminReports.html are separate
+    components concatenated into the page, and they are shared with the
+    superuser dashboard, which carries three more panels the admin page does
+    not have. Worth deciding deliberately rather than drifting into it.
+
+    Related, and smaller: devInvites.html wraps itself in
+    `<section class="container my-4">` while adminPanel.html and
+    adminReports.html use `<section class="card superuser-module">`. The odd
+    one out should become the same as the other two.
 
     --- AND STILL ABSENT ON PURPOSE ---
 
