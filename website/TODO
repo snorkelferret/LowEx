@@ -417,9 +417,12 @@ SECTIONS THE MANUAL STILL NEEDS, carried over from the old stubs so the list is
 not lost with them:
 
   * How to download and install a build, once builds exist
-  * WHAT MAKES A USEFUL BUG REPORT here, and where it should go — the manual
-    documents the button and the automatic who/when, but says nothing about
-    what to write
+  * [WRITTEN 2026-10-02] What makes a useful bug report — now a section of the
+    manual's Testing page. It says what to include (what you did, what you
+    expected, what happened, whether it repeats), what not to do, and which
+    parts are filled in automatically. Note the one it had to correct: the page
+    address is recorded, but NOT what was open on it, so a report about a
+    particular asset has to name it.
   * How comments and bugs are triaged
   * Whether testers see developer replies, and where
   * What a tester should expect between releases

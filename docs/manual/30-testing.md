@@ -40,6 +40,58 @@ say who you are. If you are not, it is recorded anonymously and you can leave an
 email address if you want a reply — optional, because making someone hand over an
 address to report a login fault is a good way to get no reports.
 
+## What makes a useful report
+
+The form asks one open question, so what you write is the whole of it. Three or
+four sentences is usually enough, and there is a shape that makes a report
+possible to act on.
+
+**What you did.** The steps, in order, from something repeatable. *"I opened the
+History tab and clicked Re-run check"* is worth far more than *"the check button
+is broken"*, because somebody else can follow it and see the same thing.
+
+**What you expected.** This is usually obvious to you and invisible to whoever
+reads it, and it is often the whole of the information. *"The upload was
+accepted"* means nothing on its own; *"I expected it to refuse a file that isn't
+really a PNG"* says everything.
+
+**What actually happened**, including anything on screen that looks like an
+error. **Paste it rather than describing it.** A paraphrase loses the one word
+that identifies the problem, and error text is written to be read by exactly the
+person you are sending it to.
+
+**Whether it happens every time**, if you know. A fault that happens once in ten
+attempts is a different problem from one that happens always, and nothing else
+in the report reveals the difference.
+
+### Worth not doing
+
+- **"It's broken."** True, and there is nothing to act on. It costs a round trip
+  to ask what broke, and the answer usually arrives after whoever could have
+  fixed it has moved on.
+- **Describing the fix rather than the fault.** *"The button should be blue"*
+  skips whatever made you want that. Describe what you were trying to do and
+  what stopped you; the fix is somebody else's to choose.
+- **Assuming the reader knows what you were doing.** They do not. They have the
+  page address, which is filled in for you, and nothing else.
+
+### What you do not need to write
+
+**Who you are, and when it happened.** Both are recorded automatically, from
+your session and from the server's clock — so there is no point stating either,
+and no way to get them wrong.
+
+**The page you were on** is recorded too. Note that it records the *page*, not
+what was open on it: if a report is about a particular asset or version, **name
+it**, because the address alone will not say which one you had in front of you.
+
+### If it is an idea rather than a fault
+
+Say what you are trying to achieve, not only what you want built. *"I cannot
+tell which of these two assets is the approved one"* is more useful than *"add a
+green tick"* — the first describes a problem somebody can solve properly, the
+second asks for one particular solution to it.
+
 ## What you cannot do
 
 - **See inside a developer's workspace.** It is private to them, and to nobody
