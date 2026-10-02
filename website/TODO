@@ -1117,7 +1117,7 @@ They MUST be dealt with before any real user data exists.
     The resolve route takes an optional note; use it, because a report closed
     with no record of what was done is barely better than one never read.
 
-    --- NEEDED, AND NEEDS BUILDING FIRST ---
+    --- NEEDED, AND BLOCKED ON SOMETHING ELSE ---
 
     WHO IS LOGGED IN. There is no data behind this today. Login is a stateless
     JWT in a cookie, so the server keeps no record of who holds a live token —
@@ -1134,15 +1134,56 @@ They MUST be dealt with before any real user data exists.
     or "seen in the last N minutes". With a jti-per-login record those are the
     same question; without one, neither can be answered.
 
-    STORAGE USAGE. The data exists: stored_files.file_size, joined through
-    workspace_version_files, is what workspaceUsage() in
-    routes/developerWorkspace.js already sums per workspace, against a quota.
-    What is missing is the admin's view of it — per developer, and in total,
-    with the biggest first. Note the store is CONTENT-ADDRESSED and shared: one
-    file referenced by two workspaces is stored once, so summing per-developer
-    figures will over-count against the real disk usage. Decide which of the
-    two numbers the panel is showing before showing it, because they will not
-    match and somebody will ask why.
+    --- NEEDED, NOTHING IN THE WAY ---
+
+    STORAGE, PER DEVELOPER. The data exists and is already defined the way we
+    agreed: workspaceUsage() in routes/developerWorkspace.js sums a workspace's
+    files against a quota, and workspaceStoredFileIds explicitly EXCLUDES
+    anything that lives in the game store —
+
+        AND wvf.stored_file_id NOT IN (SELECT stored_file_id FROM asset_version_files)
+
+    So this number counts only what the developer owns: nothing shared with the
+    game store counts against them, however many bytes it occupies on disk.
+    Same rule on the way in — shaInGameStore() lets an upload of content the
+    game already holds through without charging the quota. That is the decision,
+    already implemented; the admin panel just needs to display it per developer
+    and biggest-first.
+
+    See WORKSPACE QUOTA AND SOFT DELETE above for the full rule, including the
+    part that is easy to get wrong later: content shared with ANOTHER
+    DEVELOPER'S workspace is NOT excluded, because it is not approved and so is
+    still staging. It counts for both. That is deliberate — conservative, and it
+    stops free-riding.
+
+    STORAGE, IN TOTAL — A DIFFERENT NUMBER, AND A DIFFERENT TOOL. The real
+    question "are we about to run out of disk" is a HARDWARE question, not an
+    accounting one, and the honest answer is df, not a sum of the tables. The
+    per-developer figures above are what each developer is charged; they are not
+    expected to add up to the disk, and they must not be presented as if they
+    should. A file in the game store is charged to nobody and still occupies
+    bytes. Show the filesystem: total, used, available, and percent — on the
+    volume the store is actually on, whether that is a mounted disk, an object
+    store, or somewhere else entirely.
+
+    WARN WHEN IT IS GETTING FULL. Disk, and memory and CPU alongside it, with
+    thresholds that warn on the admin page before anyone notices the hard way.
+    This is the one panel whose job is to be boring until it is urgent, so an
+    alert has to be visible without going looking for it.
+
+    AND IT HAS TO BE READABLE BY CLAUDE. The admin needs to be able to discuss a
+    problem and get help fixing it, which means the state of the system has to
+    come out in a form that can be COPIED AND PASTED into a conversation —
+    structured, complete, no truncation, stable field names, plain text or JSON.
+    A screenshot is not this. Assume whoever pastes it is pasting it verbatim
+    and by hand.
+
+    THAT MAKES ONE REQUIREMENT ABSOLUTE: NO SECRETS IN IT. No password hashes,
+    no tokens, no API keys, no SMTP credentials, no session cookies — nothing
+    that would matter if it ended up in a chat log, a ticket, or a screenshot of
+    a chat log. Redact by construction rather than by remembering: build the
+    report from an explicit list of fields rather than by dumping a table and
+    trimming it, because a dump grows a column the day someone adds one.
 
     --- ALREADY EXISTS, MAY WANT A VIEW ---
 
