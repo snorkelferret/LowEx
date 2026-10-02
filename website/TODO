@@ -1584,3 +1584,85 @@ They MUST be dealt with before any real user data exists.
     A proper delete facility on the admin page may well be what replaces them:
     the same need, but with a confirmation, an audit trail, and no way to run
     it against the wrong database by accident.
+
+
+32) SCHEDULER AND GARBAGE COLLECTION — confirmed needed 2026-10-02.
+
+    NOTHING IN THIS SYSTEM RUNS ON A TIMER. Every operation so far is triggered
+    by a request arriving. That was a simplification while nothing needed a
+    clock; it is now a gap, because the wastebin has a 14-day window and the
+    store has garbage that only collection will free.
+
+    --- THE SCHEDULER ---
+
+    WHAT IT HAS TO RUN, roughly in the order they start to matter:
+
+      * the wastebin purge — see WASTEBIN under WORKSPACE QUOTA AND SOFT DELETE
+      * garbage collection — below
+      * check:store, periodically, so a broken store is FOUND rather than
+        discovered by somebody's download failing
+      * later, whatever the admin page's thresholds need (item 28) — disk,
+        memory and CPU are not much use sampled only when a page is loaded
+
+    DESIGN QUESTIONS, none of them obvious:
+
+      * WHAT MECHANISM. A setInterval in the server process is the least code
+        and dies with the process. An external cron calling an authenticated
+        endpoint survives restarts and leaves a record that it ran. node-cron
+        sits in between. Given the eventual deployment is a self-hosted box,
+        the external cron is probably the most honest: it does not depend on
+        the app being up at the right moment, and a job that runs is
+        distinguishable from a job that silently stopped.
+
+      * MULTIPLE INSTANCES. An in-process timer runs the job once per process.
+        Fine for an idempotent purge, wrong for anything that is not. Decide
+        whether the jobs must be safe to run concurrently or whether something
+        holds a lock — the answer probably differs per job.
+
+      * WHAT HAPPENS WHEN A JOB FAILS. Silently is the wrong answer for a
+        purge. A failed run should be visible — which means the admin page
+        (item 28), and probably the audit log.
+
+      * SHOULD IT ALSO RUN ON START? A box that was off for a month comes back
+        with a month of backlog. Running once at startup is cheap, and stops the
+        first request after a restart being the one that pays for it.
+
+    --- GARBAGE COLLECTION ---
+
+    Confirmed needed. It has TWO HALVES, and they are not equally ready:
+
+      * ORPHAN BLOBS — a file on disk with no stored_files row. THIS ALREADY
+        HAPPENS: it is exactly what check:store found on its first run, a 6-byte
+        file left behind by an incomplete cleanup. Collectable today, and
+        nothing else will ever remove it.
+
+      * UNREFERENCED ROWS — a stored_files row whose content nothing points at,
+        because every workspace_version_files and asset_version_files reference
+        to it is gone. This is the one that frees real space and it cannot occur
+        until the wastebin purge exists to create it.
+
+    SAFETY, repeated from item 31 because it is the whole risk: re-check the
+    references immediately before unlinking, inside the same IMMEDIATE
+    transaction, with no gap for a concurrent upload to slip into; refuse to run
+    at all if check:store reports the store inconsistent; and consider a grace
+    period so a blob written moments ago by an in-flight upload cannot be swept
+    up.
+
+    AND IT SHOULD START REPORT-ONLY. A collector that deletes on its first
+    scheduled run, having never once been watched, is how a store gets emptied
+    by a bug. Run it, log what it WOULD remove, and turn deletion on once its
+    output has been read a few times and matched what was expected.
+
+    --- BUILD ORDER ---
+
+    The chain has a first link that does not exist, so this is not a
+    build-in-any-order set:
+
+      1. deleted_at on workspace_assets and workspace_versions. Nothing can
+         measure a 14-day window without it, and nothing else can start.
+      2. The wastebin: view, restore, and the purge that empties it.
+      3. The scheduler, running the purge.
+      4. Garbage collection, fed by the purge — starting report-only.
+
+    Step 1 is small and unblocks everything after it. Steps 3 and 4 are the only
+    genuinely new machinery here; the rest is more of what already exists.
