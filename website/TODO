@@ -1295,3 +1295,83 @@ They MUST be dealt with before any real user data exists.
     address is wanted for anonymous reports, and who reads them — most likely
     the same admin pages as item 28, which is another reason the two want
     building together.
+
+
+30) THE SHA STORE — audited 2026-10-02. One hole found, and it is not in the
+    upload path.
+
+    There is one and only one copy of any SHA-256 in the project, and the audit
+    confirms the code holds that line. What follows is what was checked, so the
+    next person does not have to re-derive it, and the one thing that is
+    genuinely dangerous.
+
+    --- VERIFIED SOUND ---
+
+    * Exactly ONE place inserts into stored_files (the upload route). NOTHING
+      DELETES FROM IT — there is no DELETE anywhere in the codebase — so a row
+      can never be removed out from under a reference.
+
+    * The hash is computed SERVER-SIDE from the bytes on disk, by streaming the
+      temp file. It is never taken from the client, so a caller cannot claim a
+      SHA that its content does not have.
+
+    * storage_key IS the sha256, and the download route validates it as 64
+      lowercase hex before building a path from it. Nothing client-supplied
+      touches that path.
+
+    * New content is created with linkSync, which FAILS if the name exists
+      rather than overwriting. Two uploads of the same new content cannot
+      silently produce two files.
+
+    * The upload transaction is IMMEDIATE, so it takes the write lock at the
+      start. better-sqlite3 is synchronous, so a second upload cannot interleave
+      between the "is it in stored_files?" read and the insert.
+
+    * Acceptance into the game store copies REFERENCES (INSERT ... SELECT from
+      workspace_version_files), never the physical records. That is the
+      mechanism behind the one-copy rule, and it is correct.
+
+    * A row whose blob has gone missing is REPAIRED on the next upload of
+      identical content, and a stray file at a new path is replaced rather than
+      trusted.
+
+    --- THE HOLE: NOTHING CHECKS THE DISK AGAINST THE DATABASE ---
+
+    The database and the filesystem are two things and nothing enforced that
+    they agree. A blob could be lost, or its contents corrupted, and the system
+    would not notice until somebody tried to download it.
+
+    check:store now does. `npm run check:store` verifies, in order of how much
+    each matters: that every blob's bytes actually hash to the name it is stored
+    under (content addressing intact — the one that matters most, since a file
+    whose contents stopped matching its name means every reference serves the
+    wrong thing); that no row is missing its blob; that no blob is without a
+    row; and that the recorded file_size matches the disk. Read-only, so it is
+    safe against a live database. --quick skips the re-hashing on a big store.
+
+    IT FOUND ONE IMMEDIATELY, on its first run against the live store: a 6-byte
+    orphan blob left by MY OWN cleanup after an upload test. The cleanup looked
+    for a sharded path (uploads/<ab>/<sha>) and the store is FLAT
+    (uploads/files/<sha>), so it deleted the row and left the file. Which is
+    the whole argument for the check existing — that class of mistake is
+    invisible without it, and I made it within a day.
+
+    Suggested: run it before a backup and after any incident. Worth wiring into
+    the admin page later (item 28) as the storage-health panel.
+
+    --- STILL OPEN ---
+
+    * THE RESET SCRIPTS ARE UNGUARDED. backend/reset/resetAssetData.js deletes
+      every asset table AND every file in the store, with NO confirmation, no
+      dry run and no environment check. Its own comment records that a path bug
+      once made it delete every stored_files row while reporting "nothing to
+      delete", orphaning the physical files it had just untracked. That is the
+      exact failure mode this item exists to prevent, and it has already
+      happened once. These need a confirmation prompt, a printed summary of
+      what will be destroyed, and a refusal unless the paths resolve inside the
+      project.
+
+    * A lost blob is only repaired by someone re-uploading identical content.
+      check:store detects it; nothing repairs it. Acceptable while the store is
+      small and rebuildable; worth revisiting before it is the only copy of
+      anything that matters.

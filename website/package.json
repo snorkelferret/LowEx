@@ -9,6 +9,7 @@
     "check:schema": "node scripts/check-schema-drift.js",
     "check:naming": "node scripts/check-naming.js",
     "check:dom": "node scripts/check-dom-ids.js",
+    "check:store": "node scripts/check-store.js",
     "predev": "npm run generate:pages",
     "prebuild": "npm run generate:pages",
     "build": "vite build",
