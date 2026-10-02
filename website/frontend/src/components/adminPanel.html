@@ -34,51 +34,88 @@
      get it, which is the same reason the accounts logic lives in a shared file.
      ============================================================ -->
 
-<!-- The utility bar for the admin pages, at the top of the first panel.
-     Empty here on purpose — see frontend/src/utilityBar.js. On the superuser
-     dashboard both this and developerPanel render one, and that module keeps
-     the first and drops the rest. -->
-<div class="d-flex justify-content-end mb-4">
+<!-- The page heading, with the utility bar beside it — the same shape as the
+     developer page, which is what these pages are being brought into line
+     with.
+
+     THIS PANEL IS ON BOTH DASHBOARDS, and it owns the heading, the utility bar
+     and the tabs for each. The superuser dashboard adds three panels of its own
+     below, and they appear as tabs without this file naming them: the nav lists
+     every section and frontend/src/adminTabs.js removes the entries whose
+     section is not on the page.
+
+     The utility bar is EMPTY here on purpose — see frontend/src/utilityBar.js
+     for why its contents are built rather than written out. -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <h1 class="mb-0">Administration</h1>
+
   <div class="utility-bar" data-utility-bar></div>
 </div>
 
-<nav class="admin-menu mb-4" aria-label="Admin sections">
-  <ul class="nav nav-pills flex-wrap gap-1">
+<!-- TABS, NOT ANCHORS. These were scrolled-to links on one long page; the tabs
+     are the same navigation the developer page uses. See adminTabs.js for why
+     the switching is done by id rather than by Bootstrap's tab markup.
 
-    <li class="nav-item">
-      <a class="nav-link" href="#admin-panel-module">Accounts</a>
+     Repository and Cloudflare are superuser-only, so their entries disappear on
+     the admin dashboard along with the sections they point at. -->
+<nav class="mb-4" aria-label="Admin sections">
+  <ul class="nav nav-tabs flex-wrap" id="adminTabs" role="tablist">
+
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-section="admin-panel-module" role="tab">
+        Accounts
+      </button>
     </li>
 
-    <li class="nav-item">
-      <a class="nav-link" href="#dev-invites-module">Invites</a>
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-section="dev-invites-module" role="tab">
+        Invites
+      </button>
     </li>
 
-    <li class="nav-item">
-      <a class="nav-link" href="#admin-reports-module">Reports</a>
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-section="admin-reports-module" role="tab">
+        Reports
+      </button>
     </li>
 
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-not-built="admin.sessions" data-todo="28">
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-section="repo-control-module" role="tab">
+        Repository
+      </button>
+    </li>
+
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-section="cloudflare-control-module" role="tab">
+        Cloudflare
+      </button>
+    </li>
+
+    <!-- NOT BUILT. No data-section, so the tab switcher leaves them alone and
+         notBuilt.js reports them as missing when clicked. A tab that switched
+         to an empty pane would read as a broken page. -->
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-not-built="admin.sessions" data-todo="28">
         Sessions
-      </a>
+      </button>
     </li>
 
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-not-built="admin.storage" data-todo="28">
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-not-built="admin.storage" data-todo="28">
         Storage
-      </a>
+      </button>
     </li>
 
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-not-built="admin.health" data-todo="28">
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-not-built="admin.health" data-todo="28">
         Health
-      </a>
+      </button>
     </li>
 
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-not-built="admin.audit" data-todo="28">
+    <li class="nav-item" role="presentation">
+      <button type="button" class="nav-link" data-not-built="admin.audit" data-todo="28">
         Audit log
-      </a>
+      </button>
     </li>
 
   </ul>

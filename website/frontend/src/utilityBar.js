@@ -23,11 +23,13 @@
 // `<div class="utility-bar" data-utility-bar></div>` and nothing else; what
 // goes in it is built here, once.
 //
-// ONE BAR PER PAGE. The superuser dashboard carries both adminPanel and
-// developerPanel, so both render a placeholder. The first is kept — it is the
-// one at the top — and the rest are removed. They are marked with a DATA
-// attribute rather than an id precisely so the markup is not invalid before
-// this runs.
+// ONE BAR PER PAGE, and exactly one placeholder is expected today — but the
+// FIRST is kept and any others removed, because a spare placeholder left in a
+// component does not fail loudly: it renders as a small empty box with a border
+// around it, which looks like a broken control rather than a mistake.
+//
+// Marked with a DATA attribute rather than an id precisely so that a page
+// carrying two is not invalid HTML before this runs.
 
 const BAR_SELECTOR = '[data-utility-bar]';
 

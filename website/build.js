@@ -13,7 +13,8 @@ const pageConfigurations = [
       './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
       './src/adminReports.js',    // Reports - shared the same way
       './src/feedback.js',        // Report-a-problem button. Builds its own markup.
-      './src/utilityBar.js',     // The utility bar: manual, and whatever else a page adds
+      './src/utilityBar.js',      // The utility bar: manual, and whatever else a page adds
+      './src/adminTabs.js',       // The admin sections, switched by id
       './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
@@ -21,8 +22,11 @@ const pageConfigurations = [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',
       'frontend/src/components/devInvites.html',
-      'frontend/src/components/adminReports.html', 
-      'frontend/src/components/developerPanel.html',
+      'frontend/src/components/adminReports.html',
+      // developerPanel is NOT here. It renders the DEVELOPER page's heading and
+      // utility bar, and on this dashboard it printed a stray "Developer Panel"
+      // heading that had nothing to do with anything on it. The admin panel
+      // supplies this page's heading and utility bar itself.
       'frontend/src/components/repoControl.html',
       'frontend/src/components/cloudflareControl.html',
       'frontend/src/components/loginModal.html',
@@ -38,7 +42,8 @@ const pageConfigurations = [
       './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
       './src/adminReports.js',    // Reports - shared the same way
       './src/feedback.js',        // Report-a-problem button
-      './src/utilityBar.js',     // The utility bar: manual, and whatever else a page adds
+      './src/utilityBar.js',      // The utility bar: manual, and whatever else a page adds
+      './src/adminTabs.js',       // The admin sections, switched by id
       './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
