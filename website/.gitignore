@@ -69,3 +69,13 @@ backend/generated/
 
 # Stray empty directory at the repo root, superseded by frontend/dist.
 /dist/
+
+# Scratch space, for things that are thrown away as soon as they are made —
+# screenshots, DOM dumps, test fixtures.
+#
+# IN HERE AND NOT IN /tmp, deliberately. /tmp is outside the project, so
+# anything left there is invisible: you would only find it by going looking, and
+# you could not tell at a glance which files were mine and which were yours.
+# Here, it is obviously scratch, obviously disposable, and it is cleared out
+# rather than accumulating.
+.tmp/
