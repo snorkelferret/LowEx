@@ -84,6 +84,59 @@ Run them after a migration and before a backup. `check:store` is the one to
 trust when something looks wrong — it re-hashes every stored file and will tell
 you if any content no longer matches its own name.
 
+## The daily job
+
+One script, run from cron. It does two things in order, because the second
+feeds on the first:
+
+1. **Empties expired bins.** Anything deleted more than 14 days ago loses its
+   files. The version and everything that happened to it stay.
+2. **Collects unreferenced content.** Blobs nothing points at any more lose
+   their row and their file. This is what actually frees disk.
+
+```bash
+node backend/jobs/daily.js
+```
+
+**Put it in cron, do not run it by hand.** A job nobody schedules is a job that
+does not happen: deleted work would pile up in bins for ever and the disk would
+only ever grow.
+
+```cron
+# once a day, at a time nobody is waiting for anything
+17 4 * * *  cd /path/to/website && node backend/jobs/daily.js >> /var/log/lowex-daily.log 2>&1
+```
+
+Cron is deliberate rather than a timer inside the server. A timer dies with the
+process, would run once per instance if there were ever two, and leaves no
+record. Cron leaves a log — so "it silently stopped six weeks ago" is something
+you can find, rather than discover when the disk fills.
+
+### The flags
+
+| | |
+|---|---|
+| *(none)* | Empties bins, and **reports** what collection would remove without removing it |
+| `--collect` | Collection actually removes content |
+| `--dry-run` | Changes nothing at all; says what would happen |
+
+**Collection does not delete by default, on purpose.** It is the only thing in
+this system that can destroy content outright, and a collector that starts
+deleting on its first run — having never been watched — is how a store gets
+emptied by a bug. Run it plain for a week, read what it says it *would* remove,
+then add `--collect`.
+
+It also refuses to collect at all if the store is inconsistent, and will not
+touch anything written in the last 24 hours. Bins still empty either way: the
+two halves depend on different things, and a store problem should not stop
+deleted work being cleaned up.
+
+### If it fails
+
+It exits non-zero and prints why. Collection refusing is *not* a failure — it is
+the safety catch working, and the fix is to run `npm run check:store`, deal with
+what it reports, and let the next run collect.
+
 ## When something is wrong
 
 - **The server will not start.** Almost always a missing `JWT_SECRET`. It says

@@ -5,6 +5,8 @@ const router = express.Router();
 const db = require('../db');
 const audit = require('../lib/audit');
 const { RETENTION_DAYS, retentionFor } = require('../lib/retention');
+// The purge itself lives in lib/, because the daily job runs the same one.
+const { purgeVersionFiles } = require('../lib/wastebin');
 const {
     authenticateToken,
     requireRole
@@ -893,56 +895,6 @@ router.delete(
 // hashes, so the version still says what it was made of. Names and hashes only
 // — if it ever starts holding content, the point has been undone.
 // ============================================================
-
-function purgeVersionFiles(versionId, actorId) {
-    const files = db.prepare(`
-        SELECT
-            wvf.filename,
-            wvf.relative_path,
-            sf.file_size,
-            sf.sha256
-        FROM workspace_version_files wvf
-        JOIN stored_files sf ON sf.id = wvf.stored_file_id
-        WHERE wvf.workspace_version_id = ?
-        ORDER BY COALESCE(wvf.relative_path, '') COLLATE NOCASE, wvf.filename COLLATE NOCASE
-    `).all(versionId);
-
-    const manifest = files.map(file => ({
-        filename: file.filename,
-        path: file.relative_path || null,
-        size: file.file_size,
-        sha256: file.sha256,
-    }));
-
-    const bytes = files.reduce((total, file) => total + (file.file_size || 0), 0);
-
-    const purge = db.transaction(() => {
-        db.prepare(`
-            DELETE FROM workspace_version_files
-            WHERE workspace_version_id = ?
-        `).run(versionId);
-
-        db.prepare(`
-            UPDATE workspace_versions
-            SET
-                files_purged_at = COALESCE(files_purged_at, CURRENT_TIMESTAMP),
-                purged_file_manifest = ?
-            WHERE id = ?
-        `).run(JSON.stringify(manifest), versionId);
-
-        audit.record(
-            actorId,
-            'workspace_version.purge',
-            `workspace_version:${versionId}`,
-            { files: manifest.length, bytes }
-        );
-    });
-
-    purge();
-
-    return { files: manifest.length, bytes };
-}
-
 
 // ============================================================
 // POST /api/developer/workspace/assets/:assetId/versions/:versionId/purge
