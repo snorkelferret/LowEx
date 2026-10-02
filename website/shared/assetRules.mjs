@@ -51,24 +51,63 @@
 // or a folder?". Writing the extensions out twice would guarantee the two
 // drifted, so the reserved set is DERIVED from here. One list, two questions.
 //
+// ORDERED FOR GAME DEVELOPMENT FIRST — engines, then the tools that feed them,
+// then the interchange and file formats around them. The order carries no
+// behaviour; it is here so that the common case is at the top of the list for
+// whoever has to read or extend it.
+//
+// WHICH EXTENSIONS ARE IN, AND WHY. Only formats a game studio plausibly meets.
+// The set is drawn from what the engines and marketplaces actually accept —
+// Epic's Fab asset requirements and Unity's import list are the two most
+// concrete published sources — rather than from a generic "file extensions"
+// dump, which would add hundreds of formats nobody in this pipeline will ever
+// upload and make the list harder to trust.
+//
+// NOT INCLUDED, deliberately: tracker audio (.mod .xm .it .s3m), CAD (.dwg),
+// and legacy web 3D (.wrl .x3d). All real, none common in production, and every
+// extension added is one more name that stops being usable as an asset name.
+//
 // Extensions are written without the dot, lowercase.
 const ASSET_TYPE_EXTENSIONS = {
-    Blender:    ['blend'],
-    Nuke:       ['nk'],
-    Maya:       ['ma', 'mb'],
-    Unreal:     ['uasset', 'umap', 'upk', 'uproject'],
-    Substance:  ['sbsar'],
-    '3D model': ['fbx', 'obj', 'abc', 'usd', 'usda', 'usdc',
-                 'glb', 'gltf', 'dae', 'stl', 'ply'],
-    Image:      ['png', 'jpg', 'jpeg', 'tga', 'exr', 'tif', 'tiff', 'psd',
-                 'hdr', 'dds', 'bmp', 'gif', 'svg', 'webp', 'ico'],
-    Video:      ['mp4', 'mov', 'avi', 'mkv'],
-    Audio:      ['wav', 'mp3', 'ogg', 'flac'],
-    Document:   ['pdf', 'txt', 'md', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'rtf'],
-    Archive:    ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'],
-    Code:       ['js', 'mjs', 'cjs', 'json', 'py', 'cpp', 'h', 'hpp', 'cs',
-                 'ini', 'cfg', 'toml', 'yaml', 'yml', 'xml', 'sh', 'bat', 'ps1'],
-    Other:      ['exe', 'dll', 'so', 'db', 'sqlite', 'log'],
+
+    // ---- game engines ----
+    Unreal:      ['uasset', 'umap', 'upk', 'uproject'],
+    Unity:       ['unity', 'unitypackage', 'prefab', 'meta'],
+
+    // ---- the tools assets are made in ----
+    Blender:     ['blend'],
+    Maya:        ['ma', 'mb'],
+    '3ds Max':   ['max', '3ds'],
+    'Cinema 4D': ['c4d'],
+    Houdini:     ['hip', 'hipnc', 'hiplc', 'hda', 'bgeo', 'vdb'],
+    ZBrush:      ['ztl', 'zpr', 'zbr'],
+    Substance:   ['sbsar', 'spp', 'sbs'],
+    Nuke:        ['nk'],
+    Modo:        ['lxo'],
+    LightWave:   ['lwo'],
+
+    // ---- 3D interchange ----
+    '3D model':  ['fbx', 'obj', 'abc', 'usd', 'usda', 'usdc', 'usdz',
+                  'glb', 'gltf', 'dae', 'stl', 'ply', 'dxf'],
+
+    // ---- textures and images ----
+    Image:       ['png', 'jpg', 'jpeg', 'tga', 'exr', 'hdr', 'tif', 'tiff',
+                  'psd', 'psb', 'dds', 'bmp', 'gif', 'svg', 'webp', 'ico',
+                  // compressed formats the engines actually ship
+                  'ktx', 'ktx2', 'astc', 'basis', 'pvr', 'crn'],
+
+    Video:       ['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'mpg', 'mpeg',
+                  'm4v'],
+    Audio:       ['wav', 'mp3', 'ogg', 'flac', 'aif', 'aiff', 'opus', 'm4a'],
+    Font:        ['ttf', 'otf', 'woff', 'woff2', 'fnt'],
+
+    Document:    ['pdf', 'txt', 'md', 'doc', 'docx', 'xls', 'xlsx', 'pptx',
+                  'odt', 'ods', 'odp', 'csv', 'rtf'],
+    Archive:     ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz'],
+    Code:        ['js', 'mjs', 'cjs', 'json', 'py', 'cpp', 'h', 'hpp', 'cs',
+                  'ini', 'cfg', 'toml', 'yaml', 'yml', 'xml', 'sh', 'bat',
+                  'ps1'],
+    Other:       ['exe', 'dll', 'so', 'db', 'sqlite', 'log'],
 };
 
 // A name ending in one of these is a file, not an asset or a directory. Kept as

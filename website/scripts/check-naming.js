@@ -267,6 +267,44 @@ check('an unknown extension is null, not a guess',
 check('a dotted NAME that is not an extension is still null',
     N.assetTypeOf('tree.v2') === null);
 
+// The game-development formats, which is what the list is ordered and chosen
+// for. These are the ones a studio actually meets; if one of these stops
+// resolving, the list has been edited badly.
+check('engine formats resolve',
+    N.assetTypeOf('hero.uasset') === 'Unreal' &&
+    N.assetTypeOf('level.umap') === 'Unreal' &&
+    N.assetTypeOf('Player.prefab') === 'Unity' &&
+    N.assetTypeOf('main.unity') === 'Unity' &&
+    N.assetTypeOf('pack.unitypackage') === 'Unity');
+
+check('the tools assets are made in resolve',
+    N.assetTypeOf('rock.max') === '3ds Max' &&
+    N.assetTypeOf('scene.c4d') === 'Cinema 4D' &&
+    N.assetTypeOf('sim.hip') === 'Houdini' &&
+    N.assetTypeOf('smoke.vdb') === 'Houdini' &&
+    N.assetTypeOf('head.ztl') === 'ZBrush' &&
+    N.assetTypeOf('skin.spp') === 'Substance' &&
+    N.assetTypeOf('rig.ma') === 'Maya');
+
+check('shipped texture formats resolve, not just the source ones',
+    N.assetTypeOf('sky.ktx2') === 'Image' &&
+    N.assetTypeOf('atlas.astc') === 'Image' &&
+    N.assetTypeOf('ui.png') === 'Image',
+    'ktx2/astc are what the engines actually ship');
+
+// The exclusions are a decision, not an oversight — "most commonly used" was
+// the instruction, and these are real formats that are not. Each one added is
+// another name that stops being usable as an asset name.
+check('commonly-unused formats are deliberately NOT in the list',
+    N.assetTypeOf('song.xm') === null &&
+    N.assetTypeOf('plan.dwg') === null &&
+    N.assetTypeOf('scene.wrl') === null,
+    'tracker audio, CAD, legacy web 3D');
+
+check('the list stays a list a person can read',
+    N.RESERVED_EXTENSIONS.size < 200,
+    `${N.RESERVED_EXTENSIONS.size} extensions`);
+
 // ------------------------------------------------------- feedback rules
 
 console.log('\n  -- feedback rules --');

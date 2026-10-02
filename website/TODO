@@ -1974,6 +1974,22 @@ They MUST be dealt with before any real user data exists.
     ("Blender"); mixed content reports "Blender, Image" and leaves the column
     alone; an unknown extension fails the run and names the file.
 
+    WHICH EXTENSIONS, AND WHERE THEY CAME FROM. 131 extensions across 21 types,
+    drawn from what the engines and marketplaces actually accept rather than
+    from a generic "file extensions" dump — Epic's Fab asset requirements and
+    Unity's import list are the two most concrete published sources. Ordered
+    GAME DEVELOPMENT FIRST: engines, then the tools that feed them, then the
+    interchange and file formats around them.
+
+    The order carries no behaviour; it is there so the common case sits at the
+    top for whoever extends it next.
+
+    DELIBERATELY EXCLUDED, and it is a decision worth keeping: tracker audio
+    (.mod .xm .it .s3m), CAD (.dwg), and legacy web 3D (.wrl .x3d). All real
+    formats, none common in production — and every extension added is another
+    name that stops being usable as an asset name. check:naming asserts the
+    exclusions stay excluded, so a later bulk-import cannot quietly undo it.
+
     STILL OPEN: it identifies by EXTENSION only. That is the cheap and reliable
     half, and it cannot catch a file whose extension lies about its contents —
     a renamed .exe, or an exported asset with the wrong suffix. Content sniffing
