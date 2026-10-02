@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const db = require('../db');
+const audit = require('../lib/audit');
 const {
     authenticateToken,
     requireRole
@@ -19,7 +20,8 @@ const {
     classifyFolderName,
     matchAssetName,
     deriveUploadRoot,
-    isBackupFile
+    isBackupFile,
+    normaliseCategory
 } = require('../../shared/assetRules.mjs');
 
 
@@ -199,6 +201,7 @@ router.get(
                     id,
                     name,
                     asset_type,
+                    category,
                     description,
                     created_at,
                     updated_at,
@@ -339,6 +342,125 @@ router.get(
         }
     }
 );
+
+
+// ============================================================
+// POST /api/developer/workspace/assets/:assetId/category
+// ============================================================
+//
+// Sets which part of the game an asset belongs to.
+//
+// WHO: admin and superuser. NOT the developer — they set it at upload, and
+// re-uploading with a different value updates it (the upload path COALESCEs it).
+// Whether a developer should also be able to retag their own asset without
+// re-uploading is an open question; it is not granted here because it was not
+// asked for, and every extra actor on a shared field is another way for two
+// people to disagree about what something is.
+//
+// THIS IS A DELIBERATE EXCEPTION to "admins only reach inside a workspace by
+// impersonation". It is narrow on purpose, and worth stating plainly:
+//
+//   * it writes ONE column on ONE row;
+//   * it reads nothing — no filenames, no versions, no file contents;
+//   * it is audit-logged, so a retag is never anonymous.
+//
+// The impersonation rule exists so an admin cannot quietly browse someone's
+// sandbox. This does not let them browse it; it lets them correct a label on
+// something they are already responsible for classifying. If that reasoning
+// stops holding — if this grows an argument for reading the asset to decide —
+// it has stopped being this route and should go through impersonation instead.
+//
+// The value is a HINT, not a constraint: anything off the list is stored as
+// given rather than refused, and an empty value clears the category. See
+// normaliseCategory in shared/assetRules.mjs.
+// ============================================================
+
+router.post(
+    '/assets/:assetId/category',
+    authenticateToken,
+    requireRole('admin', 'superuser'),
+
+    async (req, res) => {
+        const actor = req.user;
+        const assetId = Number(req.params.assetId);
+
+        if (!Number.isInteger(assetId)) {
+            return res.status(400).json({ error: 'Invalid asset ID' });
+        }
+
+        if (!req.body || !('category' in req.body)) {
+            return res.status(400).json({
+                error: 'A category is required. Send an empty value to clear it.'
+            });
+        }
+
+        const category = normaliseCategory(req.body.category);
+
+        try {
+            const asset = db.prepare(`
+                SELECT
+                    wa.id,
+                    wa.name,
+                    wa.category,
+                    wa.workspace_id
+                FROM workspace_assets wa
+                WHERE wa.id = ?
+                  AND wa.is_active = 1
+            `).get(assetId);
+
+            if (!asset) {
+                return res.status(404).json({ error: 'Workspace asset not found' });
+            }
+
+            // Nothing to do, and nothing to record. Saying so is more useful
+            // than a silent success that leaves no trace in the audit log.
+            if ((asset.category || null) === category) {
+                return res.json({
+                    asset_id: asset.id,
+                    name: asset.name,
+                    category,
+                    changed: false
+                });
+            }
+
+            db.transaction(() => {
+                db.prepare(`
+                    UPDATE workspace_assets
+                    SET
+                        category = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).run(category, asset.id);
+
+                audit.record(
+                    actor.id,
+                    'workspace_asset.set_category',
+                    asset.name,
+                    {
+                        workspace_asset_id: asset.id,
+                        from: asset.category || null,
+                        to: category
+                    }
+                );
+            })();
+
+            return res.json({
+                asset_id: asset.id,
+                name: asset.name,
+                category,
+                changed: true
+            });
+
+        } catch (err) {
+            console.error('Failed to set the asset category:', err);
+
+            return res.status(500).json({
+                error: 'Failed to set the asset category'
+            });
+        }
+    }
+);
+
 
 // ============================================================
 // DELETE /api/developer/workspace/assets/:assetId
@@ -680,6 +802,7 @@ router.get(
                         ca.repository_version_id,
                         wa.name            AS asset_name,
                         wa.asset_type      AS asset_type,
+                        wa.category        AS category,
                         wv.version_number  AS version_number,
                         wv.version_note    AS version_note,
                         wv.creative_locked AS version_locked,
@@ -706,6 +829,7 @@ router.get(
                         ca.repository_version_id,
                         wa.name            AS asset_name,
                         wa.asset_type      AS asset_type,
+                        wa.category        AS category,
                         wv.version_number  AS version_number,
                         wv.version_note    AS version_note,
                         wv.creative_locked AS version_locked,
@@ -836,7 +960,8 @@ function filesForVersion(assetId, versionId, user) {
             wv.repository_version_id,
             wa.id   AS asset_id,
             wa.name AS asset_name,
-            wa.asset_type
+            wa.asset_type,
+            wa.category
         FROM workspace_versions wv
         JOIN workspace_assets wa     ON wa.id = wv.workspace_asset_id
         JOIN developer_workspaces dw ON dw.id = wa.workspace_id
@@ -939,7 +1064,8 @@ router.get(
                 asset: {
                     id: version.asset_id,
                     name: version.asset_name,
-                    asset_type: version.asset_type
+                    asset_type: version.asset_type,
+                    category: version.category
                 },
                 version: {
                     id: version.id,
@@ -1308,6 +1434,13 @@ router.post(
 
             const assetType =
                 String(req.body.asset_type || '').trim();
+
+            // Which part of the game this belongs to. Normalised here so the
+            // stored spelling is always canonical; an unknown value becomes
+            // null rather than an error, because "no category yet" is a normal
+            // state for an asset and refusing the upload over a label would be
+            // a worse outcome than the label being blank.
+            const category = normaliseCategory(req.body.category);
 
             const description =
                 String(req.body.description || '').trim();
@@ -1889,13 +2022,15 @@ router.post(
                                     workspace_id,
                                     name,
                                     asset_type,
+                                    category,
                                     description
                                 )
-                                VALUES (?, ?, ?, ?)
+                                VALUES (?, ?, ?, ?, ?)
                             `).run(
                                 workspace.id,
                                 assetName,
                                 assetType || null,
+                                category,
                                 description || null
                             );
 
@@ -1905,6 +2040,7 @@ router.post(
                                     id,
                                     name,
                                     asset_type,
+                                    category,
                                     description,
                                     created_at,
                                     updated_at,
@@ -1960,6 +2096,9 @@ router.post(
                                     asset_type =
                                         COALESCE(?, asset_type),
 
+                                    category =
+                                        COALESCE(?, category),
+
                                     description =
                                         COALESCE(?, description),
 
@@ -1969,6 +2108,7 @@ router.post(
                                 WHERE id = ?
                             `).run(
                                 assetType || null,
+                                category,
                                 description || null,
                                 asset.id
                             );
@@ -1979,6 +2119,7 @@ router.post(
                                     id,
                                     name,
                                     asset_type,
+                                    category,
                                     description,
                                     created_at,
                                     updated_at,
@@ -3179,6 +3320,7 @@ router.post(
 
                         wa.name AS workspace_asset_name,
                         wa.asset_type AS workspace_asset_type,
+                        wa.category AS workspace_asset_category,
                         wa.description AS workspace_asset_description,
 
                         wv.version_number,
@@ -3264,6 +3406,27 @@ router.post(
                             );
                         }
 
+
+                        // --------------------------------------------
+                        // Carry the category across.
+                        //
+                        // COALESCE so an acceptance never clears a
+                        // category the repository already has: the
+                        // sandbox value fills a blank, and a sandbox
+                        // asset the developer never categorised
+                        // leaves whatever was there alone.
+                        // --------------------------------------------
+
+                        db.prepare(`
+                            UPDATE assets
+                            SET category =
+                                COALESCE(?, category)
+                            WHERE id = ?
+                        `).run(
+                            approval.workspace_asset_category || null,
+                            repositoryAsset.id
+                        );
+
                     } else {
 
                         // --------------------------------------------
@@ -3295,12 +3458,14 @@ router.post(
                                 INSERT INTO assets (
                                     name,
                                     asset_type,
+                                    category,
                                     description
                                 )
-                                VALUES (?, ?, ?)
+                                VALUES (?, ?, ?, ?)
                             `).run(
                                 approval.workspace_asset_name,
                                 approval.workspace_asset_type || null,
+                                approval.workspace_asset_category || null,
                                 approval.workspace_asset_description || null
                             );
 

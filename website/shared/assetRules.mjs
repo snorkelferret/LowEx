@@ -19,9 +19,9 @@
 // test asserting the two agreed. A test that catches divergence is a poor
 // substitute for not having two copies to diverge.
 
-// backend/lib/assetNaming.js
-//
-// Deriving an asset name and version from the folder a developer uploads.
+// ---------------------------------------------------------------------------
+// Deriving an asset name and version from the folder a developer uploads
+// ---------------------------------------------------------------------------
 //
 // See docs/uploadmodel01 for the model. The short version:
 //
@@ -314,10 +314,71 @@ function deriveUploadRoot(filePaths) {
     return roots.size === 1 ? [...roots][0] : null;
 }
 
+// ---------------------------------------------------------------------------
+// Content category
+// ---------------------------------------------------------------------------
+//
+// Which part of the game the asset belongs to. This is the one question about an
+// asset that ONLY A HUMAN CAN ANSWER, which is why it is asked — unlike the old
+// "asset type" field, which asked the developer to restate what the file
+// extension already said (Maya, Blender, Nuke are tools, and the file type
+// verifier reads them off the file).
+//
+// DELIBERATELY NOT A CHECK CONSTRAINT. The old asset_type column was a CHECK,
+// and the CHECK could not be altered, so changing the list meant a full 12-step
+// table rebuild — twice. This list will grow. Keeping it here means adding a
+// category is a one-line edit with no migration, and the column stays free text.
+//
+// The list is the industry's usual content-domain split — what a studio would
+// put on the top of an asset browser. It is deliberately flat and short: a
+// taxonomy nobody uses is worse than no taxonomy, because it produces wrong
+// answers with confidence.
+const ASSET_CATEGORIES = [
+    'Character',
+    'Environment',
+    'Prop',
+    'Vehicle',
+    'Weapon',
+    'FX',
+    'Audio',
+    'UI',
+    'Other',
+];
+
+// The list above is a HINT, not a constraint.
+//
+// So this guides rather than enforces, in both directions:
+//
+//   * a value that matches the list is stored under its canonical spelling, so
+//     a client sending "prop" does not create a second category that reads
+//     identically in a list;
+//   * a value that does NOT match is kept as-is rather than thrown away.
+//
+// That second half is deliberate and is the difference between a hint and a
+// constraint. Silently discarding a name someone chose is worse than storing an
+// untidy one — they would set it, see it vanish, and have no way to tell why.
+// An asset is allowed to carry a category nobody else uses, and is allowed to
+// carry none at all.
+//
+// Empty and whitespace-only become null, which is the one value meaning
+// "not categorised yet".
+function normaliseCategory(value) {
+    const wanted = String(value ?? '').trim();
+    if (!wanted) return null;
+
+    const known = ASSET_CATEGORIES.find(
+        c => c.toLowerCase() === wanted.toLowerCase()
+    );
+
+    return known || wanted;
+}
+
 export {
     RESERVED_EXTENSIONS,
     NEAR_MATCH_MAX_DISTANCE,
     BACKUP_PATTERNS,
+    ASSET_CATEGORIES,
+    normaliseCategory,
     extensionOf,
     parseAssetName,
     classifyFolderName,

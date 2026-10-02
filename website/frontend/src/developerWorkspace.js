@@ -1,10 +1,100 @@
 // frontend/src/developerWorkspace.js
 
 // The same rules the server uses. shared/ is the one copy.
-import { isBackupFile } from '../../shared/assetRules.mjs';
+import {
+    isBackupFile,
+    ASSET_CATEGORIES,
+    normaliseCategory,
+} from '../../shared/assetRules.mjs';
 import { $, escapeHtml, formatFileSize } from './utils.js';
 
 const API_URL = '/api/developer/workspace';
+
+// The sentinel for the free-text escape hatch. A value starting with "__" is
+// never a real category, so it cannot collide with one someone types.
+const OTHER_CATEGORY = '__other__';
+
+// Builds the category select from the shared list rather than writing the
+// options into the HTML, so the choices and the rule that validates them cannot
+// drift apart.
+function fillCategoryOptions() {
+    const select = $('assetCategory');
+    if (!select) return;
+
+    const options = [
+        '<option value="">Not set</option>',
+        ...ASSET_CATEGORIES.map(
+            c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`
+        ),
+        `<option value="${OTHER_CATEGORY}">Other…</option>`,
+    ];
+
+    select.innerHTML = options.join('');
+
+    // "Other…" is a dead end without a box to type in, so reveal one.
+    select.addEventListener('change', () => {
+        const other = $('assetCategoryOther');
+        if (!other) return;
+
+        const isOther = select.value === OTHER_CATEGORY;
+        other.classList.toggle('d-none', !isOther);
+
+        if (isOther) {
+            other.focus();
+        } else {
+            other.value = '';
+        }
+    });
+}
+
+// What the developer actually chose, whichever of the two controls holds it.
+function readCategory() {
+    const select = $('assetCategory');
+    if (!select) return '';
+
+    if (select.value === OTHER_CATEGORY) {
+        return ($('assetCategoryOther')?.value || '').trim();
+    }
+
+    return select.value;
+}
+
+// Shows a stored category in the controls.
+//
+// A value that is NOT in the list is shown in the "Other…" box rather than
+// being dropped — the column is free text, and an admin can set something the
+// list does not contain. Rendering that as blank would look like the category
+// had been lost.
+function setCategoryValue(value) {
+    const select = $('assetCategory');
+    const other = $('assetCategoryOther');
+    if (!select || !other) return;
+
+    const wanted = String(value ?? '').trim();
+
+    if (!wanted) {
+        select.value = '';
+        other.value = '';
+        other.classList.add('d-none');
+        return;
+    }
+
+    // normaliseCategory maps a known category to its canonical spelling and
+    // passes anything else through unchanged, so matching on its result finds
+    // the option the server would have stored.
+    const canonical = normaliseCategory(wanted);
+
+    if (ASSET_CATEGORIES.includes(canonical)) {
+        select.value = canonical;
+        other.value = '';
+        other.classList.add('d-none');
+        return;
+    }
+
+    select.value = OTHER_CATEGORY;
+    other.value = wanted;
+    other.classList.remove('d-none');
+}
 
 
 // ============================================================
@@ -32,6 +122,7 @@ let skippedBackupCount = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    fillCategoryOptions();
     initialiseUploadUI();
     loadDeveloperWorkspace();
 
@@ -245,6 +336,14 @@ let pickMode = false;      // this selection has no folder to take a name from
 let assetChoice = '';      // explicit choice: a picked asset, a new name, or a
                            // near-match confirmation
 
+// Existing asset name -> its category, from the last workspace load.
+//
+// Used to PREFILL the category when the developer picks an existing asset, so
+// uploading a new version of a categorised asset does not present a blank field
+// that looks like the category was lost. It is a convenience only: the server
+// COALESCEs, so a blank field leaves the stored value alone either way.
+const assetCategories = new Map();
+
 function resetNameState() {
     nameCheck = null;
     pickMode = false;
@@ -435,6 +534,19 @@ function renderNearMatchPrompt(check, current, onChoose) {
     return wrapper;
 }
 
+// Shows the category the chosen asset already has.
+//
+// Only ever FILLS a blank field — it will not overwrite something the developer
+// has typed. Switching the picker between assets should not silently discard a
+// category they just entered.
+function prefillCategory(name) {
+    // Only fills a blank field — it will not overwrite something the developer
+    // has already entered.
+    if (readCategory()) return;
+
+    setCategoryValue(assetCategories.get(name) || '');
+}
+
 function renderAssetPicker(area, label) {
     area.appendChild(label('Asset', 'pickAssetSelect'));
 
@@ -482,6 +594,7 @@ function renderAssetPicker(area, label) {
         const isNew = select.value === NEW;
         newInput.classList.toggle('d-none', !isNew);
         assetChoice = isNew ? newInput.value.trim() : select.value;
+        prefillCategory(assetChoice);
         checkUploadName();
     });
 
@@ -846,10 +959,21 @@ async function uploadAsset() {
         formData.append('confirmed_asset_name', assetChoice);
     }
 
-    // asset_type is NOT sent. The field asked the developer to choose between
+    // asset_type is NOT sent. That field asked the developer to choose between
     // content types and TOOLS, when the tool is a property of the file that a
-    // verifier determines. Left unset until the "which part of the game" field
-    // replaces it.
+    // verifier determines. The question worth asking a human is which part of
+    // the game this belongs to, and that is what "category" is.
+    //
+    // Sent only when one was chosen. An empty value is not the same as "clear
+    // it" — the server COALESCEs on update, so omitting it leaves an existing
+    // category alone rather than wiping it on every subsequent upload into the
+    // same asset.
+    const category = readCategory();
+
+    if (category) {
+        formData.append('category', category);
+    }
+
     formData.append(
         'description',
         description
@@ -1410,6 +1534,14 @@ function renderWorkspaceAssets(assets) {
     const list = $('workspaceAssetsList');
     if (!list) return;
 
+    // Rebuilt from scratch each load rather than merged: an asset deleted in
+    // another tab must not linger here and get prefilled onto a new upload.
+    assetCategories.clear();
+
+    for (const asset of assets) {
+        if (asset.category) assetCategories.set(asset.name, asset.category);
+    }
+
     if (assets.length === 0) {
         list.innerHTML = `<p class="mb-0">No assets have been uploaded yet.</p>`;
         return;
@@ -1439,10 +1571,18 @@ function renderWorkspaceAssets(assets) {
 
         button.appendChild(assetTitle);
 
-        if (asset.asset_type) {
+        // Which part of the game this belongs to. Shown on the collapsed row
+        // because it is the one thing that tells two similarly-named assets
+        // apart at a glance — "BigTree_Env" and "BigTree_Prop" are the same
+        // name to a reader skimming a list.
+        //
+        // Absent categories render as nothing rather than as "Uncategorised":
+        // most assets will be uncategorised, and a badge on every row would be
+        // noise that hides the rows that do have one.
+        if (asset.category) {
             const badge = document.createElement('span');
-            badge.className = 'badge text-bg-secondary ms-2';
-            badge.textContent = asset.asset_type;
+            badge.className = 'badge text-bg-info ms-2';
+            badge.textContent = asset.category;
             button.appendChild(badge);
         }
 

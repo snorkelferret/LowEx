@@ -181,6 +181,39 @@ check('a path is judged on its filename, not its directory',
     N.isBackupFile('bigTree_v04/scripts/nuke.nk~') &&
     !N.isBackupFile('bigTree_v04/backup.nk'));
 
+// ------------------------------------------------------- asset categories
+
+console.log('\n  -- asset categories --');
+
+// The list is a HINT, not a constraint. That distinction is the whole point of
+// these tests: a value off the list must survive, because silently discarding
+// what someone chose is worse than storing something untidy.
+
+check('the list is short enough to be used',
+    N.ASSET_CATEGORIES.length > 0 && N.ASSET_CATEGORIES.length <= 12,
+    `${N.ASSET_CATEGORIES.length} categories`);
+
+check('a known category keeps its canonical spelling',
+    N.normaliseCategory('Character') === 'Character' &&
+    N.normaliseCategory('Character') === N.normaliseCategory('Character'));
+
+check('case and padding do not create a second category',
+    N.normaliseCategory('  prop ') === 'Prop' &&
+    N.normaliseCategory('FX') === N.normaliseCategory('fx'));
+
+check('blank is null, not an empty category',
+    N.normaliseCategory('') === null &&
+    N.normaliseCategory('   ') === null &&
+    N.normaliseCategory(undefined) === null);
+
+// The one that separates a hint from a constraint.
+check('a value off the list is KEPT, not discarded',
+    N.normaliseCategory('SetDressing') === 'SetDressing',
+    String(N.normaliseCategory('SetDressing')));
+
+check('every listed category round-trips',
+    N.ASSET_CATEGORIES.every(c => N.normaliseCategory(c) === c));
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 console.log(fail === 0 ? '\n  PASS' : '\n  FAIL');
 

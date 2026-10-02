@@ -38,9 +38,42 @@
              the file type verifier determines it; asking a human to restate
              something the machine can read is how a field becomes wrong.
 
-             What replaces it is a question only a human can answer: which part
-             of the game this belongs to. See TODO. -->
+             What replaces it is the Category field below. -->
         <div id="assetNameArea" class="col-12 col-md-6"></div>
+
+
+        <!-- Which part of the game this belongs to.
+
+             The one question about an asset only a human can answer. The old
+             asset_type field asked the developer to restate what the file
+             extension already says; this asks something no machine can read.
+
+             A HINT, NOT A CONSTRAINT. The options come from ASSET_CATEGORIES in
+             shared/assetRules.mjs and are built into the select by
+             fillCategoryOptions(); "Other…" reveals a free-text box, so a value
+             outside the list is still reachable and a category an admin typed
+             by hand still displays. Blank means "not categorised", which is a
+             normal state and not an error — an upload is not worth refusing
+             over a label.
+
+             The select is EMPTY here on purpose. Its options are built from the
+             shared list at runtime rather than written out, so the choices and
+             the rule that validates them cannot drift apart. -->
+        <div class="col-12 col-md-6">
+          <label for="assetCategory" class="form-label">
+            Category
+            <span class="text-secondary fw-normal small">— which part of the game</span>
+          </label>
+
+          <select class="form-select" id="assetCategory"></select>
+
+          <input
+            class="form-control mt-2 d-none"
+            id="assetCategoryOther"
+            placeholder="Category name"
+            autocomplete="off"
+          >
+        </div>
 
 
         <div class="col-12">

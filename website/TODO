@@ -613,11 +613,48 @@ IN PROGRESS. The upload model is being built (see below).
 
 BUILT:
 
-  backend/lib/assetNaming.js — the folder-name parser, the three validation
-  tiers (block reserved extensions / warn on dotted separators / accept), the
-  three-tier match (exact / near / different), and deriveUploadRoot() for
-  getting the folder out of an upload's paths. Tested by
-  scripts/check-naming.js, 55 cases, `npm run check:naming`.
+  ASSET CATEGORY — which part of the game an asset belongs to. A flat content
+  domain list (Character · Environment · Prop · Vehicle · Weapon · FX · Audio ·
+  UI · Other) in shared/assetRules.mjs. The developer sets it on upload; an
+  admin or superuser can change it afterwards.
+
+  NOT A CHECK CONSTRAINT, and this is the point. asset_type was a CHECK, and a
+  CHECK cannot be altered, so changing that list meant a full 12-step table
+  rebuild — twice. This is a free-text column validated in code, so adding a
+  category is a one-line edit and no migration.
+
+  The list is a HINT, not a rule: a value off the list is stored as given rather
+  than discarded, because silently dropping a name someone chose is worse than
+  storing an untidy one. The form is a select with an "Other…" box so both are
+  reachable.
+
+  Stored on workspace_assets AND assets — it is carried across on acceptance,
+  because the repository is where someone would look for "every Character", and
+  a classification that died at the boundary would be useless exactly where it
+  pays off.
+
+  POST /assets/:assetId/category — admin/superuser. This is a DELIBERATE
+  EXCEPTION to "admins reach into a workspace only by impersonation": it writes
+  one column on one row, reads nothing, and is audit-logged. If it ever grows a
+  reason to read the asset, it has stopped being this endpoint.
+
+  NOT BUILT: no UI calls that endpoint yet. There is no admin view of workspace
+  assets to hang it on, so the route is reachable by API only. An admin can
+  change a category, but only in a terminal. Needs a home — most likely
+  wherever the approval queue grows an asset view.
+
+  Also NOT decided: whether a developer should be able to retag their OWN asset
+  without re-uploading. It is not granted, because it was not asked for; today
+  they change it by re-uploading with a different value, since the upload path
+  COALESCEs it.
+
+  shared/assetRules.mjs — the folder-name parser, the three validation tiers
+  (block reserved extensions / warn on dotted separators / accept), the
+  three-tier match (exact / near / different), deriveUploadRoot() for getting
+  the folder out of an upload's paths, isBackupFile(), and the category list.
+  It was backend/lib/assetNaming.js; it moved to shared/ so the client uses the
+  same copy rather than a second one (see SHARED CODE above). Tested by
+  scripts/check-naming.js, 64 cases, `npm run check:naming`.
 
   POST /assets/check-name — preflight. The naming rules live on the server
   ONLY, so the client asks rather than carrying its own copy of the regex. One

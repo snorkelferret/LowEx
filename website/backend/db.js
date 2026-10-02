@@ -144,6 +144,7 @@ const applyAssetRepositorySchema = () => {
       workspace_id INTEGER NOT NULL,
       name TEXT NOT NULL,
       asset_type TEXT,
+      category TEXT,
       description TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -178,6 +179,7 @@ const applyAssetRepositorySchema = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       asset_type TEXT,
+      category TEXT,
       description TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -354,6 +356,44 @@ const applyAssetWorkflowSchemaPatches = () => {
     db.exec(`
       ALTER TABLE workspace_assets
       ADD COLUMN repository_base_version_id INTEGER;
+    `);
+  }
+
+  // Which part of the game this asset belongs to.
+  //
+  // FREE TEXT, NOT A CHECK. The list of categories lives in
+  // shared/assetRules.mjs and is validated on write. Putting it in a CHECK here
+  // would mean a table rebuild every time the list changes — which is what
+  // happened to asset_type, twice.
+  if (!workspaceAssetColumns.includes('category')) {
+    db.exec(`
+      ALTER TABLE workspace_assets
+      ADD COLUMN category TEXT;
+    `);
+  }
+
+
+  /*
+   * ----------------------------------------------------------
+   * assets additions (the repository side)
+   *
+   * The category is carried across when a workspace asset is
+   * accepted, so it has to exist on both tables. Adding it on
+   * only the sandbox side would mean the classification died
+   * at exactly the boundary where it becomes useful — the
+   * repository is where someone looks for "every Character".
+   * ----------------------------------------------------------
+   */
+
+  const repositoryAssetColumns = db
+    .prepare("PRAGMA table_info(assets)")
+    .all()
+    .map(c => c.name);
+
+  if (!repositoryAssetColumns.includes('category')) {
+    db.exec(`
+      ALTER TABLE assets
+      ADD COLUMN category TEXT;
     `);
   }
 
