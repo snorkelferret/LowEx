@@ -1899,11 +1899,22 @@ They MUST be dealt with before any real user data exists.
          still there. A purged version is listed and marked unrestorable
          rather than hidden. The retention period is read from
          backend/lib/retention.js, where the scheduled purge will read it too.
-      4. The scheduler, running the purge. THIS IS NOW THE ONLY THING BETWEEN
-         A DELETED VERSION AND ITS FILES BEING REMOVED — nothing expires on
-         its own, so the bin is currently a waiting room with no one to open
-         the door.
-      5. Garbage collection, fed by the purge — starting report-only.
+      4. [DONE 2026-10-02] The scheduler: backend/jobs/daily.js, run from
+         cron. One command, two jobs in order — the purge, then the
+         collector. Documented in the manual with the cron line.
+      5. [DONE 2026-10-02] Garbage collection, fed by the purge — and
+         REPORT-ONLY by default, as decided. --collect turns deletion on.
+
+    ALL FIVE ARE BUILT. What is left is not a step but a decision about when
+    the machine actually starts doing this: the job must be IN CRON on the box
+    before any of it happens on its own, and the collector should run plain for
+    a while before anyone passes --collect.
+
+    STILL NOT ADMIN-CONFIGURABLE. The retention period is a constant in
+    backend/lib/retention.js. The decision was that an administrator changes it
+    from the admin page, which needs the settings mechanism the schema still
+    does not have (item 28). The value moves in ONE place when it exists —
+    the bin and the job both read it — so nothing else has to change.
 
     NOTE WHAT STEP 2 DOES NOT DO, because the next step depends on it: it
     removes the REFERENCES, not the content. The blob is still on disk and will
