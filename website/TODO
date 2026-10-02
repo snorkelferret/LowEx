@@ -491,6 +491,75 @@ SOFT DELETE. A developer can delete anything in their own workspace.
     fresh build declares it mid-table. Order is meaningless in SQL and a
     positional comparison would report that as drift on every migration.)
 
+WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
+
+  Deleting from a workspace should put the thing in the DEVELOPER'S WASTEBIN,
+  where they can see it and get it back, and the bin should EMPTY AUTOMATICALLY
+  AFTER 14 DAYS.
+
+  This turns what is currently a one-way trip into a reversible one, and it is
+  what finally connects soft delete to freeing disk. Today is_active = 0 hides
+  the rows and frees quota, and NOTHING is ever removed — not the rows, not the
+  bytes. A bin that actually empties is the missing second half.
+
+  WHAT IT NEEDS THAT DOES NOT EXIST:
+
+  * deleted_at on workspace_assets and workspace_versions. NOTHING RECORDS WHEN
+    something was deleted — there is no such column anywhere — so there is
+    currently no way to know how old a deletion is, and therefore no way to run
+    a 14-day window at all. This is the first thing to add.
+
+  * A RESTORE action. The rows are all still there, so this is an UPDATE, but
+    it needs a route and a place in the UI.
+
+  * A view of the bin. The developer should be able to see what is in there
+    before it goes, which is most of the point of having one.
+
+  * A PURGE after the window. See the problem below.
+
+  THE 14-DAY PURGE CANNOT ALWAYS DELETE. technical_check_runs and
+  creative_approvals reference workspace_versions with NO ON DELETE clause, so a
+  version that has ever been checked or reviewed CANNOT be hard-deleted — the
+  database refuses. This is the same constraint recorded under SOFT DELETE
+  above, and it does not go away because we now want the space back.
+
+  So the bin does not always empty. The purge deletes what it can and must leave
+  the rest, and the ones it leaves are precisely the ones with history. That is
+  arguably correct — the record of something submitted should not be erasable —
+  but it has to be stated, because "empties after 14 days" will otherwise be
+  read as a promise that it always does.
+
+  AND THEN THE COLLECTOR FINISHES THE JOB. What the purge CAN always do is
+  remove workspace_version_files rows, which is what holds the reference to the
+  content. Once nothing references a blob, it becomes the collector's business
+  (item 31) and the disk is finally freed. So the chain is:
+
+      delete -> wastebin -> 14 days -> purge rows -> collector frees bytes
+
+  Without the purge, the bin is just today's soft delete with a friendlier name.
+
+  OPEN WHEN BUILDING:
+
+  * THERE IS NO SCHEDULER. Nothing in this system runs on a timer, so "after 14
+    days" has no obvious moment to happen at. Options: run the purge on server
+    start, run it lazily whenever a workspace is loaded, or add a real cron.
+    Lazy-on-load is the cheapest and has the useful property of needing no
+    extra process, but it means a workspace nobody opens is never cleaned.
+
+  * IS 14 DAYS FIXED OR CONFIGURED? WORKSPACE_LIMIT_BYTES is configurable, so
+    the same treatment (an env var with a default) is consistent.
+
+  * WHEN DOES THE CLOCK START — at delete, or at last view? Delete is simpler
+    and more honest.
+
+  * CAN THE DEVELOPER EMPTY THE BIN EARLY? Almost certainly yes; "empty now" is
+    the same operation as the purge, just asked for.
+
+  * QUOTA FREES ON DELETE OR ON PURGE? Today it frees on delete, and the
+    developer is told so. Keeping that means the bin is a grace period that
+    costs nothing, which seems right; changing it would mean a developer can be
+    over quota because of things they already deleted.
+
 QUOTA. WORKSPACE_LIMIT_BYTES, default 5 GiB, tunable without a code change.
 
   usage = SUM(file_size) over DISTINCT stored_files referenced by this
@@ -1465,6 +1534,13 @@ They MUST be dealt with before any real user data exists.
     WHAT IS MISSING IS GARBAGE COLLECTION, not another delete button. A pass
     that finds stored_files rows referenced by NEITHER workspace_version_files
     NOR asset_version_files, and removes the row and the blob together.
+
+    WHERE THE GARBAGE WOULD COME FROM: mostly the WASTEBIN PURGE — see the
+    WASTEBIN section under WORKSPACE QUOTA AND SOFT DELETE above. Delete puts
+    the rows in the bin, the bin empties after 14 days and removes the file
+    references, and this is what then frees the bytes. The two are one chain and
+    are worth building together; a collector with nothing feeding it has nothing
+    to collect.
     check:store already finds the mirror image of this — an orphan blob is the
     case where the FILE is present and the row is gone; this is the case where
     both are present and nothing points at either.
