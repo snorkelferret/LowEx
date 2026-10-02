@@ -1984,15 +1984,21 @@ async function loadAssetHistory() {
             throw new Error(data.error || 'Could not load your history.');
         }
 
+        // Set only on SUCCESS. A flag set before the request would mean a
+        // failed first load locks the tab empty forever, with no way to try
+        // again short of reloading the page.
+        historyLoaded = true;
+
         renderAssetHistory(data);
 
     } catch (err) {
         console.error('Failed to load asset history:', err);
         historyAlert(err.message);
 
+        // Left blank and re-loadable rather than left saying "Loading...".
         if (list) {
             list.className = 'text-secondary';
-            list.textContent = '';
+            list.textContent = 'Could not load your history. Switch tabs to try again.';
         }
     }
 }
@@ -2001,9 +2007,11 @@ function initialiseHistoryTab() {
     const button = $('tab-history-btn');
     if (!button) return;
 
+    // Fires on every open; loadAssetHistory() sets the flag itself once it has
+    // actually succeeded, so a failure is retried the next time the tab is
+    // opened rather than being remembered as done.
     button.addEventListener('shown.bs.tab', () => {
         if (historyLoaded) return;
-        historyLoaded = true;
         loadAssetHistory();
     });
 }

@@ -528,18 +528,11 @@ router.get(
                 totals.versions += versions.length;
             }
 
-            return res.json({
-                totals,
-                // Said once, here, so the UI does not have to invent wording
-                // and cannot disagree with the server about what these mean.
-                notes: {
-                    staging_area:
-                        'A workspace is a staging area, not permanent storage.',
-                    ownership:
-                        'Accepted versions belong to the game store. You can download a copy.',
-                },
-                assets
-            });
+            // No explanatory prose in the payload. An earlier draft carried a
+            // `notes` object of UI wording; nothing read it, and copy that
+            // lives in the API is copy nobody edits when the screen changes.
+            // The words belong where they are shown.
+            return res.json({ totals, assets });
 
         } catch (err) {
             console.error('Failed to load asset history:', err);

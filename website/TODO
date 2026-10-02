@@ -1055,8 +1055,21 @@ They MUST be dealt with before any real user data exists.
       expiresAt; `new Date('2026-09-29 14:00:00')` is Invalid Date in Safari
 
 20) Repo hygiene — remaining tracked junk.
-    logiNNotes.txt (contains a bcrypt hash) and ~40 editor backup files
-    (*~, #file#) are tracked. assets/images/mud01.nk is an 11MB Nuke script.
+
+    STILL TRACKED, STILL WRONG:
+      * logiNNotes.txt — contains a bcrypt hash.
+      * assets/images/mud01.nk — an 11MB Nuke script.
+
+    CORRECTED 2026-10-02: this item claimed "~40 editor backup files (*~,
+    #file#) are tracked". They are not, and cannot be — git ls-files matches no
+    file whose name contains a tilde or a hash. That line had been carried
+    forward without being rechecked, which is how every stale claim in this file
+    starts.
+
+    The backups do still exist ON DISK though — 36 of them, through
+    frontend/src/components and docs. Harmless to git, but they are the exact
+    class of file the upload route now refuses, and they will keep appearing for
+    as long as an editor writes them.
 
 21) Guard req.body destructuring (Express 5 behaviour change).
     Express 5 sets req.body to undefined when no body parser matched, where
@@ -1436,11 +1449,24 @@ They MUST be dealt with before any real user data exists.
     has no session. Those reports record no user, which is itself information —
     it says the report came from someone who could not get in.
 
-    Open questions, to settle when building: whether reports need a kind
-    (bug / idea / complaint) or whether free text is enough, whether a reply
-    address is wanted for anonymous reports, and who reads them — most likely
-    the same admin pages as item 28, which is another reason the two want
-    building together.
+    THREE OPEN QUESTIONS, AND ONE OF THEM WAS ANSWERED BY BUILDING IT:
+
+    * KIND — SETTLED. A kind field was built: three options, Bug / Idea /
+      Other, in shared/feedbackRules.mjs. Three and not ten because the point is
+      to let someone triage a list at a glance, and past about three people
+      start guessing; there is an explicit Other for anything that does not fit.
+      UNLIKE the asset category, this one REJECTS an unknown value — the list is
+      what makes the field worth having, and Other is always available, so being
+      strict costs the reporter nothing. The two lists sit next to each other in
+      shared/ and behave oppositely on purpose; both are commented.
+
+    * A REPLY ADDRESS FOR ANONYMOUS REPORTS — SETTLED. Optional, shown only to
+      someone with no session. Not required even then: making somebody hand over
+      an address to report a login fault is a good way to get no reports.
+
+    * WHO READS THEM — STILL OPEN, and it is item 28. The routes to list and
+      resolve reports exist, are tested, and nothing calls them, so today they
+      go somewhere nobody looks.
 
 
 30) THE SHA STORE — audited 2026-10-02. One hole found, and it is not in the
@@ -1634,17 +1660,25 @@ They MUST be dealt with before any real user data exists.
 
     --- STILL OPEN, FOR THE STORE ITSELF ---
 
-    * HARD OR SOFT. Soft needs asset_versions to gain an is_active column
-      (assets already has an unused one) and leaves the blob on disk — but the
-      collector described above frees the bytes once nothing references them,
-      which makes soft-plus-collection very nearly as good as hard. Hard frees
-      the space immediately and erases the approval and comment history, which
-      is exactly what the workspace was careful not to do. Likely answer: soft
-      by default, and let the collector handle the bytes.
+    * HARD OR SOFT — AND IT IS THE SAME ANSWER AS THE WORKSPACE. The same model
+      applies, and it took the workspace note to see it: KEEP THE RECORD, DROP
+      THE FILES. Releasing the store's asset_version_files rows is what frees
+      the content; the collector frees the blob once nothing references it; and
+      the asset, its versions, its approvals and its comments all stay readable.
+      So it is not a choice between hard and soft — it is soft rows with the
+      content released, exactly as in the workspace.
 
-    * WHAT HAPPENS TO THE APPROVAL AND COMMENT HISTORY. Keep it and the
-      deletion is really a soft one and nothing is freed. Drop it and an
-      approver's record of what they signed off disappears with the asset.
+      (An earlier version of this note said that keeping the approval and
+      comment history meant "the deletion is really a soft one and nothing is
+      freed". That was wrong, and it was the same mistake made about the
+      workspace: the RECORD is not what holds the bytes. The FILE ROWS are.)
+
+    * SO WHAT DIFFERS IS FRICTION AND REACH, NOT MECHANISM. Withdrawing
+      something that shipped is very extreme and wants lots of bars between the
+      admin and it. Purging test data is ordinary and should be close to one
+      step. Both end the same way — content released, record kept — and only the
+      difficulty tells them apart. Two controls, deliberately different weight;
+      see the DECIDED section above.
 
     * WHO. Admin, superuser, or either. Item 28's other destructive control,
       the category retag, is admin/superuser, which is the obvious default.
@@ -1749,47 +1783,93 @@ They MUST be dealt with before any real user data exists.
     genuinely new machinery; the rest is more of what already exists.
 
 
-33) THE DEVELOPER'S ASSET HISTORY — everything they have worked on.
+33) THE DEVELOPER'S ASSET HISTORY — BUILT 2026-10-02. One piece missing.
 
-    A MENU ITEM on the developer workspace listing ALL the assets that developer
-    has submitted or worked on, with any of them opening to show more detail.
+    All the assets a developer has worked on, including ones no longer live,
+    each opening to show what happened to every version of it.
 
-    WHY THIS IS NOT JUST THE LIST THAT ALREADY EXISTS. GET /assets filters to
-    is_active = 1, and the "My Workspace" card renders exactly that. So it shows
-    what is live RIGHT NOW — the staging area — and not the history. The history
-    is the valuable half: what was uploaded, what happened to each attempt, and
-    where the accepted ones went. That is the model recorded under THE WORKSPACE
-    IS A STAGING AREA WITH A HISTORY, and nothing currently displays it.
+    WHY IT IS NOT THE LIST THAT ALREADY EXISTED. GET /assets filters to
+    is_active = 1, which is right for what it is — the workspace a developer
+    works IN right now — but it cannot show anything that has LEFT it. The
+    moment a version was deleted or superseded, the record of what happened to
+    it disappeared from sight. It was never lost; it had nowhere to be seen.
 
-    WHAT IT SHOULD SHOW PER ASSET — almost all of it already stored, and already
-    written:
+    BUILT:
 
-      * the asset and EVERY version of it, including ones that are no longer
-        live
-      * per version: when it was uploaded, its note, the technical check result
-        and the reason for a failure, and the approval decision with its comment
-        and who made it
-      * WHETHER THE VERSION IS IN THE GAME STORE — repository_version_id — with
-        a download for accepted work, since downloading a copy is exactly how a
-        developer picks their own approved work back up
-      * for a version whose files were dropped, the record kept in their place
+      * GET /assets/history — every asset, live or not, every version, live or
+        not, with the technical check result and the reason for a failure, the
+        approval decision and the reviewer's comment, and whether the version
+        is in the game store.
 
-    WHAT IT NEEDS BUILT:
+      * Navigation, where this dashboard previously had NONE: two tabs, Upload
+        and History. History loads lazily on first open, because most visits
+        are to upload rather than to look back.
 
-      * A BACKEND VIEW. GET /assets filters to live rows ON PURPOSE, so this
-        needs either a second endpoint or a flag on the existing one. It must
-        stay scoped to the caller: a developer sees their own history and nobody
-        else's, and there is still no admin read path — impersonation remains
-        the only way in, as everywhere else in that router.
+      * The version renderer is the SAME ONE the workspace uses
+        (renderVersionState), so a version reads identically in both views and
+        there is no second implementation to drift. The endpoint's field names
+        were changed to latest_check / latest_approval to match GET /assets for
+        exactly that reason.
 
-      * NAVIGATION. The developer dashboard HAS NO MENU AT ALL today — the
-        header is a title and a logout button. So "a menu item" means
-        introducing navigation where none exists: at minimum, a way to move
-        between uploading and reviewing history.
+    VERIFIED, not assumed: an admin asking for history gets their OWN empty
+    history and not the developer's, and an unauthenticated call is refused.
+    That route is more tempting than most to open up, because it is read-only
+    and looks harmless — but it is the developer's whole working record, so
+    impersonation stays the only way in.
 
-      * A DETAIL VIEW, so choosing an asset shows the per-version history above
-        rather than the accordion summary shown today.
+    STILL MISSING: THE DOWNLOAD. The page says a version is in the game store,
+    and that the files belong to the game now, and then says plainly that
+    download is not built. It is not a link to nowhere — but it IS the thing
+    that makes "you can always download a copy" true rather than merely stated,
+    and it is the same piece as item 25's import path. The manifest endpoint
+    already exists and has never been called by anything; a per-file download is
+    the wrong answer at fifty files, so this wants a ZIP.
 
-    THE STAGING-AREA NOTICE LIVES ON THE MY WORKSPACE CARD. When the navigation
-    goes in, keep that notice somewhere a developer actually lands — a page
-    nobody opens is the same as not having said it.
+    AND THE PER-VERSION FILE RECORD IS NOT THERE YET, because nothing drops
+    file rows yet. When files are dropped, the history should show what was
+    uploaded from the record kept in their place — see THE WORKSPACE IS A
+    STAGING AREA WITH A HISTORY.
+
+    THE STAGING-AREA NOTICE is on the My Workspace card in the Upload tab, which
+    is where a developer lands. If the navigation is ever reworked, keep it
+    somewhere they actually arrive at.
+
+
+34) FILE TYPE VERIFICATION — planned, never recorded, not built.
+
+    The asset-type field was taken OFF the upload page on the grounds that a
+    developer should not be asked to restate what the file already says: Maya,
+    Blender and Nuke are TOOLS, and the tool is a property of the file. The plan
+    stated at the time was that a FILE TYPE VERIFIER, running as part of the
+    technical checks, determines it.
+
+    THAT PLAN WAS NEVER WRITTEN DOWN ANYWHERE ELSE, and nothing implements it.
+    Which matters because of a consequence that is easy to walk past:
+
+      workspace_assets.asset_type and assets.asset_type BOTH STILL EXIST. They
+      are still SELECTed by the asset queries, still written by the upload path,
+      and still carried across on acceptance. And they are now ALWAYS NULL —
+      every one of those reads and writes is plumbing for a value nothing
+      produces.
+
+    So this is a decision, not an omission: either the verifier gets built, or
+    those columns and all their plumbing come out as dead weight. What is not
+    acceptable is leaving it, because the schema and the queries then claim a
+    field the system cannot fill — which is exactly how the last person to read
+    this code concludes it is broken.
+
+    WHAT IT WOULD DO: identify each uploaded file — by extension first, by
+    content where that is cheap and reliable — and record the result. It is also
+    the natural place to catch a file whose extension LIES about its contents,
+    which happens with exported assets and is the failure a human eyeballing a
+    filename would miss.
+
+    WHERE IT BELONGS: the technical check run. technical_check_runs and
+    technical_check_results already exist, already record per-check pass/fail
+    with a message, and already belong to a workspace version. A verifier that
+    cannot identify a file should be able to FAIL THE RUN with a reason rather
+    than quietly recording nothing.
+
+    Note it is the same shape of job as the game-store upload check in item 25:
+    something the system can determine for itself, currently left to a human or
+    to nobody.
