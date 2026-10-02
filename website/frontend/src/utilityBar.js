@@ -70,15 +70,44 @@ export function addUtility(element) {
     return element;
 }
 
-// Builds the manual link. It is here rather than in a page because it is the
-// one tool that appears on EVERY page with a bar, whatever the role.
-function manualItem() {
+// THE TOOLS EVERY SIGNED-IN PAGE HAS, whatever the role. They live here rather
+// than in a page because there is no component they belong to — the bar's
+// contents are built once, here, and a page only supplies the empty container.
+//
+// ON THE BOARD LINK. It was removed from the sign-in form and the invitation
+// page, which are seen only by people who are not signed in — but that left
+// nothing anywhere, and a board nobody can reach is not private, it is
+// missing. This is the right home for it: a page you are already signed in to.
+//
+// The address is deliberately NOT listed here as a fact about the board. The
+// page it opens says whether the board is configured, and it is the page's job
+// to say that rather than this one's to imply it.
+//
+// THE ORDER HERE IS THE ORDER ON SCREEN — the whole block is prepended, so a
+// page's own items (the bin) always follow, whatever order the scripts run in.
+const UNIVERSAL_ITEMS = [
+    {
+        href: '/app/manual',
+        icon: 'bi-book',
+        label: 'Manual',
+        title: 'Read the manual',
+    },
+    {
+        href: '/discussion.html',
+        icon: 'bi-chat-square-text',
+        label: 'Discussion',
+        title: 'The team board',
+    },
+];
+
+function linkItem({ href, icon, label, title }) {
     const link = document.createElement('a');
 
-    link.href = '/app/manual';
-    link.title = 'Read the manual';
+    link.href = href;
+    link.title = title;
+    link.className = 'utility-item';
     link.innerHTML =
-        '<i class="bi bi-book"></i><span class="utility-label">Manual</span>';
+        `<i class="bi ${icon}"></i><span class="utility-label">${label}</span>`;
 
     return link;
 }
@@ -87,13 +116,12 @@ function init() {
     const host = bar();
     if (!host) return;
 
-    // PREPENDED rather than appended, so the order does not depend on which
-    // script happens to run first. The bin is registered by developerWorkspace,
-    // which is listed before this file, so an append would put the bin first —
-    // and would silently swap the two the day that list is reordered.
-    const link = manualItem();
-    link.classList.add('utility-item');
-    host.prepend(link);
+    // Prepended as one block rather than one item at a time, so the order is
+    // this list and not the reverse of it.
+    const block = document.createDocumentFragment();
+    for (const item of UNIVERSAL_ITEMS) block.appendChild(linkItem(item));
+
+    host.prepend(block);
 }
 
 if (document.readyState === 'loading') {
