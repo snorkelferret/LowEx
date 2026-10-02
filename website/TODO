@@ -1302,6 +1302,33 @@ They MUST be dealt with before any real user data exists.
     portal needs and has nowhere to show. Add to it rather than starting a new
     item.
 
+    --- THE MENU NOW EXISTS AND NAMES ALL OF IT (2026-10-02) ---
+
+    A menu was added to adminPanel.html, so it appears on BOTH the admin and the
+    superuser dashboard — the same reason the accounts logic lives in a shared
+    file. It carries every entry below that is a VIEW:
+
+        Accounts  |  Invites  |  Reports  |  Sessions  |  Storage  |
+        Health  |  Audit log
+
+    THE TWO KINDS BEHAVE DIFFERENTLY, ON PURPOSE. Accounts and Invites are
+    BUILT, so they are plain anchors onto the panels already on the page — they
+    scroll, and they do not pretend to be pages that do not exist. Everything
+    else is a STUB: it reports itself as missing and names the TODO item it
+    belongs to, via frontend/src/notBuilt.js, which wires any element carrying
+    data-not-built.
+
+    WHY STUBS RATHER THAN NOTHING. The shape of these pages is known and the work
+    is recorded here, so the menu names it rather than the list living only in a
+    document. And a menu entry that does nothing when clicked is indistinguishable
+    from a bug — a stub tells you where to look instead of leaving you to guess.
+
+    THEY ARE DELIBERATELY NOT TABS, and deliberately DO NOT switch panes. An
+    empty pane reads as a broken page, which is worse than an honest "not built".
+
+    DELETE THE STUB AS EACH FEATURE LANDS. When the last one goes,
+    frontend/src/notBuilt.js goes with it.
+
     --- ALREADY BUILT, NOTHING CALLS IT ---
 
     ASSET CATEGORY RETAG. POST /assets/:assetId/category exists, is tested, and
@@ -1817,13 +1844,18 @@ They MUST be dealt with before any real user data exists.
     and looks harmless — but it is the developer's whole working record, so
     impersonation stays the only way in.
 
-    STILL MISSING: THE DOWNLOAD. The page says a version is in the game store,
-    and that the files belong to the game now, and then says plainly that
-    download is not built. It is not a link to nowhere — but it IS the thing
-    that makes "you can always download a copy" true rather than merely stated,
-    and it is the same piece as item 25's import path. The manifest endpoint
-    already exists and has never been called by anything; a per-file download is
-    the wrong answer at fifty files, so this wants a ZIP.
+    STILL MISSING: THE DOWNLOAD — now a named stub. The developer dashboard has
+    a "Download" entry beside Upload and History that reports itself as not
+    built (frontend/src/notBuilt.js). The page also says plainly, on any version
+    that is in the game store, that download is not built yet.
+
+    It is the thing that makes "you can always download a copy" true rather than
+    merely stated, and it is the same piece as item 25's import path. The
+    manifest endpoint already exists and has never been called by anything; a
+    per-file download is the wrong answer at fifty files, so this wants a ZIP.
+
+    There is also a "Game store" stub, which is item 25 — browsing what is
+    already approved rather than re-uploading it.
 
     AND THE PER-VERSION FILE RECORD IS NOT THERE YET, because nothing drops
     file rows yet. When files are dropped, the history should show what was

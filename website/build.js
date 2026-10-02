@@ -11,7 +11,8 @@ const pageConfigurations = [
       './src/superuser.js',       // Superuser Core Panel logic
       './src/sharedInvites.js',   // Single-instance shared developer invite code
       './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
-      './src/feedback.js'         // Report-a-problem button. Builds its own markup.
+      './src/feedback.js',        // Report-a-problem button. Builds its own markup.
+      './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
     modules: [
@@ -32,7 +33,8 @@ const pageConfigurations = [
       './src/admin.js',    // Admin Core logic
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
       './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
-      './src/feedback.js'         // Report-a-problem button
+      './src/feedback.js',        // Report-a-problem button
+      './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
     modules: [
@@ -50,7 +52,8 @@ const pageConfigurations = [
 	'./src/header.js',          // Fill in login details
 	'./src/developerPanel.js',
 	'./src/developerWorkspace.js',
-	'./src/feedback.js'         // Report-a-problem button
+	'./src/feedback.js',        // Report-a-problem button
+	'./src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
     modules: [
