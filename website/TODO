@@ -466,18 +466,17 @@ SOFT DELETE. A developer can delete anything in their own workspace.
   DELETE /assets/:assetId                      (the asset and its versions)
   DELETE /assets/:assetId/versions/:versionId  (one version)
 
-  * HARD delete does not work today, and that is a DEFECT TO FIX, not a
-    decision. technical_check_runs.workspace_version_id and
+  * ROW DELETION IS BLOCKED BY FOREIGN KEYS, AND IT TURNS OUT THAT DOES NOT
+    MATTER. technical_check_runs.workspace_version_id and
     creative_approvals.workspace_version_id and .workspace_asset_id are foreign
     keys with no ON DELETE clause, so a version that has ever been checked or
-    reviewed cannot be removed at all. Soft delete sidesteps it for now: rows
-    marked is_active = 0, so quota still frees because accounting counts live
-    rows only.
+    reviewed cannot have its ROW removed.
 
-    THIS WAS ORIGINALLY JUSTIFIED AS "the history of something submitted should
-    not be erasable", AND THAT REASONING IS WRONG FOR A STAGING AREA. See
-    PHYSICAL DELETE below. It is recorded here because the old wording argued
-    for keeping the constraint, and the constraint is going.
+    An earlier version of this note called that a defect to fix with a 12-step
+    table rebuild. THAT WAS WRONG — see THE WORKSPACE IS A STAGING AREA WITH A
+    HISTORY below. The rows are the history worth keeping; the FILES are what
+    need to go. Only the file rows are deleted, and nothing references those, so
+    the foreign keys never come into it and the rebuild is not needed at all.
 
   * Only workspace rows are touched. stored_files, assets and asset_versions
     are never modified, so game-owned content and content another workspace
@@ -495,101 +494,95 @@ SOFT DELETE. A developer can delete anything in their own workspace.
     fresh build declares it mid-table. Order is meaningless in SQL and a
     positional comparison would report that as drift on every migration.)
 
-PHYSICAL DELETE FROM A WORKSPACE — DECIDED 2026-10-02. NEEDED, NOT BUILT.
+THE WORKSPACE IS A STAGING AREA WITH A HISTORY — restated 2026-10-02.
 
-  A developer must be able to PHYSICALLY remove an asset from their workspace:
-  THE BYTES GONE, not hidden. This is a staging area, and most of what passes
-  through it is failed technical checks and abandoned attempts. A workspace that
-  can only ever grow is not a staging area — it is an accidental archive.
+  The notes here had started to lose the model, so this is the model, plainly.
 
-  AND THE RULE THAT BOUNDS IT, in the same breath: A DEVELOPER CAN NEVER REMOVE
-  A GAME ASSET. Not by this route, not by any route.
+  1. THE DEVELOPER UPLOADS FROM THEIR OWN MACHINE AND KEEPS THEIR COPY. The
+     server is never the only place a file exists. That one fact removes most of
+     the anxiety in what follows: dropping a dead version from the server
+     destroys nothing that is not already on the developer's disk.
 
-  --- WHAT ACTUALLY GETS DELETED: THE FILES. NOT THE RECORD. ---
+  2. WHAT THE WORKSPACE MUST KEEP IS THE RECORD, NOT THE FILES. Filenames are
+     generally stable across uploads, so the record reads as the history of one
+     asset: how many times it was uploaded, what happened to each attempt on the
+     server, and why.
 
-  A TEXT HISTORY OF WHAT HAPPENED IS WORTH KEEPING: what was uploaded, what it
-  was tested for and whether it passed, and whether it was approved or refused.
-  THE FILES THEMSELVES ARE NOT. They are the part that costs disk, and they are
-  the part nobody will ever look at again.
+  3. WHAT HAPPENED ON THE SERVER IS ALREADY STORED AS TEXT, per version: the
+     version note; technical_check_runs and their results, which carry pass/fail
+     and the reason; and creative_approvals, which carry the decision, the
+     comment, who made it and when. None of that needs the files to survive.
 
-  So "physical delete" means: remove the CONTENT, keep the RECORD of it. Which
-  is a much smaller change than it first looked, and it works like this:
+  4. ON ACCEPTANCE, OWNERSHIP TRANSFERS. The developer ceases to own those
+     files — they are game property now — and may download a copy if they want
+     to keep working on it. The workspace entry for an accepted version becomes
+     a POINTER at the store version, which is what
+     workspace_versions.repository_version_id already is and already does.
 
-    1. Snapshot the file list into a text column on the version — filename,
-       relative_path, size, sha256. This is the "what was uploaded" half of the
-       history, and it has to be captured BEFORE the rows go, because
-       workspace_version_files is where those names live.
+  5. SO THE WORKSPACE SHOULD SHOW WHICH VERSIONS ARE IN THE GAME STORE. That is
+     part of the asset's history, and it is what tells a developer "this work is
+     done, and here is where it went".
 
-    2. DELETE the workspace_version_files rows. THIS IS THE STEP THAT FREES THE
-       CONTENT: those rows are the only thing holding a reference to the blob.
+  WHAT FOLLOWS, and it is not much:
 
-    3. Stamp the version as purged (files_purged_at). The version row, its note,
-       its technical_check_runs and its creative_approvals ALL STAY — which is
-       the "what was tested, approved or failed" half, already stored as text
-       and already worth having.
+  * A DEAD VERSION'S FILES CAN BE DROPPED FREELY — failed a technical check,
+    refused at approval, superseded, or deleted by the developer. They have
+    their own copy, and the record of the attempt stays.
 
-    4. The blob is now referenced by nothing, so the collector (item 32) frees
-       it. Nothing here deletes bytes directly; it removes the last reference
-       and lets the one mechanism that is allowed to touch the store do its job.
+  * AN ACCEPTED VERSION NEEDS NO WORKSPACE COPY. The store holds the content and
+    the workspace holds the pointer. Keeping a second reference in the workspace
+    is what makes the quota rules need an exclusion; not keeping one removes the
+    question.
 
-  --- AND THIS REMOVES THE FOREIGN KEY PROBLEM ENTIRELY ---
+  * THE RECORD SURVIVES BOTH CASES, and it is the cheap half. What is being
+    deleted is always the same thing: the file rows, and through them the last
+    reference to the blob.
 
-  The previous note here proposed rebuilding technical_check_runs and
-  creative_approvals with ON DELETE CASCADE, because they hold FKs to
-  workspace_versions and workspace_assets with no ON DELETE clause, which makes
-  the database refuse a delete.
+  THAT IS THE WHOLE OF IT. What the earlier version of this note added on top —
+  a purge manifest, a 12-step foreign key rebuild, an elaborate bin — was mostly
+  scaffolding around a simpler fact: the bytes are not the valuable part, the
+  record of what happened is, and the developer already has the bytes.
 
-  THAT REBUILD IS NO LONGER NEEDED. The FKs only bite if the version or asset
-  ROW is deleted, and under this design neither ever is — the rows are the
-  history we are deliberately keeping. Only the file rows go, and nothing
-  references those.
+  --- WHAT IT TAKES TO BUILD ---
 
-  Which removes the 12-step table rebuild from the plan: the riskiest, least
-  reversible piece of work in the whole chain, dropped for a design that keeps
-  more information. Worth noting that check:schema compares foreign keys
-  including on_delete, so had the rebuild been needed it would at least have
-  been mechanically verifiable — but not needing it is better.
+  * A RECORD OF THE FILES ON A VERSION, kept as text after the file rows go.
+    Filenames are stable and worth keeping, so the deleted file list needs
+    somewhere to live — a text column on workspace_versions is the small answer,
+    a separate table the more honest one. Names, paths, sizes and hashes only:
+    if it ever starts holding content, the point has been undone.
 
-  --- THE GAME-ASSET RULE STILL ENFORCES ITSELF ---
+  * A WAY TO DROP THE FILE ROWS. Deleting workspace_version_files rows is the
+    step that actually frees anything — they are the only thing holding a
+    reference to the blob. Nothing touches bytes directly; the collector (item
+    32) frees a blob once nothing references it.
 
-  AND THE GAME-ASSET RULE ENFORCES ITSELF, which is the good part:
+  * THE WORKSPACE SHOWING STORE MEMBERSHIP. repository_version_id is already
+    written on acceptance and already returned by GET /assets; what is missing
+    is the panel saying so, and offering the download.
 
-    Removing workspace_version_files rows CANNOT remove a blob, because a blob
-    is only freed when NOTHING references it — and if the content is in the game
-    store, asset_version_files still references it. The store's own reference is
-    what keeps the bytes alive.
+  --- AND THE CONSTRAINT THAT HOLDS THROUGHOUT ---
 
-    So "a developer can never remove a game asset" is not a permission check
-    that might be wrong. It is what the reference counting DOES. The worst a
-    developer can do to approved content is purge their own copy of it, which
-    the existing approved-version delete already allows and already says so in
-    its response.
+  A DEVELOPER CAN NEVER REMOVE A GAME ASSET, and this is not a permission check
+  that might be wrong — it is what the reference counting does. Dropping
+  workspace file rows cannot remove a blob, because a blob is freed only when
+  NOTHING references it, and for accepted content asset_version_files still
+  references it. The store's own reference is what keeps the bytes alive.
+
+  The worst a developer can do to accepted content is drop their own pointer to
+  it. Ownership already moved at acceptance; there is nothing left for them to
+  remove.
 
   STILL REFUSED WHILE AN APPROVAL IS PENDING (409), unchanged — what is being
   reviewed must not vanish mid-review.
 
-  AND THE RESPONSE MUST BE HONEST ABOUT WHAT HAPPENED. A developer who expects
-  space back and does not get it will keep deleting things trying. "Purged"
-  should say what was freed and, where relevant, that the content survives
-  because the game store holds it — rather than implying the same thing happened
-  in both cases.
+  AND THE RESPONSE MUST BE HONEST. A developer who expects space back and does
+  not get it will keep deleting things trying. Say what was freed, and where the
+  content still exists because the store holds it.
 
   docs/onboarding-developers WILL NEED CORRECTING WHEN BUILT. It currently tells
-  developers that deleting is a soft delete and only their copy and quota go.
-  That stops being true, and a developer-facing doc that understates what a
-  button does is worse than one that says nothing.
-
-  THIS IS A PREREQUISITE FOR THE WASTEBIN BELOW. A bin that empties after 14
-  days has to be able to actually remove something, and today nothing can be
-  removed at all. Do this first.
-
-  ONE OPEN QUESTION: THE SNAPSHOT COLUMN. Capturing the file list before
-  deleting it means a new text column on workspace_versions (something like
-  purged_file_manifest, JSON, plus files_purged_at). The alternative — keeping
-  the names somewhere else — means a second table for one job. A column is
-  smaller; a table is more honest about it being a different kind of thing. Note
-  the manifest should NOT hold anything large: names, paths, sizes and hashes
-  only. If it starts holding content, the whole point has been undone.
+  developers deletion is a soft delete and only their copy and quota go. That
+  stops being true, and a developer-facing doc that understates what a button
+  does is worse than one that says nothing.
 
 
 WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
@@ -598,57 +591,34 @@ WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
   where they can see it and get it back, and the bin should EMPTY AUTOMATICALLY
   AFTER 14 DAYS.
 
-  This turns what is currently a one-way trip into a reversible one, and it is
-  what finally connects soft delete to freeing disk. Today is_active = 0 hides
-  the rows and frees quota, and NOTHING is ever removed — not the rows, not the
-  bytes. A bin that actually empties is the missing second half.
+  WHAT "EMPTIES" MEANS, given the model above: the CONTENT goes, the RECORD
+  stays. That is the same operation as everything else here — drop the file
+  rows, keep the history — the bin is only what decides WHEN.
+
+  WHICH MAKES THE BIN CHEAP TO BUILD AND CHEAP TO EXPLAIN: for 14 days a deleted
+  thing is exactly as it was and comes back with one click, because nothing has
+  been removed yet. After that the files go and it cannot come back, though its
+  history remains readable.
 
   WHAT IT NEEDS THAT DOES NOT EXIST:
 
   * deleted_at on workspace_assets and workspace_versions. NOTHING RECORDS WHEN
-    something was deleted — there is no such column anywhere — so there is
-    currently no way to know how old a deletion is, and therefore no way to run
-    a 14-day window at all. This is the first thing to add.
+    something was deleted — there is no such column anywhere — so there is no
+    way to measure a 14-day window at all. This is the first thing to add.
 
-  * A RESTORE action. The rows are all still there, so this is an UPDATE, but
-    it needs a route and a place in the UI.
+  * A RESTORE action. Before the window closes the rows and files are all still
+    there, so this is an UPDATE and a flag.
 
-  * A view of the bin. The developer should be able to see what is in there
-    before it goes, which is most of the point of having one.
-
-  * A PURGE after the window. See the problem below.
-
-  THE PURGE IS "PHYSICAL DELETE", AND IT IS SMALLER THAN IT SOUNDS. See PHYSICAL
-  DELETE above: it snapshots the file list as text, deletes the
-  workspace_version_files rows, and keeps the version, its check runs and its
-  approvals. Only the CONTENT goes; the record of what happened stays.
-
-  SO THE BIN EMPTIES OF CONTENT, NOT OF HISTORY. After 14 days the bytes are
-  gone and the developer's workspace no longer shows the asset — but the record
-  of what was uploaded, tested and decided is still there to read. Which is the
-  useful half to keep and the expensive half to lose.
-
-  AND THEN THE COLLECTOR FINISHES THE JOB. Deleting workspace_version_files is
-  what drops the reference to the content; once nothing references a blob it
-  becomes the collector's business (item 32) and the disk is finally freed.
-  Nothing in the purge touches bytes directly — it removes the last reference
-  and lets the one mechanism allowed to touch the store do its job. So the
-  chain is:
-
-      delete -> wastebin -> 14 days -> purge files -> collector frees bytes
-
-  Without the purge, the bin is just today's soft delete with a friendlier name.
+  * A view of the bin, so the developer can see what is in it before it goes.
+    Most of the point of having one.
 
   OPEN WHEN BUILDING:
 
   * THERE IS NO SCHEDULER. Nothing in this system runs on a timer, so "after 14
-    days" has no obvious moment to happen at. Options: run the purge on server
-    start, run it lazily whenever a workspace is loaded, or add a real cron.
-    Lazy-on-load is the cheapest and has the useful property of needing no
-    extra process, but it means a workspace nobody opens is never cleaned.
+    days" has no moment to happen at. See item 32.
 
-  * IS 14 DAYS FIXED OR CONFIGURED? WORKSPACE_LIMIT_BYTES is configurable, so
-    the same treatment (an env var with a default) is consistent.
+  * IS 14 DAYS FIXED OR CONFIGURED? WORKSPACE_LIMIT_BYTES is configurable, so an
+    env var with a default is consistent.
 
   * WHEN DOES THE CLOCK START — at delete, or at last view? Delete is simpler
     and more honest.
@@ -657,9 +627,9 @@ WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
     the same operation as the purge, just asked for.
 
   * QUOTA FREES ON DELETE OR ON PURGE? Today it frees on delete, and the
-    developer is told so. Keeping that means the bin is a grace period that
-    costs nothing, which seems right; changing it would mean a developer can be
-    over quota because of things they already deleted.
+    developer is told so. Keeping that makes the bin a grace period that costs
+    nothing; changing it would mean a developer can be over quota because of
+    things they already deleted.
 
 QUOTA. WORKSPACE_LIMIT_BYTES, default 5 GiB, tunable without a code change.
 
@@ -1761,18 +1731,19 @@ They MUST be dealt with before any real user data exists.
 
       1. deleted_at on workspace_assets and workspace_versions. Nothing can
          measure a 14-day window without it.
-      2. Physical delete: the snapshot column, the route that drops the file
-         rows and keeps the record, and a response that says plainly what was
-         freed. See PHYSICAL DELETE under WORKSPACE QUOTA AND SOFT DELETE.
+      2. Dropping file rows: somewhere for the file list to live as text, the
+         route that drops the rows and keeps the record, and a response that
+         says plainly what was freed. See THE WORKSPACE IS A STAGING AREA WITH A
+         HISTORY under WORKSPACE QUOTA AND SOFT DELETE.
       3. The wastebin: view, restore, and the purge that empties it.
       4. The scheduler, running the purge.
       5. Garbage collection, fed by the purge — starting report-only.
 
-    THE FOREIGN KEY REBUILD THAT USED TO BE STEP 1 IS NO LONGER NEEDED. It was
-    only required if version and asset rows were going to be deleted, and they
-    are not — the rows ARE the history being kept. Only the file rows go, and
-    nothing references those. So the riskiest item in this plan is gone, and the
-    design that removed it keeps more information than the one that needed it.
+    THE FOREIGN KEY REBUILD THAT USED TO BE HERE IS GONE. It was only required
+    if version and asset rows were going to be deleted, and they are not — the
+    rows ARE the history being kept. Only the file rows go, and nothing
+    references those. So the riskiest item in this plan is gone, and the design
+    that removed it keeps MORE information than the one that needed it.
 
     Step 1 is small and unblocks everything. Steps 4 and 5 are the only
     genuinely new machinery; the rest is more of what already exists.
