@@ -398,14 +398,31 @@ STILL MISSING — the flow is reachable but not yet self-service:
 
 
 
-ONBOARDING DOCS 2026-10-01 (stubs)
-----------------------------------
-  docs/onboarding-developers
-  docs/onboarding-users
+ONBOARDING DOCS — SUPERSEDED 2026-10-02 BY THE MANUAL
+-----------------------------------------------------
+  docs/onboarding-developers   REMOVED
+  docs/onboarding-users        REMOVED
 
-Both are STUBS, written from what the code actually does rather than from what
-the specs intend, with everything unbuilt marked NOT BUILT. That distinction is
-the point: they should not describe features to a reader as though they exist.
+They were stubs written from what the code actually did rather than what the
+specs intend, with everything unbuilt marked NOT BUILT. Both were absorbed into
+docs/manual/, which is now the only onboarding material — served at
+/app/manual, behind a session, and searchable.
+
+WHY THEY WERE DELETED RATHER THAN KEPT BESIDE IT: two documents describing the
+same thing is two documents to keep in step, and they had already drifted.
+They still told testers that reporting a problem did not exist, months after it
+was built. That is the failure mode of every second copy.
+
+SECTIONS THE MANUAL STILL NEEDS, carried over from the old stubs so the list is
+not lost with them:
+
+  * How to download and install a build, once builds exist
+  * WHAT MAKES A USEFUL BUG REPORT here, and where it should go — the manual
+    documents the button and the automatic who/when, but says nothing about
+    what to write
+  * How comments and bugs are triaged
+  * Whether testers see developer replies, and where
+  * What a tester should expect between releases
 
 For developers the portal is mostly real, so that one is substantive —
 invitations, the workspace and its quota, the folder naming rules, what happens
@@ -579,10 +596,14 @@ THE WORKSPACE IS A STAGING AREA WITH A HISTORY — restated 2026-10-02.
   not get it will keep deleting things trying. Say what was freed, and where the
   content still exists because the store holds it.
 
-  docs/onboarding-developers WILL NEED CORRECTING WHEN BUILT. It currently tells
-  developers deletion is a soft delete and only their copy and quota go. That
-  stops being true, and a developer-facing doc that understates what a button
-  does is worse than one that says nothing.
+  THE MANUAL WILL NEED CORRECTING WHEN BUILT. docs/manual/40-developing.md tells
+  developers that deletion is a soft delete and that only their copy and quota
+  go. That stops being true, and a developer-facing doc that understates what a
+  button does is worse than one that says nothing.
+
+  (This note used to point at docs/onboarding-developers, which has been removed
+  — the manual supersedes it. The warning outlived the file it named, which is
+  the point of retargeting rather than deleting it.)
 
 
 WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
@@ -1325,8 +1346,10 @@ They MUST be dealt with before any real user data exists.
     since with self-hosting it is a config decision rather than a vendor's
     promise.
 
-    Also: correct docs/onboarding-users and docs/onboarding-developers, which
-    still describe a board we would have built.
+    Also: the manual's Discussion sections, which still describe a board we
+    would have built rather than the one that exists. (They used to say this
+    about the onboarding docs; those are gone and the manual carries the same
+    text.)
 
 
 28) ADMIN AND SUPERUSER PAGES — to build. WHAT GOES ON THEM.
