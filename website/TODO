@@ -841,8 +841,14 @@ They MUST be dealt with before any real user data exists.
 
 10) Real session revocation.
     Logout now clears the cookie, but tokens are stateless, so a copied token
-    survives until it expires. The unused `sessions` table (backend/db.js:728)
-    could hold a jti per login, checked in authenticateToken.
+    survives until it expires. The `sessions` table in db.js is fully defined
+    and has never had a row written to it — nothing writes it, nothing reads it.
+    It could hold a jti per login, checked in authenticateToken.
+
+    This is now BLOCKING something visible: item 28 wants an admin panel showing
+    who is logged in, and there is no record of a login anywhere to show. One
+    piece of work — record a session per login, check it on the way in —
+    delivers revocation, "who is logged in", and per-device logout together.
 
 11) Add CSRF protection.
     Cookie flags are now consistent (httpOnly, sameSite=lax, secure in
@@ -1086,25 +1092,71 @@ They MUST be dealt with before any real user data exists.
     still describe a board we would have built.
 
 
-28) ADMIN AND SUPERUSER PAGES — to build.
+28) ADMIN AND SUPERUSER PAGES — to build. WHAT GOES ON THEM.
 
-    The dashboards exist but are thin. They are going to grow, and one thing is
-    already waiting on them:
+    The dashboards exist but are thin. What follows is the running list of
+    things that either already exist with nothing calling them, or that the
+    portal needs and has nowhere to show. Add to it rather than starting a new
+    item.
 
-      The ASSET CATEGORY retag control. POST /assets/:assetId/category exists,
-      is tested, and is admin/superuser only — but NOTHING CALLS IT. There is no
-      admin view of workspace assets to hang a button on, so today the only way
-      to change a category is a terminal. Whoever builds the admin pages should
-      give it a home rather than adding a new endpoint.
+    --- ALREADY BUILT, NOTHING CALLS IT ---
 
-    Read the ASSET CATEGORY block above for what the endpoint does and why it is
-    a deliberate exception to the impersonation rule — that reasoning has to
-    survive being put behind a button.
+    ASSET CATEGORY RETAG. POST /assets/:assetId/category exists, is tested, and
+    is admin/superuser only — but there is no admin view of workspace assets to
+    hang a button on, so the only way to change a category today is a terminal.
+    Give it a home; do not add a second endpoint.
 
-    Related, and deliberately still absent: there is no admin read path into a
-    developer's workspace. An admin who needs to see inside one does it by
-    IMPERSONATION, which is marked, time-bounded and logged. Do not add a
-    standing browse-anything view while building these pages.
+    Read the ASSET CATEGORY block above for why it is a deliberate exception to
+    the impersonation rule. That reasoning has to survive being put behind a
+    button.
+
+    BUG REPORTS. GET /api/feedback and POST /api/feedback/:id/resolve exist and
+    are tested (see item 29) — and nothing calls either. Reports currently go
+    somewhere nobody looks, which is worse than not collecting them, because
+    people think they have been heard. A list, a reader, and a resolve button.
+    The resolve route takes an optional note; use it, because a report closed
+    with no record of what was done is barely better than one never read.
+
+    --- NEEDED, AND NEEDS BUILDING FIRST ---
+
+    WHO IS LOGGED IN. There is no data behind this today. Login is a stateless
+    JWT in a cookie, so the server keeps no record of who holds a live token —
+    the `sessions` table in db.js is fully defined and has NEVER HAD A ROW
+    written to it by anything. Nothing writes it and nothing reads it.
+
+    So this panel is not a UI job; it is blocked on item 10. Recording a
+    session per login (and checking it in authenticateToken) is what makes
+    "who is logged in", "log this device out" and real revocation possible —
+    three features from one piece of work. Build item 10 first, then this is
+    just a SELECT.
+
+    Worth deciding when building: whether "logged in" means a live session row
+    or "seen in the last N minutes". With a jti-per-login record those are the
+    same question; without one, neither can be answered.
+
+    STORAGE USAGE. The data exists: stored_files.file_size, joined through
+    workspace_version_files, is what workspaceUsage() in
+    routes/developerWorkspace.js already sums per workspace, against a quota.
+    What is missing is the admin's view of it — per developer, and in total,
+    with the biggest first. Note the store is CONTENT-ADDRESSED and shared: one
+    file referenced by two workspaces is stored once, so summing per-developer
+    figures will over-count against the real disk usage. Decide which of the
+    two numbers the panel is showing before showing it, because they will not
+    match and somebody will ask why.
+
+    --- ALREADY EXISTS, MAY WANT A VIEW ---
+
+    The Accounts table (built), the invite list (built), GET /api/admin/stats
+    (built: active/total users, pending invitations). The audit log is written
+    by deactivation and by every category retag and feedback resolve, and is
+    readable by nothing at all — worth a view for the same reason as the rest.
+
+    --- AND STILL ABSENT ON PURPOSE ---
+
+    There is no admin read path into a developer's workspace. An admin who needs
+    to see inside one does it by IMPERSONATION, which is marked, time-bounded
+    and logged. Do not add a standing browse-anything view while building these
+    pages, however convenient it looks next to the retag control.
 
 
 29) BUG REPORT / FEEDBACK FORM — BUILT. Admins cannot read them yet.
