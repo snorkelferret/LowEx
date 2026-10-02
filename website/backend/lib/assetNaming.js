@@ -216,6 +216,45 @@ function matchAssetName(existingNames, candidateName) {
 }
 
 // ---------------------------------------------------------------------------
+// Backup files
+// ---------------------------------------------------------------------------
+//
+// Editor and application backups are not assets. They are leftovers that
+// happen to sit beside the real file, and they are not always small: Blender's
+// .blend1 is a full copy of the .blend it backs up, so uploading them can
+// double the size of a large asset for no benefit at all.
+//
+// Seen in practice: a folder containing `hereiam.txt~` alongside the real file.
+//
+// These are FILTERED, not rejected. One stray backup must not fail a whole
+// folder upload — that would be a hostile way to react to something the
+// developer did not do deliberately.
+const BACKUP_PATTERNS = [
+    /~$/,              // hereiam.txt~   Emacs, gedit; also Nuke and Maya autosaves
+    /^#.*#$/,          // #file#         Emacs autosave
+    /\.bak$/i,         // file.bak
+    /\.orig$/i,        // merge leftovers
+    /\.rej$/i,
+    /\.swp$/i,         // vim
+    /\.swo$/i,
+    /\.tmp$/i,
+    /\.blend\d+$/i,    // Blender numbered backups: file.blend1, file.blend2
+    /\.blend@$/i,      // Blender's "quit without saving" file
+    /^\._/,            // macOS resource forks
+    /^\.DS_Store$/i,
+    /^Thumbs\.db$/i,
+];
+
+function isBackupFile(name) {
+    const base = String(name || '').replace(/\\/g, '/').split('/').pop();
+
+    if (!base) return false;
+
+    return BACKUP_PATTERNS.some(pattern => pattern.test(base));
+}
+
+
+// ---------------------------------------------------------------------------
 // Deriving the uploaded root from the file paths
 // ---------------------------------------------------------------------------
 //
@@ -257,6 +296,7 @@ function deriveUploadRoot(filePaths) {
 module.exports = {
     RESERVED_EXTENSIONS,
     NEAR_MATCH_MAX_DISTANCE,
+    BACKUP_PATTERNS,
     extensionOf,
     parseAssetName,
     classifyFolderName,
@@ -264,4 +304,5 @@ module.exports = {
     editDistance,
     matchAssetName,
     deriveUploadRoot,
+    isBackupFile,
 };

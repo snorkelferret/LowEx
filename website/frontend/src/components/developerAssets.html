@@ -23,42 +23,24 @@
 
       <div class="row g-3 mb-4">
 
-        <div class="col-md-6">
-          <!-- The asset name is NOT typed. It comes from the folder the
-               developer uploads — bigTree_v04 is asset "bigTree", and the
-               _v04 is their own labelling rather than the system's version.
+        <!-- The asset name is NOT typed. It comes from the folder the
+             developer uploads — bigTree_v04 is asset "bigTree", and the _v04
+             is their own labelling rather than the system's version.
 
-               When files are picked without a folder there is no name to
-               derive, so this area becomes an asset picker instead. Which of
-               the two it shows is decided by renderAssetNameArea(). -->
-          <div id="assetNameArea"></div>
-        </div>
+             When files are picked without a folder there is no name to derive,
+             so this area becomes an asset picker instead. Which of the two it
+             shows is decided by renderAssetNameArea().
 
+             THERE IS NO "ASSET TYPE" FIELD, and there should not be. The old
+             one asked the developer to choose between Concept, Texture, Model,
+             Animation, Audio — and also Maya, Blender, Nuke, Unreal, which are
+             TOOLS rather than types. The tool is a property of the file and
+             the file type verifier determines it; asking a human to restate
+             something the machine can read is how a field becomes wrong.
 
-        <div class="col-md-6">
-          <label for="assetType" class="form-label">
-            Asset type
-          </label>
-
-          <select
-            class="form-select"
-            id="assetType"
-          >
-            <option value="">Select type...</option>
-            <option value="Concept">Concept</option>
-            <option value="Texture">Texture</option>
-            <option value="Image">Image</option>
-            <option value="Model">Model</option>
-            <option value="Animation">Animation</option>
-            <option value="Maya">Maya</option>
-            <option value="Blender">Blender</option>
-            <option value="Nuke">Nuke</option>
-            <option value="Unreal">Unreal</option>
-            <option value="Audio">Audio</option>
-            <option value="Video">Video</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
+             What replaces it is a question only a human can answer: which part
+             of the game this belongs to. See TODO. -->
+        <div id="assetNameArea" class="col-12 col-md-6"></div>
 
 
         <div class="col-12">
@@ -109,7 +91,20 @@
         </p>
 
 
+        <!-- Directory FIRST. It is what normally happens: the folder names the
+             asset, and picking files is the exception that has to ask which
+             asset they belong to. The order of the buttons should say so. -->
         <div class="d-flex flex-wrap gap-2">
+
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="selectDirectoryBtn"
+          >
+            <i class="bi bi-folder-plus"></i>
+            Select Directory
+          </button>
+
 
           <button
             type="button"
@@ -118,16 +113,6 @@
           >
             <i class="bi bi-file-earmark-plus"></i>
             Select Files
-          </button>
-
-
-          <button
-            type="button"
-            class="btn btn-outline-light"
-            id="selectDirectoryBtn"
-          >
-            <i class="bi bi-folder-plus"></i>
-            Select Directory
           </button>
 
         </div>

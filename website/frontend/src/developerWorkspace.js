@@ -10,6 +10,10 @@ const API_URL = '/api/developer/workspace';
 
 let selectedFiles = [];
 
+// Backups dropped from the current selection. Shown in the preview so the
+// file count is not mysteriously smaller than what was selected.
+let skippedBackupCount = 0;
+
 
 // ============================================================
 // DOM helpers
@@ -116,13 +120,59 @@ function initialiseUploadUI() {
 // Add files
 // ============================================================
 
+// ---------------------------------------------------------------------------
+// Backup files
+//
+// Dropped BEFORE upload, so they are never transferred and never stored. This
+// is not tidiness: Blender's .blend1 is a FULL COPY of the .blend beside it, so
+// on a 500 MB asset it is half a gigabyte of upload for nothing.
+//
+// MUST STAY IN STEP with isBackupFile() in backend/lib/assetNaming.js, which is
+// authoritative and enforces the same rule server-side. The duplication is
+// deliberate — filtering here saves the bandwidth, filtering there is what
+// makes it true — and scripts/check-naming.js asserts the two agree.
+// ---------------------------------------------------------------------------
+
+const BACKUP_PATTERNS = [
+    /~$/,               // hereiam.txt~   Emacs, gedit; Nuke and Maya autosaves
+    /^#.*#$/,           // #file#         Emacs autosave
+    /\.bak$/i,
+    /\.orig$/i,
+    /\.rej$/i,
+    /\.swp$/i,
+    /\.swo$/i,
+    /\.tmp$/i,
+    /\.blend\d+$/i,     // Blender numbered backups: file.blend1, file.blend2
+    /\.blend@$/i,
+    /^\._/,             // macOS resource forks
+    /^\.DS_Store$/i,
+    /^Thumbs\.db$/i,
+];
+
+function isBackupFile(name) {
+    const base = String(name || '').replace(/\\/g, '/').split('/').pop();
+    if (!base) return false;
+    return BACKUP_PATTERNS.some(pattern => pattern.test(base));
+}
+
+
 function addSelectedFiles(files) {
+
+    skippedBackupCount = 0;
 
     for (const file of files) {
 
         const relativePath =
             file.webkitRelativePath ||
             file.name;
+
+
+        // A backup is not an asset. Counted rather than silently ignored, so
+        // the preview can say why it is not in the list.
+        if (isBackupFile(relativePath)) {
+            skippedBackupCount++;
+            continue;
+        }
 
 
         selectedFiles.push({
@@ -718,6 +768,7 @@ function updatePathOverrideState() {
 function clearUpload() {
 
     selectedFiles = [];
+    skippedBackupCount = 0;
 
     // A new selection starts the naming over: the folder, and therefore the
     // asset and any choice made about it, are all different.
@@ -740,9 +791,6 @@ async function uploadAsset() {
         return;
     }
 
-
-    const assetType =
-        $('assetType')?.value.trim();
 
     const description =
         $('assetDescription')?.value.trim();
@@ -815,11 +863,10 @@ async function uploadAsset() {
         formData.append('confirmed_asset_name', assetChoice);
     }
 
-    formData.append(
-        'asset_type',
-        assetType
-    );
-
+    // asset_type is NOT sent. The field asked the developer to choose between
+    // content types and TOOLS, when the tool is a property of the file that a
+    // verifier determines. Left unset until the "which part of the game" field
+    // replaces it.
     formData.append(
         'description',
         description
@@ -1112,7 +1159,11 @@ function updateUploadSizeSummary() {
 
     summary.textContent =
         `Total ${formatFileSize(totalBytes)} across ${selectedFiles.length} ` +
-        `file${selectedFiles.length === 1 ? '' : 's'}.`;
+        `file${selectedFiles.length === 1 ? '' : 's'}.` +
+        (skippedBackupCount > 0
+            ? ` ${skippedBackupCount} backup file${skippedBackupCount === 1 ? '' : 's'} ` +
+              `skipped — backups are not uploaded.`
+            : '');
 
     if (!warning || !workspaceUsage) return;
 

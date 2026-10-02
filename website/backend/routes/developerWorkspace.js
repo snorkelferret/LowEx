@@ -18,7 +18,8 @@ const {
     parseAssetName,
     classifyFolderName,
     matchAssetName,
-    deriveUploadRoot
+    deriveUploadRoot,
+    isBackupFile
 } = require('../lib/assetNaming');
 
 
@@ -1451,6 +1452,10 @@ router.post(
             const processedFiles = [];
             const logicalPaths = new Set();
 
+            // Backup files found in this upload. Reported rather than acted on
+            // beyond dropping them — see below.
+            const skippedBackups = [];
+
 
             for (
                 let i = 0;
@@ -1459,6 +1464,22 @@ router.post(
             ) {
 
                 const file = uploadedFiles[i];
+
+
+                // ------------------------------------------------
+                // Backup files are DROPPED, not rejected.
+                //
+                // A `.blend1` is a full copy of the .blend beside it, and a
+                // `hereiam.txt~` is an editor leftover. Neither is an asset.
+                // Failing the whole upload over one would be a hostile way to
+                // react to something the developer did not do deliberately, so
+                // they are skipped and reported instead.
+                // ------------------------------------------------
+
+                if (isBackupFile(file.originalname)) {
+                    skippedBackups.push(file.originalname);
+                    continue;
+                }
 
 
                 // ------------------------------------------------
@@ -1596,6 +1617,32 @@ router.post(
                     filename,
                     relativePath
                 });
+            }
+
+
+            // ----------------------------------------------------
+            // Everything in the upload was a backup.
+            //
+            // Worth its own message: "no files uploaded" would be confusing
+            // when the developer did select files, and naming them makes it
+            // obvious what happened.
+            // ----------------------------------------------------
+
+            if (processedFiles.length === 0) {
+                if (skippedBackups.length > 0) {
+                    const shown = skippedBackups.slice(0, 5).join(', ');
+                    const rest = skippedBackups.length > 5
+                        ? ` and ${skippedBackups.length - 5} more`
+                        : '';
+
+                    throw new Error(
+                        `Every file in this upload is a backup (${skippedBackups.length}): ` +
+                        `${shown}${rest}. Backups are not uploaded — remove them and ` +
+                        `try again.`
+                    );
+                }
+
+                throw new Error('No usable files in this upload');
             }
 
 
@@ -2237,6 +2284,10 @@ router.post(
 
             return res.status(201).json({
                 status: 'created',
+                // Backups were found and dropped. Said out loud so the
+                // developer is not left wondering why the file count differs
+                // from what they selected.
+                skipped_backups: skippedBackups,
                 ...result
             });
 
