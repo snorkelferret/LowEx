@@ -498,71 +498,98 @@ SOFT DELETE. A developer can delete anything in their own workspace.
 PHYSICAL DELETE FROM A WORKSPACE — DECIDED 2026-10-02. NEEDED, NOT BUILT.
 
   A developer must be able to PHYSICALLY remove an asset from their workspace:
-  rows gone, bytes freed, not hidden. This is a staging area, and most of what
-  passes through it is failed technical checks and abandoned attempts. There is
-  no value in keeping any of it. A workspace that can only ever grow is not a
-  staging area — it is an accidental archive.
+  THE BYTES GONE, not hidden. This is a staging area, and most of what passes
+  through it is failed technical checks and abandoned attempts. A workspace that
+  can only ever grow is not a staging area — it is an accidental archive.
 
   AND THE RULE THAT BOUNDS IT, in the same breath: A DEVELOPER CAN NEVER REMOVE
   A GAME ASSET. Not by this route, not by any route.
 
-  THE FOREIGN KEYS ARE THE BLOCKER. technical_check_runs and creative_approvals
-  hold FKs to workspace_versions and workspace_assets with no ON DELETE clause,
-  so the database refuses the delete outright. SQLite cannot alter a foreign
-  key, so this needs the 12-step rebuild — the same dance the invitations table
-  already performs in db.js, which is a working example to copy.
+  --- WHAT ACTUALLY GETS DELETED: THE FILES. NOT THE RECORD. ---
 
-  WHAT THE REBUILD NEEDS:
+  A TEXT HISTORY OF WHAT HAPPENED IS WORTH KEEPING: what was uploaded, what it
+  was tested for and whether it passed, and whether it was approved or refused.
+  THE FILES THEMSELVES ARE NOT. They are the part that costs disk, and they are
+  the part nobody will ever look at again.
 
-    * ON DELETE CASCADE on technical_check_runs.workspace_version_id.
-    * ON DELETE CASCADE on creative_approvals.workspace_version_id and
-      .workspace_asset_id.
-    * NOTHING on repository_asset_id or repository_version_id. Those point INTO
-      the game store, and no cascade may ever run in that direction.
-    * It must follow the documented procedure — disable foreign key enforcement
-      for the rebuild, do it inside a transaction, re-enable, then run
-      PRAGMA foreign_key_check. Rebuilding a table with enforcement left on is
-      how rows go missing quietly.
+  So "physical delete" means: remove the CONTENT, keep the RECORD of it. Which
+  is a much smaller change than it first looked, and it works like this:
 
-    THE REBUILD IS MECHANICALLY VERIFIABLE, which is the good news. check:schema
-    compares foreign keys INCLUDING on_delete (PRAGMA foreign_key_list, mapped
-    through f.on_update and f.on_delete), so a rebuild that drops the cascade,
-    or puts it on the wrong column, fails the check rather than being caught by
-    somebody reading the migration. It cannot be got wrong quietly.
+    1. Snapshot the file list into a text column on the version — filename,
+       relative_path, size, sha256. This is the "what was uploaded" half of the
+       history, and it has to be captured BEFORE the rows go, because
+       workspace_version_files is where those names live.
 
-  WHEN BUILT, docs/onboarding-developers NEEDS CORRECTING. It currently tells
-  developers that deleting is a soft delete and that only their copy and their
-  quota go. That stops being true, and a developer-facing doc that understates
-  what a button does is worse than one that says nothing.
+    2. DELETE the workspace_version_files rows. THIS IS THE STEP THAT FREES THE
+       CONTENT: those rows are the only thing holding a reference to the blob.
 
-  WHY THE HISTORY GOES, AND WHY THAT IS ALL RIGHT. A failed check run and a
-  rejected approval are records OF THE STAGING ATTEMPT. When the attempt is
-  deleted they have nothing left to describe. Nothing is lost that matters: the
-  game store keeps its own record of anything that became a game asset, and
-  audit_logs keeps the record of who deleted what. Provenance survives; it just
-  stops being duplicated on the staging side.
+    3. Stamp the version as purged (files_purged_at). The version row, its note,
+       its technical_check_runs and its creative_approvals ALL STAY — which is
+       the "what was tested, approved or failed" half, already stored as text
+       and already worth having.
+
+    4. The blob is now referenced by nothing, so the collector (item 32) frees
+       it. Nothing here deletes bytes directly; it removes the last reference
+       and lets the one mechanism that is allowed to touch the store do its job.
+
+  --- AND THIS REMOVES THE FOREIGN KEY PROBLEM ENTIRELY ---
+
+  The previous note here proposed rebuilding technical_check_runs and
+  creative_approvals with ON DELETE CASCADE, because they hold FKs to
+  workspace_versions and workspace_assets with no ON DELETE clause, which makes
+  the database refuse a delete.
+
+  THAT REBUILD IS NO LONGER NEEDED. The FKs only bite if the version or asset
+  ROW is deleted, and under this design neither ever is — the rows are the
+  history we are deliberately keeping. Only the file rows go, and nothing
+  references those.
+
+  Which removes the 12-step table rebuild from the plan: the riskiest, least
+  reversible piece of work in the whole chain, dropped for a design that keeps
+  more information. Worth noting that check:schema compares foreign keys
+  including on_delete, so had the rebuild been needed it would at least have
+  been mechanically verifiable — but not needing it is better.
+
+  --- THE GAME-ASSET RULE STILL ENFORCES ITSELF ---
 
   AND THE GAME-ASSET RULE ENFORCES ITSELF, which is the good part:
 
-    Physically deleting workspace rows removes workspace_version_files rows. It
-    CANNOT remove a blob, because a blob is only freed when NOTHING references
-    it — and if the content is in the game store, asset_version_files still
-    references it. The store's own reference is what keeps the bytes alive.
+    Removing workspace_version_files rows CANNOT remove a blob, because a blob
+    is only freed when NOTHING references it — and if the content is in the game
+    store, asset_version_files still references it. The store's own reference is
+    what keeps the bytes alive.
 
     So "a developer can never remove a game asset" is not a permission check
     that might be wrong. It is what the reference counting DOES. The worst a
-    developer can do to approved content is delete their own copy of it, which
+    developer can do to approved content is purge their own copy of it, which
     the existing approved-version delete already allows and already says so in
     its response.
 
   STILL REFUSED WHILE AN APPROVAL IS PENDING (409), unchanged — what is being
-  reviewed must not vanish mid-review. And the response should say plainly
-  whether bytes were actually freed or only hidden, because a developer who
-  expects space back and does not get it will keep deleting things trying.
+  reviewed must not vanish mid-review.
+
+  AND THE RESPONSE MUST BE HONEST ABOUT WHAT HAPPENED. A developer who expects
+  space back and does not get it will keep deleting things trying. "Purged"
+  should say what was freed and, where relevant, that the content survives
+  because the game store holds it — rather than implying the same thing happened
+  in both cases.
+
+  docs/onboarding-developers WILL NEED CORRECTING WHEN BUILT. It currently tells
+  developers that deleting is a soft delete and only their copy and quota go.
+  That stops being true, and a developer-facing doc that understates what a
+  button does is worse than one that says nothing.
 
   THIS IS A PREREQUISITE FOR THE WASTEBIN BELOW. A bin that empties after 14
-  days has to be able to actually remove things, and today it could not remove
-  anything that had ever been checked or reviewed. Do this first.
+  days has to be able to actually remove something, and today nothing can be
+  removed at all. Do this first.
+
+  ONE OPEN QUESTION: THE SNAPSHOT COLUMN. Capturing the file list before
+  deleting it means a new text column on workspace_versions (something like
+  purged_file_manifest, JSON, plus files_purged_at). The alternative — keeping
+  the names somewhere else — means a second table for one job. A column is
+  smaller; a table is more honest about it being a different kind of thing. Note
+  the manifest should NOT hold anything large: names, paths, sizes and hashes
+  only. If it starts holding content, the whole point has been undone.
 
 
 WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
@@ -591,21 +618,24 @@ WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
 
   * A PURGE after the window. See the problem below.
 
-  THE 14-DAY PURGE NEEDS PHYSICAL DELETE, WHICH DOES NOT WORK YET. See PHYSICAL
-  DELETE above: the foreign keys on technical_check_runs and creative_approvals
-  make the database refuse to remove anything that has ever been checked or
-  reviewed. Until those are rebuilt with ON DELETE CASCADE, a bin that empties
-  after 14 days could not empty most of what would be put in it.
+  THE PURGE IS "PHYSICAL DELETE", AND IT IS SMALLER THAN IT SOUNDS. See PHYSICAL
+  DELETE above: it snapshots the file list as text, deletes the
+  workspace_version_files rows, and keeps the version, its check runs and its
+  approvals. Only the CONTENT goes; the record of what happened stays.
 
-  That fix is what makes "empties after 14 days" true rather than aspirational,
-  and it is why PHYSICAL DELETE comes first in the build order.
+  SO THE BIN EMPTIES OF CONTENT, NOT OF HISTORY. After 14 days the bytes are
+  gone and the developer's workspace no longer shows the asset — but the record
+  of what was uploaded, tested and decided is still there to read. Which is the
+  useful half to keep and the expensive half to lose.
 
-  AND THEN THE COLLECTOR FINISHES THE JOB. What the purge CAN always do is
-  remove workspace_version_files rows, which is what holds the reference to the
-  content. Once nothing references a blob, it becomes the collector's business
-  (item 31) and the disk is finally freed. So the chain is:
+  AND THEN THE COLLECTOR FINISHES THE JOB. Deleting workspace_version_files is
+  what drops the reference to the content; once nothing references a blob it
+  becomes the collector's business (item 32) and the disk is finally freed.
+  Nothing in the purge touches bytes directly — it removes the last reference
+  and lets the one mechanism allowed to touch the store do its job. So the
+  chain is:
 
-      delete -> wastebin -> 14 days -> purge rows -> collector frees bytes
+      delete -> wastebin -> 14 days -> purge files -> collector frees bytes
 
   Without the purge, the bin is just today's soft delete with a friendlier name.
 
@@ -1729,18 +1759,20 @@ They MUST be dealt with before any real user data exists.
     The chain has a first link that does not exist, so this is not a
     build-in-any-order set:
 
-      1. THE FOREIGN KEYS on technical_check_runs and creative_approvals,
-         rebuilt with ON DELETE CASCADE — see PHYSICAL DELETE under WORKSPACE
-         QUOTA AND SOFT DELETE. Nothing can actually be removed until this is
-         done, so every later step depends on it.
-      2. deleted_at on workspace_assets and workspace_versions. Nothing can
+      1. deleted_at on workspace_assets and workspace_versions. Nothing can
          measure a 14-day window without it.
-      3. Physical delete: the route that really removes, and the response that
-         says plainly whether bytes were freed.
-      4. The wastebin: view, restore, and the purge that empties it.
-      5. The scheduler, running the purge.
-      6. Garbage collection, fed by the purge — starting report-only.
+      2. Physical delete: the snapshot column, the route that drops the file
+         rows and keeps the record, and a response that says plainly what was
+         freed. See PHYSICAL DELETE under WORKSPACE QUOTA AND SOFT DELETE.
+      3. The wastebin: view, restore, and the purge that empties it.
+      4. The scheduler, running the purge.
+      5. Garbage collection, fed by the purge — starting report-only.
 
-    Steps 1 and 2 are small and unblock everything after them. Steps 5 and 6 are
-    the only genuinely new machinery here; the rest is more of what already
-    exists.
+    THE FOREIGN KEY REBUILD THAT USED TO BE STEP 1 IS NO LONGER NEEDED. It was
+    only required if version and asset rows were going to be deleted, and they
+    are not — the rows ARE the history being kept. Only the file rows go, and
+    nothing references those. So the riskiest item in this plan is gone, and the
+    design that removed it keeps more information than the one that needed it.
+
+    Step 1 is small and unblocks everything. Steps 4 and 5 are the only
+    genuinely new machinery; the rest is more of what already exists.
