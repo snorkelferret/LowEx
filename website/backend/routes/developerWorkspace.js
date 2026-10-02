@@ -3010,6 +3010,34 @@ router.post(
 
 
             // ----------------------------------------------------
+            // Check: no file is empty.
+            //
+            // A zero-byte file passes every other check here — it exists, its
+            // size matches what was recorded, its path is unique — and it is
+            // never a real asset. It is a failed export, an interrupted write,
+            // or a placeholder someone meant to come back to.
+            //
+            // The size is read from stored_files, which the per-file check
+            // above has already compared against the file on disk. So a
+            // recorded zero is a real zero, not a stale row.
+            // ----------------------------------------------------
+
+            const emptyFiles = files
+                .filter(file => !file.file_size)
+                .map(file => file.filename);
+
+            results.push({
+                name: 'files_not_empty',
+
+                status: emptyFiles.length ? 'failed' : 'passed',
+
+                message: emptyFiles.length
+                    ? `Empty file(s) — 0 bytes: ${emptyFiles.join(', ')}`
+                    : 'No file is empty.'
+            });
+
+
+            // ----------------------------------------------------
             // Record the asset's type, WHEN THERE IS ONE ANSWER.
             //
             // Only when every file in the version is the same type. An asset

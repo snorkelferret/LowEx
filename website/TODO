@@ -1990,8 +1990,90 @@ They MUST be dealt with before any real user data exists.
     name that stops being usable as an asset name. check:naming asserts the
     exclusions stay excluded, so a later bulk-import cannot quietly undo it.
 
-    STILL OPEN: it identifies by EXTENSION only. That is the cheap and reliable
-    half, and it cannot catch a file whose extension lies about its contents —
-    a renamed .exe, or an exported asset with the wrong suffix. Content sniffing
-    (magic bytes) is the answer and is a separate job; the function is shaped so
-    that it would change in ONE place when it happens.
+    --- WHAT THE REAL CHECKS MUST GROW INTO ---
+
+    The check runs as extension-only for now. Two more are wanted before these
+    can be called the real checks, and both are about the same thing: believing
+    a file's NAME instead of the file.
+
+    * NO FILE IS EMPTY — BUILT 2026-10-02. A zero-byte file passes every other
+      check here: it exists, its size matches what was recorded, its path is
+      unique, and its extension is recognised. And it is never a real asset —
+      it is a failed export, an interrupted write, or a placeholder somebody
+      meant to come back to. Verified: an empty .blend passed files_present,
+      the per-file check AND the type check, and failed only this one.
+
+    * THE CONTENTS MUST MATCH THE EXTENSION — NOT BUILT. This is the one that
+      matters most, and extension-only cannot do it: a file named .nk is not
+      necessarily a Nuke script, and a file named .png is not necessarily an
+      image. What is being guarded against is a rename — something executable,
+      or something that is not an asset at all, wearing a trusted extension.
+
+      HOW: read the first bytes and match against known signatures (magic
+      numbers). Nuke, Blender, PNG, EXR, ZIP and the rest each start with
+      something identifiable. Where a format has NO reliable signature, the
+      honest answer is "cannot confirm" rather than a pass — the check should
+      say which files it verified and which it merely did not contradict.
+
+      IT BELONGS IN THE SAME FUNCTION, or beside it. assetTypeOf() is the one
+      place a file's type is decided; this decides whether the file IS what its
+      name claims, and the two answers are only useful together. If they live
+      apart they will drift, and the drift would be a file that passes one and
+      not the other with no way to tell which was right.
+
+      NOTE IT CANNOT BE DONE AT UPLOAD. The bytes are on disk by the time the
+      technical check runs, which is the right place for it — the check is what
+      a version is judged on, and the judgement has to be reproducible.
+
+
+35) NOTHING UPLOADED EVER RUNS. A standing rule, not a task.
+
+    ONLY THE FUNCTIONS WE PROVIDE MAY RUN IN A WORKSPACE. A developer uploads
+    files; those files are DATA. They are never executed, never evaluated, never
+    interpreted, and never served in a way that lets a browser run them. This is
+    the rule the whole workspace rests on, and it is worth writing down because
+    the ways to break it are all convenient.
+
+    VERIFIED 2026-10-02, because a rule nobody has checked is a hope:
+
+      * THE UPLOAD STORE IS NOT SERVED STATICALLY. express.static is mounted on
+        frontend/dist and frontend/public only. The content directory
+        (backend/uploads/files) has no route that maps onto it — a request
+        cannot name a path inside it.
+
+      * NOTHING IN THE BACKEND EXECUTES ANYTHING. No child_process, no exec, no
+        eval, no new Function, no vm. Verified by searching the whole backend.
+        The technical check READS files to hash and size them; that is the only
+        thing anything does with a stored file.
+
+      * CONTENT IS SERVED AS application/octet-stream WITH
+        Content-Disposition: attachment AND X-Content-Type-Options: nosniff,
+        and NEVER with the stored mime_type. The mime_type is there for display
+        and is never a response header. Serving a developer-supplied .svg or
+        .html inline from this origin would be stored XSS against whoever
+        opened it, which is a worse version of the same mistake.
+
+      * The Content-Disposition filename is built from a developer-supplied
+        name, so quotes and backslashes are stripped and non-ASCII is escaped.
+        A filename is not allowed to break out of its own header.
+
+    WHAT THAT MEANS FOR ANYTHING BUILT LATER, and these are the ones that will
+    be tempting:
+
+      * NO PREVIEW THAT INTERPRETS. An image shown inline is a decision to
+        re-examine, not a detail — and anything that renders SVG, HTML or a
+        model in a way that can run script has broken this rule outright.
+
+      * NO SERVER-SIDE CONVERSION. A thumbnailer, a video transcoder, an
+        archive extractor: each one opens a file we did not write with a parser
+        we did not write. That is the definition of the risk this rule exists to
+        prevent, and it deserves its own decision rather than being added as a
+        convenience.
+
+      * NO ARCHIVE EXTRACTION without solving zip-slip first — an entry named
+        ../../ is how an extractor writes outside the directory it was given.
+
+      * NO CONFIG OR SCRIPT A DEVELOPER UPLOADS EVER RUNS. Not an .sh, not a
+        .json a tool would read as configuration, not a build file. If we ever
+        run a developer's build, that is a decision with a sandbox attached, not
+        a feature.
