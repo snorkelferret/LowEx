@@ -104,16 +104,38 @@ body {
    Application Header
    ========================================================================== */
 
+/* THE PAGE INSET, defined once.
+ *
+ * The header and the content both use it, so the title in the bar and the first
+ * heading below it start at the same x — which is the whole reason it is a
+ * variable and not two literals that happen to agree today.
+ *
+ * The header has its own horizontal padding while the content container has the
+ * same value, so both are inset from the viewport edge by the same amount while
+ * the header stays full-bleed. */
+:root {
+  --page-inset: 1.5rem;
+}
+
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
   min-height: 64px;
-  padding: 0.75rem 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: 0.75rem var(--page-inset);
+  margin-bottom: var(--page-inset);
   background: #12141c;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
+}
+
+/* The content. It had NO padding at all — the header's own inset was the only
+ * margin on the page, so every heading, tab and card below it sat flush against
+ * the left and right edges of the window. */
+.dashboard-container {
+  width: 100%;
+  padding: 0 var(--page-inset) var(--page-inset);
   box-sizing: border-box;
 }
 
@@ -217,6 +239,13 @@ body {
      m*-2 (.5rem)    between a heading and the thing it heads, and inside
                      stacked items.
      m*-1 (.25rem)   between an icon and its label.
+
+   THE PAGE INSET. --page-inset, 1.5rem, used by the header AND by
+   .dashboard-container. Both are inset from the viewport edge by the same
+   amount, so the title in the header bar and the first heading on the page
+   start at the same x. The chain below that is one step smaller each time —
+   1.5rem page, 1rem card padding — which is what makes nesting read as
+   nesting.
 
    BOTTOM MARGINS, NOT TOP. Use `mb-*` on the element above rather than `mt-*`
    on the element below. Both work until the order changes or something is

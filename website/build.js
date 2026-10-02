@@ -97,13 +97,31 @@ const pageConfigurations = [
 function compilePage(config) {
   console.log(`🔨 Building: ${config.output}...`);
 
-  // Read and combine all component HTML partials
+  // Read and combine all component HTML partials.
+  //
+  // THE HEADER IS COLLECTED SEPARATELY, and it is not a detail. Every other
+  // component is page content and belongs inside the padded container; the
+  // header spans the full width with its own background and a border along the
+  // bottom, and putting it inside means either the header stops short of the
+  // edges or the content has no inset at all.
+  //
+  // That second one is what had been happening: .dashboard-container was never
+  // styled, so it had NO padding, the header's own padding was the only inset
+  // on the page, and every heading and card below it sat flush against the
+  // viewport edge.
+  let headerContent = '';
   let bodyContent = '';
+
   for (const modulePath of config.modules) {
     const fullPath = path.resolve(__dirname, modulePath);
+    const isChrome = modulePath.endsWith('header.html');
+
     if (fs.existsSync(fullPath)) {
       const content = fs.readFileSync(fullPath, 'utf-8');
-      bodyContent += `\n<!-- Module: ${modulePath} -->\n${content}\n`;
+      const block = `\n<!-- Module: ${modulePath} -->\n${content}\n`;
+
+      if (isChrome) headerContent += block;
+      else bodyContent += block;
     } else {
       console.warn(`  ⚠️ Warning: Component file missing at ${modulePath}. Inserting placeholder container.`);
       bodyContent += `\n<!-- Missing Module: ${modulePath} -->\n<section class="card missing-module"><p>Module loading error: ${modulePath}</p></section>\n`;
@@ -130,7 +148,8 @@ function compilePage(config) {
   <link rel="stylesheet" href="${config.styles}">
 </head>
 <body class="bg-dark text-light min-vh-100 d-flex flex-column">
-  <div  class="dashboard-container">
+${headerContent}
+  <div class="dashboard-container">
     ${bodyContent}
   </div>
 
