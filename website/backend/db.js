@@ -854,6 +854,62 @@ const initDb = () => {
 
   /*
    * ----------------------------------------------------------
+   * Feedback — bug reports and suggestions
+   *
+   * WHO AND WHEN ARE NOT COLUMNS THE CLIENT CAN SET. actor_id
+   * comes from the session token and created_at from the
+   * server clock; the route reads neither from the request
+   * body. A report that cannot be trusted about who sent it,
+   * or when, is not worth collecting.
+   *
+   * user_id is NULLABLE ON PURPOSE. Someone who cannot sign in
+   * is the most likely person to want to report something, and
+   * they have no session by definition. A NULL there is not
+   * missing data — it says the report came from outside, which
+   * is usually the fault being reported.
+   *
+   * username and role are SNAPSHOTS taken at the time. The
+   * actor_id is the link and survives a rename; these are so
+   * the report still reads correctly years later, when the
+   * account may have been renamed, deactivated or removed.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      user_id INTEGER,
+      username TEXT,
+      role TEXT,
+      contact_email TEXT,
+
+      kind TEXT NOT NULL,
+      message TEXT NOT NULL,
+
+      page_url TEXT,
+
+      status TEXT NOT NULL DEFAULT 'open',
+      resolution_note TEXT,
+      resolved_by INTEGER,
+      resolved_at DATETIME,
+
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
+
+  // The list an admin reads is "open ones, newest first", so the index matches
+  // that order rather than the table's.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_feedback_status
+      ON feedback(status, created_at DESC);
+  `);
+
+
+  /*
+   * ----------------------------------------------------------
    * Sessions
    * ----------------------------------------------------------
    */

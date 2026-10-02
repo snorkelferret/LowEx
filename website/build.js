@@ -10,7 +10,8 @@ const pageConfigurations = [
       './src/header.js',          // Fill in login details	  
       './src/superuser.js',       // Superuser Core Panel logic
       './src/sharedInvites.js',   // Single-instance shared developer invite code
-      './src/adminUsers.js'       // Accounts table - shared with the admin dashboard
+      './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
+      './src/feedback.js'         // Report-a-problem button. Builds its own markup.
     ],
     styles: '/styles/styles.css',
     modules: [
@@ -30,7 +31,8 @@ const pageConfigurations = [
       './src/header.js',          // Fill in login details
       './src/admin.js',    // Admin Core logic
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
-      './src/adminUsers.js'       // Accounts table - shared with the superuser dashboard
+      './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
+      './src/feedback.js'         // Report-a-problem button
     ],
     styles: '/styles/styles.css',
     modules: [
@@ -47,7 +49,8 @@ const pageConfigurations = [
     scripts: [
 	'./src/header.js',          // Fill in login details
 	'./src/developerPanel.js',
-	'./src/developerWorkspace.js'
+	'./src/developerWorkspace.js',
+	'./src/feedback.js'         // Report-a-problem button
     ],
     styles: '/styles/styles.css',
     modules: [
@@ -67,7 +70,10 @@ const pageConfigurations = [
     output: 'frontend/register.html',
     title: 'Accept Invitation',
     scripts: [
-	'./src/register.js'
+	'./src/register.js',
+	// An expired or refused invitation is exactly the kind of thing someone
+	// needs to report, and they have no account to report it with.
+	'./src/feedback.js'
     ],
     styles: '/styles/styles.css',
     modules: [

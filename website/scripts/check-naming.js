@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Checks backend/lib/assetNaming.js.
+ * Checks the SHARED rules in shared/.
  *
  * The folder-name parser is a regex over human-chosen names, and the whole
  * point of the near-match prompt is that parsing is fuzzy. That makes it worth
@@ -10,11 +10,18 @@
  *
  * The cases marked with a source below came from real decisions, not
  * invention — see docs/uploadmodel01.
+ *
+ * IT OUTGREW ITS NAME. It started as the asset-naming check and is now also
+ * where the category list and the feedback rules are pinned down, because
+ * anything in shared/ is used by both sides and therefore worth testing once,
+ * here. The script name is kept because renaming it would churn package.json
+ * and every reference for no gain; `check:naming` is the shared-rules check.
  */
 
 const fs = require('fs');
 const path = require('path');
 const N = require(path.join(__dirname, '../shared/assetRules.mjs'));
+const F = require(path.join(__dirname, '../shared/feedbackRules.mjs'));
 
 let pass = 0;
 let fail = 0;
@@ -213,6 +220,60 @@ check('a value off the list is KEPT, not discarded',
 
 check('every listed category round-trips',
     N.ASSET_CATEGORIES.every(c => N.normaliseCategory(c) === c));
+
+// ------------------------------------------------------- feedback rules
+
+console.log('\n  -- feedback rules --');
+
+// The interesting property here is the OPPOSITE of the category list: the kind
+// is a CLOSED set and must be rejected when it is not in it, while the category
+// is a hint and must be kept. Two lists, two behaviours, and the difference is
+// deliberate — a report filed under a kind nobody can filter on is a report
+// nobody will find.
+
+check('a known kind is accepted',
+    F.FEEDBACK_KINDS.every(k => F.normaliseKind(k.value) === k.value));
+
+check('an unknown kind is REJECTED, unlike a category',
+    F.normaliseKind('nonsense') === null &&
+    F.normaliseKind('') === null &&
+    F.normaliseKind(undefined) === null,
+    'there is an explicit "other" for anything that does not fit');
+
+check('kind is matched case-insensitively',
+    F.normaliseKind('BUG') === 'bug' && F.normaliseKind(' Idea ') === 'idea');
+
+// The one that matters most: a report must not be refusable because the
+// reporter was verbose, and must not be storable as nothing.
+const long = 'x'.repeat(F.MAX_MESSAGE_LENGTH + 1);
+
+check('a valid report passes',
+    F.validateFeedback({ kind: 'bug', message: 'It broke.' }).ok);
+
+check('an empty or too-short message is refused',
+    !F.validateFeedback({ kind: 'bug', message: '  ' }).ok &&
+    !F.validateFeedback({ kind: 'bug', message: 'ab' }).ok);
+
+check('an over-long message is refused, not truncated',
+    !F.validateFeedback({ kind: 'bug', message: long }).ok &&
+    F.validateFeedback({ kind: 'bug', message: long }).errors.message
+        .includes(String(F.MAX_MESSAGE_LENGTH)));
+
+check('a bad kind and a bad message are both reported',
+    Object.keys(F.validateFeedback({ kind: 'x', message: '' }).errors)
+        .sort().join(',') === 'kind,message');
+
+check('contact is optional and blank becomes null',
+    F.validateFeedback({ kind: 'bug', message: 'It broke.' }).value.contact === null &&
+    F.validateFeedback({ kind: 'bug', message: 'It broke.', contact: ' a@b.c ' })
+        .value.contact === 'a@b.c');
+
+check('the page URL is truncated, not refused',
+    F.normalisePageUrl('/x'.repeat(1000)).length === F.MAX_PAGE_URL_LENGTH);
+
+check('validateFeedback returns nothing the client could use to claim identity',
+    !('user_id' in F.validateFeedback({ kind: 'bug', message: 'hi' }).value) &&
+    !('created_at' in F.validateFeedback({ kind: 'bug', message: 'hi' }).value));
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 console.log(fail === 0 ? '\n  PASS' : '\n  FAIL');

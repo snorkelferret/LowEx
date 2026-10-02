@@ -73,5 +73,17 @@
             }
         });
     </script>
+
+    <!-- Bootstrap 5 JS Bundle, added for the report dialog below. The splash
+         needed no JavaScript library before this. -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Report-a-problem button.
+
+         Included because this is a page like any other, and if the splash is
+         broken — the artwork missing, or the click region not where it looks —
+         the person stuck on it has nowhere else to go. It is the one page with
+         no navigation at all. -->
+    <script type="module" src="./src/feedback.js"></script>
 </body>
 </html>

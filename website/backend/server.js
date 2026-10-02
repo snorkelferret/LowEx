@@ -83,6 +83,12 @@ app.use('/api/superuser', authenticateToken, superuserRoutes);
 app.use('/api/inviteDevs', inviteDevRoutes);
 app.use('/api/developer/workspace', developerWorkspaceRoutes);
 
+// Bug reports and suggestions. Reachable from every page, signed in or not —
+// the route applies its own optionalAuth rather than requiring a session,
+// because someone who cannot sign in is the most likely person to want to
+// report something. See routes/feedback.js for what it refuses to read.
+app.use('/api/feedback', require('./routes/feedback'));
+
 // 4. Protected role view routes (/app/user, /app/developer, /app/admin, /app/superuser)
 app.use('/app', require('./routes/views'));
 

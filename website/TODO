@@ -1065,10 +1065,10 @@ They MUST be dealt with before any real user data exists.
     That is rung 2 of three in the note; rung 1 is the link-out that exists
     today, rung 3 is full SSO.
 
-    A DEPENDENCY FIRST: there is no way to deactivate a portal account.
-    authenticateToken reads is_active and nothing writes it, so rung 2 has
-    nothing to hook into. Add deactivation — it is small and worth having
-    regardless.
+    THE DEPENDENCY IS NOW MET: account deactivation exists (admin panel,
+    Accounts table; authenticateToken reads is_active and deactivating writes
+    it, taking effect on the next request). So rung 2 has something to hook
+    into when the board is built.
 
     WHAT EXISTS NOW, deliberately product-agnostic: frontend/discussion.html
     links out via VITE_DISCUSSION_URL and names no provider, so pointing it at
@@ -1084,3 +1084,70 @@ They MUST be dealt with before any real user data exists.
 
     Also: correct docs/onboarding-users and docs/onboarding-developers, which
     still describe a board we would have built.
+
+
+28) ADMIN AND SUPERUSER PAGES — to build.
+
+    The dashboards exist but are thin. They are going to grow, and one thing is
+    already waiting on them:
+
+      The ASSET CATEGORY retag control. POST /assets/:assetId/category exists,
+      is tested, and is admin/superuser only — but NOTHING CALLS IT. There is no
+      admin view of workspace assets to hang a button on, so today the only way
+      to change a category is a terminal. Whoever builds the admin pages should
+      give it a home rather than adding a new endpoint.
+
+    Read the ASSET CATEGORY block above for what the endpoint does and why it is
+    a deliberate exception to the impersonation rule — that reasoning has to
+    survive being put behind a button.
+
+    Related, and deliberately still absent: there is no admin read path into a
+    developer's workspace. An admin who needs to see inside one does it by
+    IMPERSONATION, which is marked, time-bounded and logged. Do not add a
+    standing browse-anything view while building these pages.
+
+
+29) BUG REPORT / FEEDBACK FORM — BUILT. Admins cannot read them yet.
+
+    A form for reporting a fault or giving feedback, reachable from every page,
+    signed in or not. The button is bottom-right on all eight pages.
+
+    BUILT: shared/feedbackRules.mjs (the kinds and the limits, used by both
+    sides), the feedback table, POST /api/feedback (open to everyone),
+    GET /api/feedback and POST /api/feedback/:id/resolve (admin/superuser),
+    optionalAuth in the auth middleware so an open route can still learn who is
+    asking, and frontend/src/feedback.js — which BUILDS ITS OWN MARKUP, so a
+    page gets the button from one script tag rather than a partial that has to
+    be listed in build.js AND pasted into each hand-written page.
+
+    VERIFIED, not assumed: anonymous reports store a null user; a signed-in
+    report stores the actor from the token; and a body claiming
+    user_id/username/role/created_at is IGNORED ENTIRELY — the row was recorded
+    as the token's user with the server's clock, which is the whole point.
+
+    NOT BUILT: no UI reads them. GET and resolve are API-only, which means
+    reports currently go somewhere nobody looks. Same gap as item 28, and the
+    same fix — they want building together.
+
+    WHO AND WHEN ARE FILLED IN AUTOMATICALLY AND ON THE SERVER. The actor comes
+    from the session token and the timestamp from the server clock. Neither is
+    taken from the client: a client-supplied "who" is a claim, not a fact, and a
+    client-supplied "when" is whatever the reporter's machine happens to think
+    the time is. A report that cannot be trusted about who sent it is not worth
+    collecting.
+
+    WHAT THE CLIENT DOES supply is the one thing only it knows — the page and
+    the URL the report is about. That is the "where", and without it a report
+    costs a round trip to interpret. It is still untrusted input: truncated and
+    escaped like any other.
+
+    ANONYMOUS IS ALLOWED ON THE PUBLIC PAGES. Being unable to sign in is the
+    single most likely thing to want to report, and by definition that person
+    has no session. Those reports record no user, which is itself information —
+    it says the report came from someone who could not get in.
+
+    Open questions, to settle when building: whether reports need a kind
+    (bug / idea / complaint) or whether free text is enough, whether a reply
+    address is wanted for anonymous reports, and who reads them — most likely
+    the same admin pages as item 28, which is another reason the two want
+    building together.
