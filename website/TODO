@@ -1747,3 +1747,49 @@ They MUST be dealt with before any real user data exists.
 
     Step 1 is small and unblocks everything. Steps 4 and 5 are the only
     genuinely new machinery; the rest is more of what already exists.
+
+
+33) THE DEVELOPER'S ASSET HISTORY — everything they have worked on.
+
+    A MENU ITEM on the developer workspace listing ALL the assets that developer
+    has submitted or worked on, with any of them opening to show more detail.
+
+    WHY THIS IS NOT JUST THE LIST THAT ALREADY EXISTS. GET /assets filters to
+    is_active = 1, and the "My Workspace" card renders exactly that. So it shows
+    what is live RIGHT NOW — the staging area — and not the history. The history
+    is the valuable half: what was uploaded, what happened to each attempt, and
+    where the accepted ones went. That is the model recorded under THE WORKSPACE
+    IS A STAGING AREA WITH A HISTORY, and nothing currently displays it.
+
+    WHAT IT SHOULD SHOW PER ASSET — almost all of it already stored, and already
+    written:
+
+      * the asset and EVERY version of it, including ones that are no longer
+        live
+      * per version: when it was uploaded, its note, the technical check result
+        and the reason for a failure, and the approval decision with its comment
+        and who made it
+      * WHETHER THE VERSION IS IN THE GAME STORE — repository_version_id — with
+        a download for accepted work, since downloading a copy is exactly how a
+        developer picks their own approved work back up
+      * for a version whose files were dropped, the record kept in their place
+
+    WHAT IT NEEDS BUILT:
+
+      * A BACKEND VIEW. GET /assets filters to live rows ON PURPOSE, so this
+        needs either a second endpoint or a flag on the existing one. It must
+        stay scoped to the caller: a developer sees their own history and nobody
+        else's, and there is still no admin read path — impersonation remains
+        the only way in, as everywhere else in that router.
+
+      * NAVIGATION. The developer dashboard HAS NO MENU AT ALL today — the
+        header is a title and a logout button. So "a menu item" means
+        introducing navigation where none exists: at minimum, a way to move
+        between uploading and reviewing history.
+
+      * A DETAIL VIEW, so choosing an asset shows the per-version history above
+        rather than the accordion summary shown today.
+
+    THE STAGING-AREA NOTICE LIVES ON THE MY WORKSPACE CARD. When the navigation
+    goes in, keep that notice somewhere a developer actually lands — a page
+    nobody opens is the same as not having said it.
