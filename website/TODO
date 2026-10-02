@@ -1884,18 +1884,27 @@ They MUST be dealt with before any real user data exists.
 
     --- BUILD ORDER ---
 
-    The chain has a first link that does not exist, so this is not a
-    build-in-any-order set:
+    Two of the five are built, and they were the two everything else waited on:
 
-      1. deleted_at on workspace_assets and workspace_versions. Nothing can
-         measure a 14-day window without it.
-      2. Dropping file rows: somewhere for the file list to live as text, the
-         route that drops the rows and keeps the record, and a response that
-         says plainly what was freed. See THE WORKSPACE IS A STAGING AREA WITH A
-         HISTORY under WORKSPACE QUOTA AND SOFT DELETE.
-      3. The wastebin: view, restore, and the purge that empties it.
+      1. [DONE 2026-10-02] deleted_at on workspace_assets and
+         workspace_versions, stamped on delete with COALESCE so re-deleting
+         cannot restart the clock.
+      2. [DONE 2026-10-02] Dropping the file rows: the file list is
+         snapshotted as JSON first (name, path, size, hash — content never),
+         then workspace_version_files goes. POST
+         .../versions/:versionId/purge, and ONLY for versions already deleted,
+         so the reversible step is never skipped by accident.
+      3. The wastebin: view and restore. THE PURGE ITSELF NOW EXISTS — what is
+         missing is showing a developer what is in the bin and letting them
+         take it back out.
       4. The scheduler, running the purge.
       5. Garbage collection, fed by the purge — starting report-only.
+
+    NOTE WHAT STEP 2 DOES NOT DO, because the next step depends on it: it
+    removes the REFERENCES, not the content. The blob is still on disk and will
+    be until step 5 exists, and check:store reports the store as healthy
+    throughout — correctly, because those rows DO still have their blobs. What
+    is gone is the referrers, and finding those is the collector's job.
 
     THE FOREIGN KEY REBUILD THAT USED TO BE HERE IS GONE. It was only required
     if version and asset rows were going to be deleted, and they are not — the
