@@ -1186,6 +1186,12 @@ They MUST be dealt with before any real user data exists.
 
     --- NEEDED, NOTHING IN THE WAY ---
 
+    DELETING FROM THE GAME ASSET STORE. Its own item — see 31 — because it is
+    bigger than a control on a page: it needs a route, a confirmation that
+    names what will be destroyed, and a decision about history. Listed here so
+    whoever builds these pages does not build the panel without it and then
+    find the asset management has nowhere to live.
+
     STORAGE, PER DEVELOPER. The data exists and is already defined the way we
     agreed: workspaceUsage() in routes/developerWorkspace.js sums a workspace's
     files against a quota, and workspaceStoredFileIds explicitly EXCLUDES
@@ -1375,3 +1381,83 @@ They MUST be dealt with before any real user data exists.
       check:store detects it; nothing repairs it. Acceptable while the store is
       small and rebuildable; worth revisiting before it is the only copy of
       anything that matters.
+
+
+31) DELETING FROM THE GAME ASSET STORE — needed. NOTHING EXISTS.
+
+    There is no note, spec, route or panel anywhere in the repo describing how
+    to remove an approved asset from the store. That has been searched for
+    explicitly, under every phrasing (delete, remove, withdraw, retract,
+    unpublish, take down, purge), and the answer is nothing. The only mechanism
+    in the repo that destroys store content is the unguarded reset script in
+    item 30. So this is new ground rather than a continuation.
+
+    THE NEED. Deleting from the store has to be possible, and most obviously
+    during testing: the first assets pushed through the approval workflow will
+    be junk, and today the only way to be rid of them is to wipe everything.
+    Worth knowing: assets.is_active EXISTS ON THE TABLE AND IS READ BY NOTHING —
+    the same dead-column state workspace_assets.asset_type was in. Soft delete
+    was anticipated here and never wired up.
+
+    THE REQUIREMENT: THE ADMIN IS TOLD WHAT IS BEING DELETED, AND AGREES.
+    Not a dialog asking "are you sure?". The admin is shown what will actually
+    go — the asset, its versions, its files, and what else references it — and
+    agrees to that specific list. The same ask-and-confirm shape as the
+    near-match prompt and the naming tiers: the server states the consequence,
+    the human accepts it, the server acts. It belongs on the admin page with
+    the rest of item 28.
+
+    --- CONSTRAINTS THAT ALREADY EXIST AND WILL SHAPE IT ---
+
+    * THE ONE-COPY RULE FORBIDS DELETING BLOBS. stored_files is shared, and a
+      developer's workspace may still reference the same content. Deleting a
+      store asset removes REFERENCES — asset_version_files rows — and never
+      stored_files rows. It is then check:store's job to report any blob that
+      nothing references any more.
+
+    * THE DATABASE WILL REFUSE A NAIVE DELETE. There are no ON DELETE clauses
+      anywhere, and an approved asset is referenced by asset_versions, by
+      creative_approvals.repository_asset_id and repository_version_id, and by
+      the same pair on asset_comments. Deletion is ordered and deliberate, or
+      it fails.
+
+    * docs/dbspec01 SAYS STORE ASSET VERSIONS ARE IMMUTABLE. That is a
+      spec-level statement which deletion contradicts. It may well mean
+      "immutable once released" rather than "immutable, full stop" — but that
+      distinction has never been drawn, and this is where it has to be.
+
+    * THE WORKSPACE ALREADY DOES THE OPPOSITE, ON PURPOSE. Its soft delete is
+      documented as never touching the store tables, so an approved asset
+      survives its author deleting their copy. That reasoning was about
+      protecting history; deleting from the store has to be reconciled with it
+      rather than quietly reversing it.
+
+    --- OPEN, AND THE FIRST IS THE REAL QUESTION ---
+
+    * IS DELETING TEST DATA THE SAME ACT AS WITHDRAWING SOMETHING THAT SHIPPED?
+      They are not obviously the same operation. Removing a test asset that
+      never left the building is housekeeping. Removing one that went out in a
+      released build has consequences outside this system. If releases exist by
+      the time this is built, the panel should distinguish them — the
+      confirmation wording has to be honest about which one is happening.
+
+    * HARD OR SOFT. Soft needs asset_versions to gain an is_active column
+      (assets already has an unused one) and leaves the blob on disk. Hard
+      actually frees the space but erases the approval and comment history that
+      references it. The workspace chose soft, for the reason recorded in
+      WORKSPACE QUOTA AND SOFT DELETE. The store probably wants the same, plus
+      a separate hard purge for test data — which is the case raised here.
+
+    * WHAT HAPPENS TO THE APPROVAL AND COMMENT HISTORY. Keep it and the
+      deletion is really a soft one and nothing is freed. Drop it and an
+      approver's record of what they signed off disappears with the asset.
+
+    * WHO. Admin, superuser, or either. Item 28's other destructive control,
+      the category retag, is admin/superuser, which is the obvious default.
+
+    --- AND THE TESTING CASE IS ALREADY HALF-BUILT, BADLY ---
+
+    The reset scripts do this job today, unguarded — see STILL OPEN in item 30.
+    A proper delete facility on the admin page may well be what replaces them:
+    the same need, but with a confirmation, an audit trail, and no way to run
+    it against the wrong database by accident.
