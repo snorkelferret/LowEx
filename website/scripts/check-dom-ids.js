@@ -130,6 +130,22 @@ for (const { client, pages } of CHECKS) {
         declared.add(m[1]);
     }
 
+    // Markup a client BUILDS ITSELF counts as declared by that client.
+    //
+    // Without this, an element the client creates — a button put into a bar
+    // that lives in another component, say, so the two can be wired together —
+    // is reported as a missing id even though the same file writes it. The
+    // check would be telling the truth about the page and the wrong thing
+    // about the code.
+    //
+    // It is a heuristic and it can be fooled: an id mentioned only in a comment
+    // is counted. That is the safe direction to be wrong in — this check exists
+    // to catch an id NOTHING writes, and a comment is at least a claim that
+    // something does.
+    for (const m of source.matchAll(/id=["']([^"']+)["']/g)) {
+        declared.add(m[1]);
+    }
+
     if (declared.size === 0) {
         console.log(`  skip  ${client} — no page built to check against`);
         skipped++;

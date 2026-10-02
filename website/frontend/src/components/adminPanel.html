@@ -34,6 +34,14 @@
      get it, which is the same reason the accounts logic lives in a shared file.
      ============================================================ -->
 
+<!-- The utility bar for the admin pages, at the top of the first panel.
+     Empty here on purpose — see frontend/src/utilityBar.js. On the superuser
+     dashboard both this and developerPanel render one, and that module keeps
+     the first and drops the rest. -->
+<div class="d-flex justify-content-end mb-3">
+  <div class="utility-bar" data-utility-bar></div>
+</div>
+
 <nav class="admin-menu mb-4" aria-label="Admin sections">
   <ul class="nav nav-pills flex-wrap gap-1">
 

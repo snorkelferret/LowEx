@@ -1,7 +1,7 @@
 <section class="developer-assets-section">
 
   <!-- ========================================================
-       The developer's two views, and the way into the bin.
+       The developer's two views.
 
        There was no navigation here at all before this — the dashboard was one
        page with everything on it. Two tabs, because the two jobs are genuinely
@@ -9,13 +9,12 @@
        done, and the second one needs to still make sense when the first has
        moved on.
 
-       THE BIN IS NOT A THIRD TAB. It was one, and it was wrong: a tab is a
-       place you go and stay, and the bin is something you open, deal with, and
-       close. It is a glyph at the end of this row instead, opening a dialog.
+       THE BIN IS NOT A TAB AND NOT HERE. It was a tab, and that was wrong: a
+       tab is somewhere you go and STAY, and the bin is something you open, deal
+       with, and close. It is in the utility bar beside the page heading now,
+       with the manual — both are tools rather than places.
        ======================================================== -->
-  <div class="d-flex align-items-end justify-content-between">
-
-  <ul class="nav nav-tabs" id="developerTabs" role="tablist">
+  <ul class="nav nav-tabs mb-3" id="developerTabs" role="tablist">
 
     <li class="nav-item" role="presentation">
       <button
@@ -69,24 +68,6 @@
     </li>
 
   </ul>
-
-  <!-- The bin. A glyph rather than a tab: a tab is somewhere you go and stay,
-       and this is something you open, deal with, and close. The count rides on
-       it so an open bin is visible without opening it. -->
-  <button
-    type="button"
-    id="binButton"
-    class="btn btn-sm btn-outline-secondary mb-1 d-flex align-items-center gap-1"
-    data-bs-toggle="modal"
-    data-bs-target="#binModal"
-    title="Recently deleted"
-  >
-    <i class="bi bi-trash3"></i>
-    <span id="binCount" class="badge text-bg-secondary d-none">0</span>
-    <span class="visually-hidden">Recently deleted</span>
-  </button>
-
-  </div><!-- /tab row -->
 
 
   <div class="tab-content">

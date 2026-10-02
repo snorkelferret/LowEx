@@ -1,1 +1,23 @@
-<h1>Developer Panel </h1>
+<!-- frontend/src/components/developerPanel.html
+
+     The page heading, with the utility bar beside it.
+
+     The heading says which page this is; the bar holds the tools that are
+     always available on it. They belong on the same line because they are the
+     same kind of thing — page furniture, not content.
+
+     THE BAR IS EMPTY HERE, and that is not a mistake. build.js concatenates
+     components and cannot nest them, so its contents are built by
+     frontend/src/utilityBar.js, once, rather than written out in every file
+     that hosts a bar. See that file for why it is a bar at all and not two
+     floating glyphs.
+
+     NOTE this component is on the SUPERUSER dashboard as well as the
+     developer one, which is why it says "Developer Panel" somewhere it does
+     not belong. Left alone for now; the admin pages are being restructured. -->
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h1 class="mb-0">Developer Panel</h1>
+
+  <div class="utility-bar" data-utility-bar></div>
+</div>

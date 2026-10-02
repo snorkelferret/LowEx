@@ -7,6 +7,7 @@ import {
     normaliseCategory,
 } from '../../shared/assetRules.mjs';
 import { $, escapeHtml, formatFileSize } from './utils.js';
+import { addUtility } from './utilityBar.js';
 
 const API_URL = '/api/developer/workspace';
 
@@ -2550,9 +2551,42 @@ function restoreVersion(version, button) {
     );
 }
 
+// The bin's way in: a button in the utility bar, beside the manual.
+//
+// BUILT HERE RATHER THAN IN MARKUP, because the bar lives in developerPanel
+// and the bin belongs to this file — the modal, the count and the wiring are
+// all here. Somewhere between the two, one of them has to reach across, and a
+// button with a click handler is the smaller thing to pass.
+//
+// The count rides on the button so an open bin is visible without opening it.
 function initialiseBin() {
     const modal = $('binModal');
     if (!modal) return;
+
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.id = 'binButton';
+    button.title = 'Recently deleted';
+    button.innerHTML =
+        '<i class="bi bi-trash3"></i>' +
+        '<span class="utility-label">Bin</span>' +
+        '<span id="binCount" class="badge text-bg-secondary d-none">0</span>';
+
+    // Through the modal API rather than data-bs-toggle, because this element is
+    // created after the page was parsed — the data attributes Bootstrap scans
+    // for on load would never be seen.
+    button.addEventListener('click', () => {
+        if (!window.bootstrap) return;
+        window.bootstrap.Modal.getOrCreateInstance(modal).show();
+    });
+
+    if (!addUtility(button)) {
+        // No utility bar on this page. The bin is still reachable at
+        // /devDashboard.html, but there is nothing to hang the button on, so
+        // say so rather than failing silently.
+        console.warn('No utility bar found — the bin has no way in on this page.');
+    }
 
     // Reloaded on EVERY open, so the countdowns are current. Nothing else needs
     // doing here: the badge is set when the workspace loads, and again whenever

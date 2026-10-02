@@ -146,3 +146,49 @@ body {
 .header-user-actions #logoutBtn {
   white-space: nowrap;
 }
+
+/* ==========================================================================
+   Utility bar
+   ==========================================================================
+
+   A small panel of always-available tools, sitting inline with the page
+   heading. It replaced two things that were floating in a corner: a manual
+   glyph fixed to the bottom-left, which overlapped whatever the page put
+   there, and a bin tab, which gave a place you visit once the same standing as
+   the tabs you actually work in.
+
+   A bordered panel rather than bare glyphs, because a lone icon in a corner
+   reads as decoration. A group with a border reads as controls, which is what
+   they are — and there is room for more without it looking accidental. */
+
+.utility-bar {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .2rem .3rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: .5rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.utility-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .3rem .6rem;
+  border: 1px solid transparent;
+  border-radius: .35rem;
+  background: none;
+  color: var(--bs-secondary-color);
+  font-size: .875rem;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.utility-item:hover,
+.utility-item:focus-visible {
+  color: var(--bs-light);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+}

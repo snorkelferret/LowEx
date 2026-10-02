@@ -42,12 +42,21 @@
     <main class="container py-5" style="max-width: 800px;">
 
         <div class="mb-5">
-            <h1 class="h3 fw-bold mb-1">
-                Welcome<span id="user-greeting"></span>
-            </h1>
-            <p class="text-secondary mb-0">
-                You are signed in as <span id="user-role-line">a tester</span>.
-            </p>
+            <!-- The utility bar, inline with the greeting for the same reason
+                 it sits beside the heading everywhere else: page furniture,
+                 not content. Contents built by frontend/src/utilityBar.js. -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h1 class="h3 fw-bold mb-1">
+                        Welcome<span id="user-greeting"></span>
+                    </h1>
+                    <p class="text-secondary mb-0">
+                        You are signed in as <span id="user-role-line">a tester</span>.
+                    </p>
+                </div>
+
+                <div class="utility-bar" data-utility-bar></div>
+            </div>
         </div>
 
         <div class="row g-3 mb-4">
@@ -126,9 +135,9 @@
     <!-- Report-a-problem button. Builds its own markup. -->
     <script type="module" src="./src/feedback.js"></script>
 
-    <!-- The manual, as a corner glyph. Builds its own markup. This page is
-         hand-written rather than assembled by build.js, so the script is added
-         here as well as in the three dashboards' script lists. -->
-    <script type="module" src="./src/manualLink.js"></script>
+    <!-- The utility bar. Builds its own contents; the placeholder below gives
+         it somewhere to sit. This page is hand-written rather than assembled
+         by build.js, so both are added here as well as in the dashboards. -->
+    <script type="module" src="./src/utilityBar.js"></script>
 </body>
 </html>
