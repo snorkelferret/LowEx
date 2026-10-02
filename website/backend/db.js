@@ -224,6 +224,32 @@ const applyAssetRepositorySchema = () => {
   // introduces `releases`. Kept for now so the schema change is reviewable on
   // its own.
 
+  /*
+   * ----------------------------------------------------------
+   * stored_files — THE PHYSICAL CONTENT, AND THE ONLY COPY OF IT
+   *
+   * THERE IS ONE AND ONLY ONE COPY OF ANY SHA-256 IN THE
+   * ENTIRE PROJECT, and UNIQUE (sha256) below is what makes
+   * that true rather than merely intended. Every reference
+   * anywhere — a developer's workspace, the game store, a
+   * release — points at a row in this table. None of them
+   * owns the bytes, and none of them gets a second copy.
+   *
+   * So "uploading the same file again" is a no-op on disk. It
+   * adds a REFERENCE, not a file, and costs nothing: if the
+   * SHA is already here, the existing row is reused and no
+   * bytes are written. This is why quota is accounted per
+   * workspace rather than per stored file, and why the same
+   * content in two places is one file with two referrers.
+   *
+   * Consequence worth knowing before writing anything that
+   * counts these: summing per-user or per-workspace figures
+   * will never equal the disk, because one file can be
+   * referenced many times and a file referenced by nobody is
+   * still occupying bytes. Ask df for the disk.
+   * ----------------------------------------------------------
+   */
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS stored_files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

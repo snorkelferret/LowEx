@@ -1024,10 +1024,16 @@ They MUST be dealt with before any real user data exists.
     exactly ONE place, the quota projection, and only to avoid charging for
     content the store already holds. It never refuses and never says anything.
 
-    SO TODAY: a developer can upload a byte-identical copy of approved content
-    into their workspace, and nothing tells them. It is stored, referenced from
-    their version, and costs no quota. Silent, and the developer has no way to
-    learn that the thing they just uploaded is already in the game store.
+    SO TODAY: a developer can upload content that is already in the game store,
+    and nothing tells them. Note what that does and does NOT do — there is ONE
+    AND ONLY ONE COPY of any SHA-256 in the project, enforced by
+    UNIQUE (sha256) on stored_files, so this writes NO new bytes to disk. The
+    existing row is reused and the developer's version simply references it.
+    Nothing is duplicated and no quota is charged.
+
+    The cost is not storage, then. It is that the developer silently does
+    something pointless and is never offered the better path — pulling the
+    approved copy — which is what this item exists to provide.
 
     WHAT IT SHOULD DO: detect it and say so, naming the asset it already exists
     as. Then the developer pulls the approved copy instead of keeping a second
