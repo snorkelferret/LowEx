@@ -2003,27 +2003,53 @@ They MUST be dealt with before any real user data exists.
       meant to come back to. Verified: an empty .blend passed files_present,
       the per-file check AND the type check, and failed only this one.
 
-    * THE CONTENTS MUST MATCH THE EXTENSION — NOT BUILT. This is the one that
-      matters most, and extension-only cannot do it: a file named .nk is not
-      necessarily a Nuke script, and a file named .png is not necessarily an
-      image. What is being guarded against is a rename — something executable,
-      or something that is not an asset at all, wearing a trusted extension.
+    * THE CONTENTS MUST MATCH THE EXTENSION — BUILT 2026-10-02. The extension
+      is a CLAIM; this is what turns it into something a reviewer can rely on,
+      or says plainly that it cannot.
 
-      HOW: read the first bytes and match against known signatures (magic
-      numbers). Nuke, Blender, PNG, EXR, ZIP and the rest each start with
-      something identifiable. Where a format has NO reliable signature, the
-      honest answer is "cannot confirm" rather than a pass — the check should
-      say which files it verified and which it merely did not contradict.
+      FOUR OUTCOMES, NOT TWO, and the fourth is the point:
 
-      IT BELONGS IN THE SAME FUNCTION, or beside it. assetTypeOf() is the one
-      place a file's type is decided; this decides whether the file IS what its
-      name claims, and the two answers are only useful together. If they live
-      apart they will drift, and the drift would be a file that passes one and
-      not the other with no way to tell which was right.
+        confirmed      the bytes match a signature this extension may have
+        contradicted   they match something ELSE — the name is wrong, or the
+                       file is not what it claims
+        blocked        refused content, whatever it is called
+        unverifiable   nothing reliable to check against
 
-      NOTE IT CANNOT BE DONE AT UPLOAD. The bytes are on disk by the time the
-      technical check runs, which is the right place for it — the check is what
-      a version is judged on, and the judgement has to be reproducible.
+      UNVERIFIABLE IS NOT A PASS. A file the system cannot vouch for is
+      reported as such rather than counted as good. A tick that cannot fail
+      tells a reviewer nothing, and telling them nothing while looking like
+      approval is worse than saying so. The count is reported ALWAYS, including
+      when something failed — dropping it on failure would hide how much of an
+      upload was never actually checked.
+
+      BLOCKED IS SEPARATE FROM WRONG, as two checks: a .png that is really a
+      JPEG is a mislabelled asset, a .png that is really a Windows executable is
+      not an asset at all. Burying both in one list would hide the one that
+      matters. Executable signatures are checked BEFORE the extension, so a
+      rename cannot get past it.
+
+      WHAT IS NOT BLOCKED, deliberately: anything identified by "#!" or a text
+      prefix. Shell and Python scripts share those markers with legitimate files
+      here — a Nuke script and a Maya script are text too — so a rule built on
+      them would fail real assets. Running uploaded code is prevented by nothing
+      ever executing a stored file (item 35), not by this list.
+
+      SIGNS 61 OF 131 EXTENSIONS. The rest are text formats with no reliable
+      opening bytes — .obj, .ma, .nk, .dae, .gltf — and they report as
+      unverifiable. A format is listed ONLY if a file of that format ALWAYS
+      starts with those bytes; anything less would be a check that passes by
+      accident. Structural checks (a .usda must open with #usda, an .obj has
+      v/f line forms) would cover some of the gap and are a separate job.
+
+      LIVES BESIDE assetTypeOf() in shared/assetRules.mjs. The type map and the
+      signature table describe the same vocabulary, and kept apart they would
+      drift — check:naming now asserts that no signature exists for an
+      extension the type map has never heard of.
+
+      VERIFIED end to end: a real PNG confirmed; a JPEG named .png contradicted
+      as "looks like JPEG, not PNG"; a Windows executable named .png BLOCKED,
+      with the run failed; a Nuke script reported as one of the files that could
+      not be verified.
 
 
 35) NOTHING UPLOADED EVER RUNS. A standing rule, not a task.

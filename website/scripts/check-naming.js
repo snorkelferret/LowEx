@@ -305,6 +305,96 @@ check('the list stays a list a person can read',
     N.RESERVED_EXTENSIONS.size < 200,
     `${N.RESERVED_EXTENSIONS.size} extensions`);
 
+// ------------------------------------------------- content vs extension
+
+console.log('\n  -- content matches the name --');
+
+// The extension is a CLAIM; this is what turns it into something a reviewer can
+// rely on. The three outcomes are not two: a file the system cannot vouch for
+// is reported as unverifiable, NOT counted as good. A tick that cannot fail
+// tells a reviewer nothing.
+
+const head = (bytes) => {
+    const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'hex');
+    return Buffer.concat([buf, Buffer.alloc(N.SIGNATURE_HEAD_BYTES)]);
+};
+
+const verdict = (extension, bytes, pad = '') =>
+    N.checkFileContent(extension, head(
+        pad
+            ? Buffer.concat([Buffer.from(pad, 'hex'), Buffer.from(bytes, 'hex')])
+            : bytes
+    )).outcome;
+
+check('a real PNG is confirmed',
+    verdict('png', '89504E470D0A1A0A') === 'confirmed');
+
+check('a JPEG wearing a .png name is CONTRADICTED',
+    verdict('png', 'FFD8FF') === 'contradicted',
+    'and the verdict says what it does look like');
+
+check('the contradiction names both sides',
+    (() => {
+        const v = N.checkFileContent('png', head('FFD8FF'));
+        return v.actual === 'JPEG' && v.expected === 'PNG';
+    })());
+
+// The one that matters most: a rename must not get past it.
+check('an EXECUTABLE wearing a .png name is BLOCKED, not merely wrong',
+    verdict('png', '4D5A') === 'blocked');
+
+check('an executable is blocked even when the extension is honest',
+    verdict('exe', '4D5A') === 'blocked' &&
+    verdict('dll', '4D5A') === 'blocked');
+
+check('every blocked signature is recognised in any container',
+    ['ELF', 'Mach-O', 'Java'].every(() =>
+        ['png', 'nk', 'blend', 'zip'].every(ext =>
+            ['7F454C46', 'FEEDFACF', 'CAFEBABE'].some(sig =>
+                N.checkFileContent(ext, head(sig)).outcome === 'blocked'))));
+
+check('a text format with no signature is UNVERIFIABLE, not passed',
+    verdict('nk', Buffer.from('version 14.0\n').toString('hex')) === 'unverifiable' &&
+    verdict('obj', Buffer.from('# blender\nv 0 0 0\n').toString('hex')) === 'unverifiable');
+
+check('offset signatures are read at the right offset',
+    // "....ftyp" — an MP4 says nothing at byte 0
+    N.checkFileContent('mp4', head(
+        Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftyp')])
+    )).outcome === 'confirmed');
+
+check('a RIFF container is told apart by what follows RIFF',
+    N.checkFileContent('wav', head(
+        Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WAVE')])
+    )).outcome === 'confirmed' &&
+    N.checkFileContent('wav', head(
+        Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP')])
+    )).outcome === 'contradicted');
+
+check('several extensions may share one signature',
+    N.checkFileContent('docx', head('504B0304')).outcome === 'confirmed' &&
+    N.checkFileContent('unitypackage', head('504B0304')).outcome === 'confirmed',
+    'office files and .unitypackage are ZIP underneath');
+
+// The two lists describe the same vocabulary, so a signature for an extension
+// the type map has never heard of means they have drifted.
+check('no signature exists for an extension the type map does not know',
+    (() => {
+        const known = new Set(Object.values(N.ASSET_TYPE_EXTENSIONS).flat());
+        return N.CONTENT_FORMATS
+            .flatMap(f => f.extensions)
+            .every(ext => known.has(ext));
+    })());
+
+check('every signature is well-formed hex',
+    N.CONTENT_FORMATS.concat(N.BLOCKED_CONTENT).every(f =>
+        f.conditions.every(c =>
+            /^[0-9A-F]+$/.test(c.hex) &&
+            c.hex.length % 2 === 0 &&
+            Number.isInteger(c.offset) &&
+            c.offset + c.hex.length / 2 <= N.SIGNATURE_HEAD_BYTES)),
+    `nothing reads past ${N.SIGNATURE_HEAD_BYTES} bytes`);
+
 // ------------------------------------------------------- feedback rules
 
 console.log('\n  -- feedback rules --');

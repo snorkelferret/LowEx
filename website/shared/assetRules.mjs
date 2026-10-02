@@ -139,6 +139,208 @@ function assetTypeOf(filename) {
 }
 
 // ---------------------------------------------------------------------------
+// Content signatures — whether the bytes ARE what the name claims
+// ---------------------------------------------------------------------------
+//
+// The extension is a CLAIM. This is what turns it into something a reviewer can
+// rely on, or says plainly that it cannot.
+//
+// IT LIVES HERE, beside the type map, because the two are views of the same
+// vocabulary: an extension's type and an extension's signature have to agree,
+// and kept apart they would drift.
+//
+// THE INCLUSION RULE, and it is strict: a format is listed ONLY if a file of
+// that format ALWAYS starts with these bytes. Anything else is left out and
+// reported as UNVERIFIABLE — which is not a failure, and not a pass. A tick
+// that cannot fail is worse than no check, so this refuses to pretend.
+//
+// That is why the text formats are largely absent. .obj, .ma, .nk, .dae and
+// .gltf are text and have no reliable opening bytes; a .obj is recognised by
+// the shape of its lines, which is a parse, not a signature. Saying "cannot
+// confirm" about them is the honest answer.
+//
+// Each condition is a hex string at a byte offset, and ALL must match. Offsets
+// are needed more often than you would hope: MP4 says nothing at byte 0 and
+// identifies itself at byte 4, and anything RIFF-based (WAV, WebP, AVI) keeps
+// half its identity at byte 8.
+const CONTENT_FORMATS = [
+    // ---- images ----
+    { format: 'PNG',      extensions: ['png'],      conditions: [{ offset: 0, hex: '89504E470D0A1A0A' }] },
+    { format: 'JPEG',     extensions: ['jpg', 'jpeg'], conditions: [{ offset: 0, hex: 'FFD8FF' }] },
+    { format: 'GIF',      extensions: ['gif'],      conditions: [{ offset: 0, hex: '47494638' }] },
+    { format: 'BMP',      extensions: ['bmp'],      conditions: [{ offset: 0, hex: '424D' }] },
+    { format: 'ICO',      extensions: ['ico'],      conditions: [{ offset: 0, hex: '00000100' }] },
+    { format: 'TIFF',     extensions: ['tif', 'tiff'], conditions: [
+        { offset: 0, hex: '49492A00' },   // little-endian
+    ] },
+    { format: 'TIFF (big-endian)', extensions: ['tif', 'tiff'], conditions: [
+        { offset: 0, hex: '4D4D002A' },
+    ] },
+    { format: 'OpenEXR',  extensions: ['exr'],      conditions: [{ offset: 0, hex: '762F3101' }] },
+    { format: 'DDS',      extensions: ['dds'],      conditions: [{ offset: 0, hex: '44445320' }] },
+    { format: 'Photoshop', extensions: ['psd', 'psb'], conditions: [{ offset: 0, hex: '38425053' }] },
+    { format: 'WebP',     extensions: ['webp'],     conditions: [
+        { offset: 0, hex: '52494646' }, { offset: 8, hex: '57454250' },
+    ] },
+    { format: 'KTX',      extensions: ['ktx', 'ktx2'], conditions: [{ offset: 0, hex: 'AB4B5458' }] },
+    { format: 'ASTC',     extensions: ['astc'],     conditions: [{ offset: 0, hex: '13ABA15C' }] },
+
+    // ---- 3d ----
+    { format: 'glTF binary', extensions: ['glb'],   conditions: [{ offset: 0, hex: '676C5446' }] },
+    { format: 'Blender',  extensions: ['blend'],    conditions: [{ offset: 0, hex: '424C454E444552' }] },
+    { format: 'FBX (binary)', extensions: ['fbx'],  conditions: [{ offset: 0, hex: '4B617964617261' }] },
+    { format: 'Alembic',  extensions: ['abc'],      conditions: [{ offset: 0, hex: '4F67617761' }] },
+    { format: 'USD binary', extensions: ['usdc'],   conditions: [{ offset: 0, hex: '5058522D55534443' }] },
+    { format: 'USD ascii', extensions: ['usda'],    conditions: [{ offset: 0, hex: '2375736461' }] },
+    { format: 'PLY',      extensions: ['ply'],      conditions: [{ offset: 0, hex: '706C79' }] },
+
+    // ---- audio ----
+    { format: 'WAV',      extensions: ['wav'],      conditions: [
+        { offset: 0, hex: '52494646' }, { offset: 8, hex: '57415645' },
+    ] },
+    { format: 'AIFF',     extensions: ['aif', 'aiff'], conditions: [
+        { offset: 0, hex: '464F524D' }, { offset: 8, hex: '41494646' },
+    ] },
+    { format: 'Ogg',      extensions: ['ogg', 'opus'], conditions: [{ offset: 0, hex: '4F676753' }] },
+    { format: 'FLAC',     extensions: ['flac'],     conditions: [{ offset: 0, hex: '664C6143' }] },
+    { format: 'MP3',      extensions: ['mp3'],      conditions: [{ offset: 0, hex: '494433' }] },
+
+    // ---- video ----
+    { format: 'ISO media', extensions: ['mp4', 'm4v', 'mov'], conditions: [
+        { offset: 4, hex: '66747970' },
+    ] },
+    { format: 'Matroska', extensions: ['mkv', 'webm'], conditions: [{ offset: 0, hex: '1A45DFA3' }] },
+    { format: 'AVI',      extensions: ['avi'],      conditions: [
+        { offset: 0, hex: '52494646' }, { offset: 8, hex: '41564920' },
+    ] },
+    { format: 'ASF',      extensions: ['wmv'],      conditions: [{ offset: 0, hex: '3026B2758E66CF11' }] },
+
+    // ---- fonts ----
+    { format: 'TrueType', extensions: ['ttf'],      conditions: [{ offset: 0, hex: '00010000' }] },
+    { format: 'OpenType', extensions: ['otf'],      conditions: [{ offset: 0, hex: '4F54544F' }] },
+    { format: 'WOFF',     extensions: ['woff'],     conditions: [{ offset: 0, hex: '774F4646' }] },
+    { format: 'WOFF2',    extensions: ['woff2'],    conditions: [{ offset: 0, hex: '774F4632' }] },
+
+    // ---- archives and containers ----
+    // One ZIP signature covers a lot: .docx, .xlsx, .pptx, .odt, .sbsar and
+    // .unitypackage are all ZIP archives underneath.
+    { format: 'ZIP',      extensions: ['zip', 'docx', 'xlsx', 'pptx', 'odt', 'ods',
+                                       'odp', 'sbsar', 'unitypackage'], conditions: [
+        { offset: 0, hex: '504B0304' },
+    ] },
+    { format: 'RAR',      extensions: ['rar'],      conditions: [{ offset: 0, hex: '526172211A07' }] },
+    { format: '7-Zip',    extensions: ['7z'],       conditions: [{ offset: 0, hex: '377ABCAF271C' }] },
+    { format: 'GZIP',     extensions: ['gz', 'tgz'], conditions: [{ offset: 0, hex: '1F8B' }] },
+    { format: 'BZIP2',    extensions: ['bz2'],      conditions: [{ offset: 0, hex: '425A68' }] },
+    { format: 'XZ',       extensions: ['xz'],       conditions: [{ offset: 0, hex: 'FD377A585A00' }] },
+    { format: 'TAR',      extensions: ['tar'],      conditions: [{ offset: 257, hex: '7573746172' }] },
+
+    // ---- documents ----
+    { format: 'PDF',      extensions: ['pdf'],      conditions: [{ offset: 0, hex: '25504446' }] },
+    { format: 'Unity asset', extensions: ['unity', 'prefab', 'meta'], conditions: [
+        { offset: 0, hex: '2559414D4C' },
+    ] },
+];
+
+// Extension -> the formats that extension is allowed to be. An extension with
+// no entry here is UNVERIFIABLE, which is a real answer and not an error.
+const FORMATS_BY_EXTENSION = (() => {
+    const map = new Map();
+
+    for (const entry of CONTENT_FORMATS) {
+        for (const extension of entry.extensions) {
+            if (!map.has(extension)) map.set(extension, []);
+            map.get(extension).push(entry);
+        }
+    }
+
+    return map;
+})();
+
+// CONTENT THAT IS REFUSED WHATEVER IT IS CALLED.
+//
+// A separate list from the format signatures, because it answers a different
+// question. A .png that is really a JPEG is a mislabelled asset; a .png that is
+// really a Windows executable is something else entirely, and the two should
+// not arrive as the same finding.
+//
+// Checked BEFORE the extension is consulted, so naming it .nk does not help.
+// Note what is NOT here: anything identified by "#!" or by a text prefix. Shell
+// and Python scripts share those markers with legitimate files in this
+// pipeline — a Nuke script and a Maya script are text too — so a rule built on
+// them would fail real assets. Running uploaded code is prevented by nothing
+// ever executing a stored file (item 35), not by this list.
+const BLOCKED_CONTENT = [
+    { format: 'Windows executable', conditions: [{ offset: 0, hex: '4D5A' }] },
+    { format: 'Linux executable',   conditions: [{ offset: 0, hex: '7F454C46' }] },
+    { format: 'macOS executable',   conditions: [{ offset: 0, hex: 'FEEDFACE' }] },
+    { format: 'macOS executable',   conditions: [{ offset: 0, hex: 'FEEDFACF' }] },
+    { format: 'macOS executable',   conditions: [{ offset: 0, hex: 'CFFAEDFE' }] },
+    { format: 'Java class or universal binary', conditions: [{ offset: 0, hex: 'CAFEBABE' }] },
+];
+
+// How many bytes to read. 512 covers every condition above, including TAR's at
+// offset 257. Nothing here parses a whole file.
+const SIGNATURE_HEAD_BYTES = 512;
+
+function conditionsMatch(head, conditions) {
+    return conditions.every(({ offset, hex }) => {
+        const wanted = Buffer.from(hex, 'hex');
+        if (offset + wanted.length > head.length) return false;
+
+        return head.subarray(offset, offset + wanted.length).equals(wanted);
+    });
+}
+
+/**
+ * Is this file what its name says it is?
+ *
+ * @param extension  lowercase, no dot — from extensionOf()
+ * @param head       the first SIGNATURE_HEAD_BYTES of the content
+ *
+ * @returns { outcome, format?, expected?, actual? } where outcome is one of:
+ *
+ *   'blocked'       refused content, whatever the name. Checked first, so a
+ *                   rename cannot get past it.
+ *   'confirmed'     the bytes match a signature this extension may have.
+ *   'contradicted'  the bytes match something else — the name is wrong, or the
+ *                   file is not what it claims.
+ *   'unverifiable'  nothing reliable to check against. NOT a pass.
+ */
+function checkFileContent(extension, head) {
+    const bytes = Buffer.isBuffer(head) ? head : Buffer.from(head || []);
+
+    for (const blocked of BLOCKED_CONTENT) {
+        if (conditionsMatch(bytes, blocked.conditions)) {
+            return { outcome: 'blocked', actual: blocked.format };
+        }
+    }
+
+    const allowed = FORMATS_BY_EXTENSION.get(extension);
+
+    if (!allowed) {
+        return { outcome: 'unverifiable' };
+    }
+
+    for (const format of allowed) {
+        if (conditionsMatch(bytes, format.conditions)) {
+            return { outcome: 'confirmed', format: format.format };
+        }
+    }
+
+    // The name has a signature and the content does not match it. Say what it
+    // DOES look like, when it looks like something — that is the sentence a
+    // reviewer needs.
+    const looksLike = CONTENT_FORMATS.find(f => conditionsMatch(bytes, f.conditions));
+
+    return {
+        outcome: 'contradicted',
+        expected: allowed.map(f => f.format).join(' or '),
+        actual: looksLike ? looksLike.format : null,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Version suffix
 // ---------------------------------------------------------------------------
 //
@@ -450,6 +652,10 @@ export {
     RESERVED_EXTENSIONS,
     ASSET_TYPE_EXTENSIONS,
     assetTypeOf,
+    CONTENT_FORMATS,
+    BLOCKED_CONTENT,
+    SIGNATURE_HEAD_BYTES,
+    checkFileContent,
     NEAR_MATCH_MAX_DISTANCE,
     BACKUP_PATTERNS,
     ASSET_CATEGORIES,

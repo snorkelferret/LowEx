@@ -22,7 +22,10 @@ const {
     deriveUploadRoot,
     isBackupFile,
     normaliseCategory,
-    assetTypeOf
+    assetTypeOf,
+    extensionOf,
+    checkFileContent,
+    SIGNATURE_HEAD_BYTES
 } = require('../../shared/assetRules.mjs');
 
 
@@ -3034,6 +3037,122 @@ router.post(
                 message: emptyFiles.length
                     ? `Empty file(s) — 0 bytes: ${emptyFiles.join(', ')}`
                     : 'No file is empty.'
+            });
+
+
+            // ----------------------------------------------------
+            // Check: is each file what its NAME says it is?
+            //
+            // The extension is a claim. checkFileContent() reads the first
+            // bytes and answers in one of four ways — and the fourth is the
+            // important one:
+            //
+            //   confirmed      the bytes match a signature this extension may
+            //                  have
+            //   contradicted   they match something ELSE. The name is wrong, or
+            //                  the file is not what it claims.
+            //   blocked        refused content, whatever it is called
+            //   unverifiable   nothing reliable to check against
+            //
+            // UNVERIFIABLE IS NOT A PASS. A file the system cannot vouch for is
+            // reported as such rather than counted as good; a tick that cannot
+            // fail tells a reviewer nothing, and telling them nothing while
+            // looking like approval is worse than saying so.
+            //
+            // Read-only, and only the first SIGNATURE_HEAD_BYTES of each file.
+            // Nothing here executes, parses or interprets what it reads.
+            // ----------------------------------------------------
+
+            const blocked = [];
+            const contradicted = [];
+            const unverifiable = [];
+            let confirmed = 0;
+
+            for (const file of files) {
+
+                const storagePath = path.join(
+                    __dirname,
+                    '../uploads/files',
+                    file.storage_key
+                );
+
+                let head;
+
+                try {
+                    const handle = await fs.promises.open(storagePath, 'r');
+
+                    try {
+                        const buffer = Buffer.alloc(SIGNATURE_HEAD_BYTES);
+                        const { bytesRead } =
+                            await handle.read(buffer, 0, SIGNATURE_HEAD_BYTES, 0);
+
+                        head = buffer.subarray(0, bytesRead);
+                    } finally {
+                        await handle.close();
+                    }
+
+                } catch (err) {
+                    // Unreadable here is already reported by the per-file check
+                    // above; this one simply has nothing to say about it.
+                    continue;
+                }
+
+                const verdict = checkFileContent(
+                    extensionOf(file.filename),
+                    head
+                );
+
+                if (verdict.outcome === 'blocked') {
+                    blocked.push(`${file.filename} (${verdict.actual})`);
+                } else if (verdict.outcome === 'contradicted') {
+                    contradicted.push(
+                        verdict.actual
+                            ? `${file.filename} (looks like ${verdict.actual}, not ${verdict.expected})`
+                            : `${file.filename} (not ${verdict.expected})`
+                    );
+                } else if (verdict.outcome === 'unverifiable') {
+                    unverifiable.push(file.filename);
+                } else {
+                    confirmed++;
+                }
+            }
+
+
+            // Reported separately from a mismatch, because they are different
+            // things. A .png that is really a JPEG is a mislabelled asset. A
+            // .png that is really a Windows executable is not an asset at all,
+            // and burying the two in one list would hide the one that matters.
+            results.push({
+                name: 'no_executable_content',
+
+                status: blocked.length ? 'failed' : 'passed',
+
+                message: blocked.length
+                    ? `Refused content, whatever the file is called: ${blocked.join('; ')}`
+                    : 'No file contains executable content.'
+            });
+
+
+            // The count is ALWAYS reported, and so is the unverifiable list —
+            // including when something failed. Dropping it on failure would
+            // hide the fact that most of the upload was never actually checked,
+            // which is the one thing a reviewer must not be left guessing at.
+            const contentSummary =
+                `${confirmed} of ${files.length} file(s) verified against their extension.` +
+                (unverifiable.length
+                    ? ` ${unverifiable.length} could not be verified — no reliable ` +
+                      `signature for the format: ${unverifiable.join(', ')}`
+                    : '');
+
+            results.push({
+                name: 'content_matches_extension',
+
+                status: contradicted.length ? 'failed' : 'passed',
+
+                message: contradicted.length
+                    ? `Content does not match the file name: ${contradicted.join('; ')}. ` +
+                      contentSummary
+                    : contentSummary
             });
 
 
