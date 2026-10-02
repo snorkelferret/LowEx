@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillCategoryOptions();
     initialiseUploadUI();
     initialiseHistoryTab();
-    initialiseBinTab();
+    initialiseBin();
     loadDeveloperWorkspace();
 
 });
@@ -2305,10 +2305,12 @@ function initialiseHistoryTab() {
 // period for the browser to do arithmetic with: a countdown computed from the
 // client's clock is a countdown that depends on a clock that may be wrong.
 //
-// Every tab reloads this, because a restore or a purge changes the count — and
-// a badge that says 3 when the bin holds 2 is worse than no badge.
-
-let binLoaded = false;
+// RELOADED EVERY TIME IT IS OPENED, unlike the History tab.
+//
+// History is a record: it changes when the developer changes it, so loading it
+// once per visit is right. The bin has a CLOCK — the countdown on every item
+// moves whether or not anything happened — so a cached list would eventually
+// show "14 days left" for something about to go. It is one request, on a click.
 
 function binAlert(message) {
     const box = $('binAlert');
@@ -2493,7 +2495,6 @@ async function loadBin() {
             throw new Error(data.error || 'Could not load the bin.');
         }
 
-        binLoaded = true;
         renderBin(data);
 
     } catch (err) {
@@ -2549,12 +2550,12 @@ function restoreVersion(version, button) {
     );
 }
 
-function initialiseBinTab() {
-    const button = $('tab-bin-btn');
-    if (!button) return;
+function initialiseBin() {
+    const modal = $('binModal');
+    if (!modal) return;
 
-    button.addEventListener('shown.bs.tab', () => {
-        if (binLoaded) return;
-        loadBin();
-    });
+    // Reloaded on EVERY open, so the countdowns are current. Nothing else needs
+    // doing here: the badge is set when the workspace loads, and again whenever
+    // the bin is re-rendered, both through setBinCount().
+    modal.addEventListener('shown.bs.modal', loadBin);
 }

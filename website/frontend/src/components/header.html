@@ -12,11 +12,10 @@
       <span id="currentUserLabel">Logged in as: <strong id="headerUsernameTarget">Loading...</strong></span>
     </div>
 
-    <!-- The manual, for every role. A plain link rather than a button: it
-         navigates, it does not act on the session. -->
-    <a href="/app/manual" class="btn btn-outline-light btn-sm">
-      <i class="bi bi-book"></i> Manual
-    </a>
+    <!-- The manual is NOT here. It was a button in this corner, beside Log out,
+         which is where a session action lives and a link to a document does
+         not. It is now a small glyph in the bottom-left corner, added by
+         frontend/src/manualLink.js. -->
 
     <button id="logoutBtn" class="btn btn-outline-light btn-sm">
       <i class="bi bi-box-arrow-right"></i> Logout

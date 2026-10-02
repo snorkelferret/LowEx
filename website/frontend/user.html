@@ -29,9 +29,6 @@
             <a class="navbar-brand fw-bold text-uppercase" href="index.html">Low Expectations</a>
 
             <div class="d-flex align-items-center gap-2">
-                <a class="btn btn-sm btn-outline-secondary" href="/app/manual">
-                    <i class="bi bi-book me-1"></i> Manual
-                </a>
                 <a class="btn btn-sm btn-outline-secondary" href="discussion.html">
                     <i class="bi bi-chat-square-text me-1"></i> Discussion
                 </a>
@@ -128,5 +125,10 @@
 
     <!-- Report-a-problem button. Builds its own markup. -->
     <script type="module" src="./src/feedback.js"></script>
+
+    <!-- The manual, as a corner glyph. Builds its own markup. This page is
+         hand-written rather than assembled by build.js, so the script is added
+         here as well as in the three dashboards' script lists. -->
+    <script type="module" src="./src/manualLink.js"></script>
 </body>
 </html>

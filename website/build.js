@@ -13,6 +13,7 @@ const pageConfigurations = [
       './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
       './src/adminReports.js',    // Reports - shared the same way
       './src/feedback.js',        // Report-a-problem button. Builds its own markup.
+      './src/manualLink.js',      // The manual, as a corner glyph
       './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
@@ -37,6 +38,7 @@ const pageConfigurations = [
       './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
       './src/adminReports.js',    // Reports - shared the same way
       './src/feedback.js',        // Report-a-problem button
+      './src/manualLink.js',      // The manual, as a corner glyph
       './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',
@@ -57,6 +59,7 @@ const pageConfigurations = [
 	'./src/developerPanel.js',
 	'./src/developerWorkspace.js',
 	'./src/feedback.js',        // Report-a-problem button
+	'./src/manualLink.js',      // The manual, as a corner glyph
 	'./src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
     styles: '/styles/styles.css',

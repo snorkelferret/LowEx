@@ -1,15 +1,21 @@
 <section class="developer-assets-section">
 
   <!-- ========================================================
-       The developer's two views.
+       The developer's two views, and the way into the bin.
 
        There was no navigation here at all before this — the dashboard was one
        page with everything on it. Two tabs, because the two jobs are genuinely
        different: uploading is what you are doing now, history is what you have
        done, and the second one needs to still make sense when the first has
        moved on.
+
+       THE BIN IS NOT A THIRD TAB. It was one, and it was wrong: a tab is a
+       place you go and stay, and the bin is something you open, deal with, and
+       close. It is a glyph at the end of this row instead, opening a dialog.
        ======================================================== -->
-  <ul class="nav nav-tabs mb-3" id="developerTabs" role="tablist">
+  <div class="d-flex align-items-end justify-content-between">
+
+  <ul class="nav nav-tabs" id="developerTabs" role="tablist">
 
     <li class="nav-item" role="presentation">
       <button
@@ -34,24 +40,6 @@
         role="tab"
       >
         <i class="bi bi-clock-history me-1"></i>History
-      </button>
-    </li>
-
-    <!-- The bin. Deleting is reversible for a fortnight, and something a
-         developer can get back but cannot see is a grace period nobody can
-         use — so it gets its own place rather than being hidden in History,
-         which is a record rather than a place to act. -->
-    <li class="nav-item" role="presentation">
-      <button
-        class="nav-link"
-        id="tab-bin-btn"
-        data-bs-toggle="tab"
-        data-bs-target="#tab-bin"
-        type="button"
-        role="tab"
-      >
-        <i class="bi bi-trash3 me-1"></i>Bin
-        <span id="binCount" class="badge text-bg-secondary ms-1 d-none">0</span>
       </button>
     </li>
 
@@ -81,6 +69,24 @@
     </li>
 
   </ul>
+
+  <!-- The bin. A glyph rather than a tab: a tab is somewhere you go and stay,
+       and this is something you open, deal with, and close. The count rides on
+       it so an open bin is visible without opening it. -->
+  <button
+    type="button"
+    id="binButton"
+    class="btn btn-sm btn-outline-secondary mb-1 d-flex align-items-center gap-1"
+    data-bs-toggle="modal"
+    data-bs-target="#binModal"
+    title="Recently deleted"
+  >
+    <i class="bi bi-trash3"></i>
+    <span id="binCount" class="badge text-bg-secondary d-none">0</span>
+    <span class="visually-hidden">Recently deleted</span>
+  </button>
+
+  </div><!-- /tab row -->
 
 
   <div class="tab-content">
@@ -502,31 +508,46 @@
   </div><!-- /tab-history -->
 
 
-  <!-- ========================================================
-       Bin — deleted work that can still come back.
+  </div><!-- /tab-content -->
 
-       Separate from History on purpose. History is a record: it is for reading
-       what happened. The bin is a place to ACT, and it has a clock attached —
-       which is the one thing that distinguishes the two, and the reason
-       burying it under a history list would be wrong.
-       ======================================================== -->
-  <div class="tab-pane fade" id="tab-bin" role="tabpanel">
+</section>
 
-    <div class="card bg-dark border-secondary">
 
-      <div class="card-header d-flex justify-content-between align-items-center">
+<!-- ============================================================
+     The bin, as a dialog.
+
+     NOT A TAB ANY MORE. A tab is somewhere you go and stay; the bin is
+     something you open, act on, and close. Making it a tab also gave it the
+     same standing as Upload and History, which it does not have — those are
+     where the work is, and this is what you do with what you threw away.
+
+     It still has a clock, and the clock is why it is not simply folded into
+     History: History is a record for reading, and this is a place with a
+     deadline and buttons.
+
+     Lives OUTSIDE the tab content so it can be opened from anywhere on the
+     page, and so nothing about the tabs can hide it.
+     ============================================================ -->
+<div class="modal fade" id="binModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+
+    <div class="modal-content bg-dark text-light border-secondary">
+
+      <div class="modal-header border-secondary">
         <div>
-          <h2 class="h5 mb-1">
-            <i class="bi bi-trash3"></i>
-            Recently deleted
+          <h2 class="h5 modal-title mb-1">
+            <i class="bi bi-trash3 me-1"></i>Recently deleted
           </h2>
           <p class="text-secondary small mb-0" id="binRetentionLine">
             Deleting is reversible. After that the files are removed.
           </p>
         </div>
+
+        <button type="button" class="btn-close btn-close-white"
+                data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
-      <div class="card-body">
+      <div class="modal-body">
 
         <div id="binAlert" class="alert alert-danger py-2 small d-none"></div>
 
@@ -536,10 +557,11 @@
 
       </div>
 
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">Close</button>
+      </div>
+
     </div>
-
-  </div><!-- /tab-bin -->
-
-  </div><!-- /tab-content -->
-
-</section>
+  </div>
+</div>
