@@ -466,14 +466,18 @@ SOFT DELETE. A developer can delete anything in their own workspace.
   DELETE /assets/:assetId                      (the asset and its versions)
   DELETE /assets/:assetId/versions/:versionId  (one version)
 
-  * HARD delete is not available, and not by choice:
-    technical_check_runs.workspace_version_id and
-    creative_approvals.workspace_version_id are foreign keys with no ON DELETE
-    clause, so a version that has ever been checked or reviewed cannot be
-    deleted. That is arguably correct — the history of something submitted
-    should not be erasable. Soft delete sidesteps it: the rows stay, marked
-    is_active = 0, so review history survives and quota still frees, because
-    accounting counts live rows only.
+  * HARD delete does not work today, and that is a DEFECT TO FIX, not a
+    decision. technical_check_runs.workspace_version_id and
+    creative_approvals.workspace_version_id and .workspace_asset_id are foreign
+    keys with no ON DELETE clause, so a version that has ever been checked or
+    reviewed cannot be removed at all. Soft delete sidesteps it for now: rows
+    marked is_active = 0, so quota still frees because accounting counts live
+    rows only.
+
+    THIS WAS ORIGINALLY JUSTIFIED AS "the history of something submitted should
+    not be erasable", AND THAT REASONING IS WRONG FOR A STAGING AREA. See
+    PHYSICAL DELETE below. It is recorded here because the old wording argued
+    for keeping the constraint, and the constraint is going.
 
   * Only workspace rows are touched. stored_files, assets and asset_versions
     are never modified, so game-owned content and content another workspace
@@ -490,6 +494,76 @@ SOFT DELETE. A developer can delete anything in their own workspace.
     ALTER TABLE appends, so a migrated column always sits at the end while a
     fresh build declares it mid-table. Order is meaningless in SQL and a
     positional comparison would report that as drift on every migration.)
+
+PHYSICAL DELETE FROM A WORKSPACE — DECIDED 2026-10-02. NEEDED, NOT BUILT.
+
+  A developer must be able to PHYSICALLY remove an asset from their workspace:
+  rows gone, bytes freed, not hidden. This is a staging area, and most of what
+  passes through it is failed technical checks and abandoned attempts. There is
+  no value in keeping any of it. A workspace that can only ever grow is not a
+  staging area — it is an accidental archive.
+
+  AND THE RULE THAT BOUNDS IT, in the same breath: A DEVELOPER CAN NEVER REMOVE
+  A GAME ASSET. Not by this route, not by any route.
+
+  THE FOREIGN KEYS ARE THE BLOCKER. technical_check_runs and creative_approvals
+  hold FKs to workspace_versions and workspace_assets with no ON DELETE clause,
+  so the database refuses the delete outright. SQLite cannot alter a foreign
+  key, so this needs the 12-step rebuild — the same dance the invitations table
+  already performs in db.js, which is a working example to copy.
+
+  WHAT THE REBUILD NEEDS:
+
+    * ON DELETE CASCADE on technical_check_runs.workspace_version_id.
+    * ON DELETE CASCADE on creative_approvals.workspace_version_id and
+      .workspace_asset_id.
+    * NOTHING on repository_asset_id or repository_version_id. Those point INTO
+      the game store, and no cascade may ever run in that direction.
+    * It must follow the documented procedure — disable foreign key enforcement
+      for the rebuild, do it inside a transaction, re-enable, then run
+      PRAGMA foreign_key_check. Rebuilding a table with enforcement left on is
+      how rows go missing quietly.
+
+    THE REBUILD IS MECHANICALLY VERIFIABLE, which is the good news. check:schema
+    compares foreign keys INCLUDING on_delete (PRAGMA foreign_key_list, mapped
+    through f.on_update and f.on_delete), so a rebuild that drops the cascade,
+    or puts it on the wrong column, fails the check rather than being caught by
+    somebody reading the migration. It cannot be got wrong quietly.
+
+  WHEN BUILT, docs/onboarding-developers NEEDS CORRECTING. It currently tells
+  developers that deleting is a soft delete and that only their copy and their
+  quota go. That stops being true, and a developer-facing doc that understates
+  what a button does is worse than one that says nothing.
+
+  WHY THE HISTORY GOES, AND WHY THAT IS ALL RIGHT. A failed check run and a
+  rejected approval are records OF THE STAGING ATTEMPT. When the attempt is
+  deleted they have nothing left to describe. Nothing is lost that matters: the
+  game store keeps its own record of anything that became a game asset, and
+  audit_logs keeps the record of who deleted what. Provenance survives; it just
+  stops being duplicated on the staging side.
+
+  AND THE GAME-ASSET RULE ENFORCES ITSELF, which is the good part:
+
+    Physically deleting workspace rows removes workspace_version_files rows. It
+    CANNOT remove a blob, because a blob is only freed when NOTHING references
+    it — and if the content is in the game store, asset_version_files still
+    references it. The store's own reference is what keeps the bytes alive.
+
+    So "a developer can never remove a game asset" is not a permission check
+    that might be wrong. It is what the reference counting DOES. The worst a
+    developer can do to approved content is delete their own copy of it, which
+    the existing approved-version delete already allows and already says so in
+    its response.
+
+  STILL REFUSED WHILE AN APPROVAL IS PENDING (409), unchanged — what is being
+  reviewed must not vanish mid-review. And the response should say plainly
+  whether bytes were actually freed or only hidden, because a developer who
+  expects space back and does not get it will keep deleting things trying.
+
+  THIS IS A PREREQUISITE FOR THE WASTEBIN BELOW. A bin that empties after 14
+  days has to be able to actually remove things, and today it could not remove
+  anything that had ever been checked or reviewed. Do this first.
+
 
 WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
 
@@ -517,17 +591,14 @@ WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
 
   * A PURGE after the window. See the problem below.
 
-  THE 14-DAY PURGE CANNOT ALWAYS DELETE. technical_check_runs and
-  creative_approvals reference workspace_versions with NO ON DELETE clause, so a
-  version that has ever been checked or reviewed CANNOT be hard-deleted — the
-  database refuses. This is the same constraint recorded under SOFT DELETE
-  above, and it does not go away because we now want the space back.
+  THE 14-DAY PURGE NEEDS PHYSICAL DELETE, WHICH DOES NOT WORK YET. See PHYSICAL
+  DELETE above: the foreign keys on technical_check_runs and creative_approvals
+  make the database refuse to remove anything that has ever been checked or
+  reviewed. Until those are rebuilt with ON DELETE CASCADE, a bin that empties
+  after 14 days could not empty most of what would be put in it.
 
-  So the bin does not always empty. The purge deletes what it can and must leave
-  the rest, and the ones it leaves are precisely the ones with history. That is
-  arguably correct — the record of something submitted should not be erasable —
-  but it has to be stated, because "empties after 14 days" will otherwise be
-  read as a promise that it always does.
+  That fix is what makes "empties after 14 days" true rather than aspirational,
+  and it is why PHYSICAL DELETE comes first in the build order.
 
   AND THEN THE COLLECTOR FINISHES THE JOB. What the purge CAN always do is
   remove workspace_version_files rows, which is what holds the reference to the
@@ -1658,11 +1729,18 @@ They MUST be dealt with before any real user data exists.
     The chain has a first link that does not exist, so this is not a
     build-in-any-order set:
 
-      1. deleted_at on workspace_assets and workspace_versions. Nothing can
-         measure a 14-day window without it, and nothing else can start.
-      2. The wastebin: view, restore, and the purge that empties it.
-      3. The scheduler, running the purge.
-      4. Garbage collection, fed by the purge — starting report-only.
+      1. THE FOREIGN KEYS on technical_check_runs and creative_approvals,
+         rebuilt with ON DELETE CASCADE — see PHYSICAL DELETE under WORKSPACE
+         QUOTA AND SOFT DELETE. Nothing can actually be removed until this is
+         done, so every later step depends on it.
+      2. deleted_at on workspace_assets and workspace_versions. Nothing can
+         measure a 14-day window without it.
+      3. Physical delete: the route that really removes, and the response that
+         says plainly whether bytes were freed.
+      4. The wastebin: view, restore, and the purge that empties it.
+      5. The scheduler, running the purge.
+      6. Garbage collection, fed by the purge — starting report-only.
 
-    Step 1 is small and unblocks everything after it. Steps 3 and 4 are the only
-    genuinely new machinery here; the rest is more of what already exists.
+    Steps 1 and 2 are small and unblock everything after them. Steps 5 and 6 are
+    the only genuinely new machinery here; the rest is more of what already
+    exists.
