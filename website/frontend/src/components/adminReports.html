@@ -1,0 +1,57 @@
+<!-- ============================================================
+     Reports — bug reports and suggestions from every page.
+
+     A SEPARATE COMPONENT rather than another block inside adminPanel.html,
+     because it is a view in its own right and adminPanel is already carrying
+     the stats and the accounts table. It is listed in build.js for BOTH the
+     admin and the superuser dashboard, like the other shared panels.
+
+     NOTHING HERE IS NEW DATA. GET /api/feedback and the resolve route have
+     existed and been tested since the report button was built, and nothing
+     called either — so reports went somewhere nobody looked, which is worse
+     than not collecting them, because the person who sent one believes they
+     have been heard.
+
+     THE WRAPPING MATCHES adminPanel.html — "card superuser-module" with an h3
+     and a module-body — so the two sit together as the same kind of thing.
+     (devInvites.html wraps itself differently, which is a real inconsistency
+     on this page and worth tidying; noted rather than fixed here, because
+     changing it touches the superuser dashboard too.)
+     ============================================================ -->
+
+<section class="card superuser-module" id="admin-reports-module">
+  <h3>📨 Reports</h3>
+
+  <div class="module-body">
+
+    <p>Bug reports and suggestions, sent from the button on every page.</p>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h4 class="h6 mb-0">
+        Reports
+        <span id="reportCounts" class="text-secondary fw-normal small ms-1"></span>
+      </h4>
+
+      <select id="reportStatusFilter" class="form-select form-select-sm w-auto">
+        <option value="open">Open</option>
+        <option value="resolved">Resolved</option>
+        <option value="all">All</option>
+      </select>
+    </div>
+
+    <div id="reportListAlert" class="alert py-2 small d-none"></div>
+
+    <div id="reportList" class="text-secondary">
+      Loading reports...
+    </div>
+
+    <p class="form-text mt-2 mb-0">
+      Reports arrive with the sender, the time and the page already recorded —
+      taken from the session and the server clock rather than from the sender's
+      browser, so they can be relied on. A report from someone who could not
+      sign in carries no sender at all, which is itself the information: it
+      says they could not get in.
+    </p>
+
+  </div>
+</section>

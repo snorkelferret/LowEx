@@ -11,6 +11,7 @@ const pageConfigurations = [
       './src/superuser.js',       // Superuser Core Panel logic
       './src/sharedInvites.js',   // Single-instance shared developer invite code
       './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
+      './src/adminReports.js',    // Reports - shared the same way
       './src/feedback.js',        // Report-a-problem button. Builds its own markup.
       './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
@@ -18,7 +19,8 @@ const pageConfigurations = [
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',
-      'frontend/src/components/devInvites.html', 
+      'frontend/src/components/devInvites.html',
+      'frontend/src/components/adminReports.html', 
       'frontend/src/components/developerPanel.html',
       'frontend/src/components/repoControl.html',
       'frontend/src/components/cloudflareControl.html',
@@ -33,6 +35,7 @@ const pageConfigurations = [
       './src/admin.js',    // Admin Core logic
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
       './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
+      './src/adminReports.js',    // Reports - shared the same way
       './src/feedback.js',        // Report-a-problem button
       './src/notBuilt.js'         // Menu stubs for features that are not built yet
     ],
@@ -40,7 +43,8 @@ const pageConfigurations = [
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/adminPanel.html',
-      'frontend/src/components/devInvites.html', // <--- Added here!
+      'frontend/src/components/devInvites.html',
+      'frontend/src/components/adminReports.html',
       'frontend/src/components/loginModal.html',
     ],
  },
