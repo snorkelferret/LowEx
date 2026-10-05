@@ -1516,8 +1516,50 @@ They MUST be dealt with before any real user data exists.
     whoever builds these pages does not build the panel without it and then
     find the asset management has nowhere to live.
 
-    STORAGE, PER DEVELOPER. The data exists and is already defined the way we
-    agreed: workspaceUsage() in routes/developerWorkspace.js sums a workspace's
+    STORAGE — [DONE 2026-05-10]. The panel is built and shows both figures,
+    side by side, with the note explaining why they do not reconcile. The two
+    are now LIBRARIES rather than route-local code, because each is asked on
+    more than one screen and the answers must not diverge:
+
+      * backend/lib/workspaceUsage.js — what a developer is CHARGED.
+      * backend/lib/hostStorage.js    — what the DISK holds.
+
+    AND THE DEVELOPER'S NUMBER IS THE SAME FUNCTION. The admin tab does not sum
+    the tables itself; it calls workspaceUsage() per workspace, the same call
+    the developer's own panel makes. Two implementations would eventually
+    disagree, and the disagreement would be invisible until somebody compared
+    two screens — one developer being told they have room while the admin is
+    told they do not. Same function, same answer, by construction.
+
+    The status bands (ok / warning / critical) come from shared/usageStatus.mjs
+    so the disk and a quota cannot mean different things by "nearly full", and
+    the CLIENT IS NOT ASKED TO AGREE — it is sent a band and displays it.
+
+    INODES ARE SHOWN WITH THE SPACE, which was not in the original plan and
+    belongs there: a content-addressed store holds one file per SHA and game
+    assets include a great many small ones, so the file table can run out while
+    terabytes remain. It fails identically — every write refused — and a panel
+    that showed only free space would call that disk healthy.
+
+    STILL OPEN HERE:
+      * The warning has to be VISIBLE WITHOUT GOING LOOKING, which this tab is
+        not: it lives behind a tab. The banner belongs in the header or the
+        utility bar, and that is the Health panel's job.
+      * THRESHOLDS ARE HARDCODED at 85/95 in shared/usageStatus.mjs. Item 32
+        wants them admin-editable through the settings mechanism, which does not
+        exist yet. When it lands, the constants move behind it and the worker
+        must READ the setting rather than cache it at boot.
+      * The blob directory path '../uploads/files' is written out in FIVE
+        places (this lib, jobs/daily.js, the upload route, two reset scripts).
+        hostStorage.js exports BLOB_DIR; the other four should use it. Not done
+        in this change because two of them are destructive reset scripts that
+        would need re-testing to touch safely.
+
+    The rest of this section is the reasoning that produced the above, kept
+    because the accounting rules are easy to break later:
+
+    PER DEVELOPER. The data exists and is already defined the way we
+    agreed: workspaceUsage() sums a workspace's
     files against a quota, and workspaceStoredFileIds explicitly EXCLUDES
     anything that lives in the game store —
 
@@ -1537,7 +1579,12 @@ They MUST be dealt with before any real user data exists.
     tell the same bytes from the same file — but that is deduplication, not
     sharing, and both are still charged, because each is staging their own copy.
 
-    STORAGE, IN TOTAL — A DIFFERENT NUMBER, AND A DIFFERENT TOOL. The real
+    STORAGE, IN TOTAL — [DONE 2026-05-10, in backend/lib/hostStorage.js, which
+    uses statfs: total, used, available and percent on the volume the blobs are
+    actually on, plus the inode table. It reports bavail rather than bfree so
+    the root reserve is not counted as room a process can use.]
+
+    A DIFFERENT NUMBER, AND A DIFFERENT TOOL. The real
     question "are we about to run out of disk" is a HARDWARE question, not an
     accounting one, and the honest answer is df, not a sum of the tables. The
     per-developer figures above are what each developer is charged; they are not
@@ -1575,22 +1622,20 @@ They MUST be dealt with before any real user data exists.
     for the same reason as the rest, and it is now the last of the
     "we already record this and nobody can see it" group.
 
-    --- A LAYOUT INCONSISTENCY WORTH SETTLING ---
+    --- LAYOUT INCONSISTENCY — [SETTLED 2026-10-02]. The admin page is TABS,
+    the same as the developer page.
 
-    The admin page is a stack of sections with a menu that ANCHORS to them.
-    The developer page is a set of TABS. Both work; they do not match, and
-    "keep the look consistent across the pages" was the instruction.
+    Frontend/src/adminTabs.js switches sections by id, so the panes do not have
+    to be siblings in one .tab-content — which they cannot be, because these
+    panels are separate components that build.js concatenates and no one of
+    them can wrap the others. The nav lists EVERY section including the
+    superuser-only ones, and an entry whose section is not on the page is
+    removed, so the admin dashboard shows its tabs and the superuser dashboard
+    shows its own from one file.
 
-    Converting the admin page to tabs is a real restructure rather than a
-    tweak: adminPanel.html, devInvites.html and adminReports.html are separate
-    components concatenated into the page, and they are shared with the
-    superuser dashboard, which carries three more panels the admin page does
-    not have. Worth deciding deliberately rather than drifting into it.
-
-    Related, and smaller: devInvites.html wraps itself in
-    `<section class="container my-4">` while adminPanel.html and
-    adminReports.html use `<section class="card superuser-module">`. The odd
-    one out should become the same as the other two.
+    The container oddity is also gone: devInvites.html no longer wraps itself
+    in `<section class="container my-4">`; it is a plain section holding two
+    cards, like the other panels.
 
     --- AND STILL ABSENT ON PURPOSE ---
 

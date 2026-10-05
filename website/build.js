@@ -13,6 +13,7 @@ const pageConfigurations = [
       './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
       './src/adminReports.js',    // Reports - shared the same way
       './src/adminAudit.js',      // Audit log - shared the same way
+      './src/adminStorage.js',    // Storage - shared the same way
       './src/feedback.js',        // Report-a-problem button. Builds its own markup.
       './src/utilityBar.js',      // The utility bar: manual, and whatever else a page adds
       './src/adminTabs.js',       // The admin sections, switched by id
@@ -25,6 +26,7 @@ const pageConfigurations = [
       'frontend/src/components/devInvites.html',
       'frontend/src/components/adminReports.html',
       'frontend/src/components/adminAudit.html',
+      'frontend/src/components/adminStorage.html',
       // developerPanel is NOT here. It renders the DEVELOPER page's heading and
       // utility bar, and on this dashboard it printed a stray "Developer Panel"
       // heading that had nothing to do with anything on it. The admin panel
@@ -44,6 +46,7 @@ const pageConfigurations = [
       './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
       './src/adminReports.js',    // Reports - shared the same way
       './src/adminAudit.js',      // Audit log - shared the same way
+      './src/adminStorage.js',    // Storage - shared the same way
       './src/feedback.js',        // Report-a-problem button
       './src/utilityBar.js',      // The utility bar: manual, and whatever else a page adds
       './src/adminTabs.js',       // The admin sections, switched by id
@@ -56,6 +59,7 @@ const pageConfigurations = [
       'frontend/src/components/devInvites.html',
       'frontend/src/components/adminReports.html',
       'frontend/src/components/adminAudit.html',
+      'frontend/src/components/adminStorage.html',
       'frontend/src/components/loginModal.html',
     ],
  },

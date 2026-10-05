@@ -4,6 +4,9 @@ const router = express.Router();
 
 const db = require('../db');
 const audit = require('../lib/audit');
+// The quota accounting, shared with the admin Storage tab so the two pages
+// cannot show different figures for the same workspace.
+const { WORKSPACE_LIMIT_BYTES, workspaceUsage } = require('../lib/workspaceUsage');
 const { RETENTION_DAYS, retentionFor } = require('../lib/retention');
 // The purge itself lives in lib/, because the daily job runs the same one.
 const { purgeVersionFiles } = require('../lib/wastebin');
@@ -30,6 +33,10 @@ const {
     checkFileContent,
     SIGNATURE_HEAD_BYTES
 } = require('../../shared/assetRules.mjs');
+// Byte sizes, spelled the same way here as on screen. shared/ is the one copy —
+// the client formatter used to be a second implementation and the two had
+// already drifted apart.
+const { formatBytes } = require('../../shared/formatBytes.mjs');
 
 
 // ============================================================
@@ -41,87 +48,6 @@ const tempUploadDir = path.join(__dirname, '../uploads/tmp');
 fs.mkdirSync(tempUploadDir, { recursive: true });
 
 
-
-// ============================================================
-// WORKSPACE QUOTA
-// ============================================================
-//
-// A workspace is a STAGING AREA, not a store. The limit exists to stop it
-// being used as permanent storage, not to ration legitimate work.
-//
-// THE ACCOUNTING, and why it is shaped this way:
-//
-//   * COUNTED: distinct content the workspace still holds — that is, distinct
-//     stored_files referenced by its ACTIVE assets and ACTIVE versions.
-//
-//   * DISTINCT, because content is addressed by SHA. Re-uploading unchanged
-//     files must not count again, or every iteration would appear to cost the
-//     full size of the tree.
-//
-//   * EXCLUDED: anything already in the GAME STORE. Game-owned content is not
-//     what the workspace is staging, and pulling an approved asset back down
-//     to iterate on it must not consume quota — that round trip is the workflow
-//     the portal exists to support.
-//
-//   * A WORKSPACE IS PRIVATE. Nothing in it is visible to, or shared with,
-//     another developer. The GAME STORE is the only shared content in the
-//     system, which is why it is the only thing the exclusion above is about.
-//
-//   * The store is content-addressed, so it cannot tell "the same bytes" from
-//     "the same file". If two developers independently upload identical
-//     content, it is stored ONCE and counted against BOTH. That is not sharing
-//     — neither can see the other's work — it is deduplication, and each is
-//     still staging their own copy. Which is exactly why the accounting is per
-//     workspace and not per stored file.
-//
-//   * SOFT-DELETED rows do not count, which is precisely how deleting frees
-//     quota without destroying review history.
-//
-// Tunable without a code change. Default 5 GiB: a 500 MB .blend re-saved ten
-// times is 5 GB of genuinely new content, and dedup does not help with that,
-// so a smaller limit would strand a developer mid-iteration on a large asset.
-const WORKSPACE_LIMIT_BYTES = (() => {
-    const configured = Number(process.env.WORKSPACE_LIMIT_BYTES);
-    return Number.isFinite(configured) && configured > 0
-        ? configured
-        : 5 * 1024 * 1024 * 1024;
-})();
-
-// Sizes are shown to developers, so they are rendered in a unit a person can
-// read. A fixed MB divisor reported a small limit as "0.0 MB" and a 5 GB limit
-// as "5120.0 MB".
-function formatBytes(bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-
-    let value = Number(bytes) || 0;
-    let unit = 0;
-
-    while (value >= 1024 && unit < units.length - 1) {
-        value /= 1024;
-        unit++;
-    }
-
-    return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
-}
-
-// Distinct stored files the workspace currently holds, game-store content
-// excluded.
-const workspaceStoredFileIds = db.prepare(`
-    SELECT DISTINCT wvf.stored_file_id AS id
-    FROM workspace_version_files wvf
-    JOIN workspace_versions wv ON wv.id = wvf.workspace_version_id
-    JOIN workspace_assets   wa ON wa.id = wv.workspace_asset_id
-    WHERE wa.workspace_id = ?
-      AND wa.is_active = 1
-      AND wv.is_active = 1
-      AND wvf.stored_file_id NOT IN (
-          SELECT stored_file_id FROM asset_version_files
-      )
-`);
-
-const fileSizeOf = db.prepare(`
-    SELECT id, file_size FROM stored_files WHERE id = ?
-`);
 
 // ---------------------------------------------------------------------------
 // A version's review state — DEFINED ONCE
@@ -231,27 +157,6 @@ const shaHeldByWorkspace = db.prepare(`
       AND sf.sha256 = ?
     LIMIT 1
 `);
-
-function workspaceUsage(workspaceId) {
-    const rows = workspaceStoredFileIds.all(workspaceId);
-
-    let bytes = 0;
-    for (const row of rows) {
-        const file = fileSizeOf.get(row.id);
-        if (file) bytes += file.file_size;
-    }
-
-    return {
-        bytes,
-        limit_bytes: WORKSPACE_LIMIT_BYTES,
-        remaining_bytes: Math.max(0, WORKSPACE_LIMIT_BYTES - bytes),
-        file_count: rows.length,
-        percent_used: WORKSPACE_LIMIT_BYTES > 0
-            ? Math.round((bytes / WORKSPACE_LIMIT_BYTES) * 1000) / 10
-            : 0
-    };
-}
-
 
 // ============================================================
 // GET /api/developer/workspace/assets

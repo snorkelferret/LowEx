@@ -20,6 +20,11 @@ const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { isStrictlyBelow } = require('../lib/roles');
 const audit = require('../lib/audit');
+// The two storage questions. Kept as libraries because each is asked on more
+// than one screen and the answers must not diverge — see each file for why they
+// are separate questions.
+const { hostStorage } = require('../lib/hostStorage');
+const { WORKSPACE_LIMIT_BYTES, workspaceUsage } = require('../lib/workspaceUsage');
 
 // All routes require at least Admin privilege
 router.use(authenticateToken, requireAdmin);
@@ -152,6 +157,107 @@ router.get('/audit', (req, res) => {
     } catch (err) {
         console.error('Failed to read the audit log:', err);
         return res.status(500).json({ error: 'Failed to load the audit log' });
+    }
+});
+
+
+/**
+ * GET /api/admin/storage
+ *
+ * Two questions, kept apart because their answers do not reconcile.
+ *
+ * WHAT THE DISK HOLDS — from backend/lib/hostStorage.js. Bytes and inodes on
+ * the filesystem the blobs live on, with a status of ok / warning / critical.
+ *
+ * WHAT DEVELOPERS ARE CHARGED — per workspace, from
+ * backend/lib/workspaceUsage.js. THE SAME FUNCTION THE DEVELOPER'S OWN PANEL
+ * CALLS, deliberately: if this route summed the tables itself the two screens
+ * would eventually disagree, and the developer would be told they have room
+ * while the admin was told they did not. Same function, same answer, by
+ * construction.
+ *
+ * THE TWO TOTALS ARE NOT SUPPOSED TO MATCH and the panel says so in as many
+ * words. Charged bytes exclude the game store, count a shared blob once per
+ * workspace holding it, and ignore soft-deleted rows; disk bytes are every blob
+ * once. The difference is the game store, plus whatever the collector has not
+ * reached yet. An administrator who assumes one should equal the other will
+ * report the accounting as broken.
+ */
+router.get('/storage', (req, res) => {
+    try {
+        const host = hostStorage();
+
+        // What the store actually occupies. One row per SHA and one blob per
+        // row — the flat content-addressed layout — so this is the store's real
+        // size and not an estimate.
+        const store = db.prepare(`
+            SELECT COUNT(*) AS blob_count, COALESCE(SUM(file_size), 0) AS bytes
+            FROM stored_files
+        `).get();
+
+        // Every developer account, including one that has never uploaded and so
+        // has no workspace row. A list that silently omits them reads as "these
+        // are all the developers", which is a different and wrong claim.
+        //
+        // Ordered by what they hold, largest first: the tab exists to show who
+        // is near the limit, and that should be the first thing on it.
+        const accounts = db.prepare(`
+            SELECT
+                u.id       AS developer_id,
+                u.username,
+                u.email,
+                u.is_active,
+                dw.id      AS workspace_id
+            FROM users u
+            LEFT JOIN developer_workspaces dw ON dw.developer_id = u.id
+            WHERE u.role = 'developer' OR dw.id IS NOT NULL
+        `).all();
+
+        const developers = accounts.map(account => {
+            // No workspace is genuinely zero, not unknown: nothing has been
+            // uploaded, because a workspace is created by uploading.
+            const usage = account.workspace_id
+                ? workspaceUsage(account.workspace_id)
+                : {
+                    bytes: 0,
+                    file_count: 0,
+                    percent_used: 0,
+                    status: 'ok',
+                    limit_bytes: WORKSPACE_LIMIT_BYTES,
+                    remaining_bytes: WORKSPACE_LIMIT_BYTES
+                };
+
+            return {
+                developer_id: account.developer_id,
+                username: account.username,
+                email: account.email,
+                is_active: account.is_active,
+                workspace_id: account.workspace_id,
+                ...usage
+            };
+        }).sort((a, b) => b.bytes - a.bytes);
+
+        const charged_bytes = developers.reduce((sum, d) => sum + d.bytes, 0);
+
+        return res.json({
+            host,
+            store: {
+                blob_count: store.blob_count,
+                bytes: store.bytes
+            },
+            charged: {
+                bytes: charged_bytes,
+                developer_count: developers.length,
+                // Named for what it is. The admin needs to know which figure
+                // the per-developer percentages are out of.
+                workspace_limit_bytes: WORKSPACE_LIMIT_BYTES
+            },
+            developers
+        });
+
+    } catch (err) {
+        console.error('Failed to read storage figures:', err);
+        return res.status(500).json({ error: 'Failed to load storage figures' });
     }
 });
 

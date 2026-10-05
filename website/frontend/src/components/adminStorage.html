@@ -1,0 +1,56 @@
+<!-- ============================================================
+     Storage — the disk, and what each developer is charged.
+
+     TWO FIGURES THAT ARE NOT SUPPOSED TO MATCH, and the panel says so out loud
+     because the first thing an administrator does with two totals is subtract
+     one from the other. Disk bytes are every blob once; charged bytes exclude
+     the game store, count a blob once per workspace holding it, and ignore
+     soft-deleted rows. The gap between them is the game store plus whatever the
+     collector has not reached, and it is not an error.
+
+     THE PER-DEVELOPER NUMBERS COME FROM THE DEVELOPER'S OWN FUNCTION. The
+     server calls workspaceUsage() — the same one the developer's panel calls —
+     so this tab cannot tell a different story from the screen the developer is
+     looking at. See backend/lib/workspaceUsage.js.
+
+     SAME SHAPE AS THE REPORTS AND AUDIT PANELS: card-header, then card-body
+     holding the alert and the content. The three sit in one tab strip and
+     should look like it.
+
+     THE FIGURES ARE BUILT BY adminStorage.js, not written into this markup.
+     They arrive from the server in one response with a shared shape, and there
+     are three states for the host block alone (unreadable, warning, normal) —
+     a static skeleton would be more markup than content, and half of it would
+     be a placeholder to be replaced a moment later.
+     ============================================================ -->
+
+<section class="card superuser-module mb-4" id="admin-storage-module">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">💾 Storage</h2>
+  </div>
+
+  <div class="card-body">
+
+    <p class="text-secondary">
+      What the hardware is holding, and what each developer is charged for.
+      Charged figures count only what a developer is staging: the game store is
+      shared and belongs to nobody, and pulling an approved asset back to work
+      on it costs no quota. So the two totals differ, and they should.
+    </p>
+
+    <div id="storageAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+
+    <div id="storageHost" class="text-secondary">Checking the disk...</div>
+
+    <div id="storageReconcile" class="mt-3"></div>
+
+    <h3 class="h6 mt-4 mb-2">
+      By developer
+      <span id="storageDeveloperCount" class="text-secondary fw-normal small ms-1"></span>
+    </h3>
+
+    <div id="storageDevelopers" class="text-secondary">Loading developers...</div>
+
+  </div>
+</section>

@@ -6,7 +6,8 @@ import {
     ASSET_CATEGORIES,
     normaliseCategory,
 } from '../../shared/assetRules.mjs';
-import { $, escapeHtml, formatFileSize } from './utils.js';
+import { $, escapeHtml } from './utils.js';
+import { formatBytes } from '../../shared/formatBytes.mjs';
 import { addUtility } from './utilityBar.js';
 import { apiFetch } from './api.js';
 
@@ -114,8 +115,8 @@ let skippedBackupCount = 0;
 // DOM helpers
 // ============================================================
 
-// $, escapeHtml and formatFileSize come from ./utils.js. They were defined here
-// as well as in three other client files — identical, but only by luck.
+// $ and escapeHtml come from ./utils.js, formatBytes from shared/. Both were
+// defined here as well as elsewhere — identical, but only by luck.
 
 
 // ============================================================
@@ -779,7 +780,7 @@ function renderUploadPreview() {
                 'text-nowrap text-secondary';
 
             sizeCell.textContent =
-                formatFileSize(
+                formatBytes(
                     item.file.size
                 );
 
@@ -1222,8 +1223,8 @@ function renderQuotaPanel() {
     const label = document.createElement('span');
     label.className = 'me-2';
     label.textContent =
-        `${formatFileSize(workspaceUsage.bytes)} of ` +
-        `${formatFileSize(workspaceUsage.limit_bytes)} used`;
+        `${formatBytes(workspaceUsage.bytes)} of ` +
+        `${formatBytes(workspaceUsage.limit_bytes)} used`;
 
     const bar = document.createElement('div');
     bar.className = 'progress d-inline-block align-middle';
@@ -1269,7 +1270,7 @@ function updateUploadSizeSummary() {
     );
 
     summary.textContent =
-        `Total ${formatFileSize(totalBytes)} across ${selectedFiles.length} ` +
+        `Total ${formatBytes(totalBytes)} across ${selectedFiles.length} ` +
         `file${selectedFiles.length === 1 ? '' : 's'}.` +
         (skippedBackupCount > 0
             ? ` ${skippedBackupCount} backup file${skippedBackupCount === 1 ? '' : 's'} ` +
@@ -1283,8 +1284,8 @@ function updateUploadSizeSummary() {
     if (projected > workspaceUsage.limit_bytes) {
         warning.textContent =
             `This upload may exceed the workspace limit — up to ` +
-            `${formatFileSize(projected)} against a ` +
-            `${formatFileSize(workspaceUsage.limit_bytes)} limit. Content the ` +
+            `${formatBytes(projected)} against a ` +
+            `${formatBytes(workspaceUsage.limit_bytes)} limit. Content the ` +
             `workspace already holds does not count, so the real figure may be ` +
             `lower. The server checks exactly and will refuse if it would go over.`;
         warning.classList.remove('d-none');
@@ -1878,7 +1879,7 @@ function renderWorkspaceAssets(assets) {
                         const details = document.createElement('div');
                         details.className = 'small text-secondary mt-1';
 
-                        const size = formatFileSize(file.file_size);
+                        const size = formatBytes(file.file_size);
 
                         details.textContent =
                             `${size}${file.mime_type ? ` • ${file.mime_type}` : ''}`;
@@ -1917,8 +1918,8 @@ function formatWorkspaceDate(value) {
     return date.toLocaleString();
 }
 
-// formatFileSize() and escapeHtml() moved to ./utils.js, where they are defined
-// once for every client file rather than once each.
+// escapeHtml() moved to ./utils.js and formatBytes() to shared/formatBytes.mjs,
+// where each is defined once for every caller rather than once each.
 
 
 // ============================================================
@@ -2078,7 +2079,7 @@ function renderPurgeState(asset, version) {
                 item.className = 'font-monospace text-secondary';
 
                 const path = file.path ? `${file.path}/${file.filename}` : file.filename;
-                item.textContent = `${path} — ${formatFileSize(file.size)}`;
+                item.textContent = `${path} — ${formatBytes(file.size)}`;
                 item.title = file.sha256;
 
                 list.appendChild(item);
@@ -2392,7 +2393,7 @@ function binRow({ title, subtitle, item, onRestore }) {
     } else {
         state.textContent =
             `${item.file_count} file${item.file_count === 1 ? '' : 's'}, ` +
-            `${formatFileSize(item.bytes)}. The files are still here. ` +
+            `${formatBytes(item.bytes)}. The files are still here. ` +
             binCountdown(item);
     }
 

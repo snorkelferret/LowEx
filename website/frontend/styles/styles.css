@@ -115,6 +115,27 @@ body {
  * the header stays full-bleed. */
 :root {
   --page-inset: 1.5rem;
+
+  /* ---------------------------------------------------------------
+     The reserved status scale.
+
+     Three steps, not four: these are the ones the portal actually
+     distinguishes, and a step defined for a state nothing reports is a
+     colour waiting to be used for emphasis instead.
+
+     They mean a STATE and nothing else — never decoration, never
+     emphasis, never a chart series. Bootstrap's success/warning/danger
+     are theme colours and shift with the theme; these are fixed, because
+     "nearly full" must look the same on every page that says it.
+
+     ALWAYS PAIRED WITH AN ICON AND A WORD. Around one man in twelve has
+     a colour vision deficiency, and red-versus-green is the pair that
+     goes first, so the colour reinforces a label that is already there
+     and is never the whole message.
+     --------------------------------------------------------------- */
+  --status-ok: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
 }
 
 .app-header {
@@ -317,5 +338,46 @@ body {
    colour: it means "waiting on somebody" here and must not drift with the
    palette. 8.41:1 on the dark card, so it is legible as ordinary text. */
 .stat-value--attention {
-  color: #fab219;
+  color: var(--status-warning);
+}
+
+/* ==========================================================================
+   Usage bars
+   ==========================================================================
+
+   A proportion of a limit — disk filled, quota spent. A bar rather than a
+   percentage alone because the limit is the point: "78%" and "nearly out of
+   room" are the same number and different facts.
+
+   Bootstrap's .progress is not used: it is a fixed 1rem tall, its bar needs a
+   label to be visible at all, and the status colours below would have to be
+   overridden on every use. Four rules is less CSS than the overrides.
+
+   The fill colour is the STATUS of the measurement, not a series identity, and
+   it is never the only signal — the percentage is printed beside every bar and
+   the host block carries an icon and a word. */
+
+.usage-bar {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background-color: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--bs-secondary-color);
+  transition: width 0.2s ease;
+}
+
+.usage-bar-fill--ok       { background-color: var(--status-ok); }
+.usage-bar-fill--warning  { background-color: var(--status-warning); }
+.usage-bar-fill--critical { background-color: var(--status-critical); }
+
+/* A bar with nothing in it reads as missing rather than as zero, so a zero
+   fill is given a sliver — enough to say "measured, and it is nothing". */
+.usage-bar-fill--empty {
+  min-width: 2px;
+  background-color: rgba(255, 255, 255, 0.25);
 }

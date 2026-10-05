@@ -24,25 +24,7 @@ export function escapeHtml(value) {
     );
 }
 
-/**
- * A file size in a unit a person can read.
- *
- * The exponent is derived rather than fixed: a hardcoded MB divisor rendered a
- * small limit as "0.0 MB" and a 5 GB one as "5120.0 MB".
- */
-export function formatFileSize(bytes) {
-    if (!Number.isFinite(bytes) || bytes <= 0) {
-        return '0 B';
-    }
-
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-
-    const exponent = Math.min(
-        Math.floor(Math.log(bytes) / Math.log(1024)),
-        units.length - 1
-    );
-
-    const value = bytes / Math.pow(1024, exponent);
-
-    return `${value.toFixed(exponent === 0 ? 0 : 2)} ${units[exponent]}`;
-}
+// formatFileSize used to live here. It now lives in shared/formatBytes.mjs —
+// see that file for why: the server had its own copy, and the two had already
+// drifted to one decimal and two for the same figure. The client imports it
+// from shared like everything else that both halves need.
