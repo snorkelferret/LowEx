@@ -33,10 +33,11 @@
   <div class="card-body">
 
     <p class="text-secondary">
-      What the hardware is holding, and what each developer is charged for.
-      Charged figures count only what a developer is staging: the game store is
-      shared and belongs to nobody, and pulling an approved asset back to work
-      on it costs no quota. So the two totals differ, and they should.
+      What this server's disk is holding, and how much of it sits in each
+      developer's workspace. Workspace figures count only what a developer is
+      staging: the game store is shared and belongs to nobody, and pulling an
+      approved asset back to work on it uses none of their allowance. So the two
+      totals differ, and they should — nothing here is billed to anyone.
     </p>
 
     <div id="storageAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
@@ -51,6 +52,50 @@
     </h3>
 
     <div id="storageDevelopers" class="text-secondary">Loading developers...</div>
+
+    <!-- ---------------------------------------------------------------
+         Storage by game version — PROVISION ONLY. No data, and no fake
+         controls.
+
+         There is nothing to report yet: no game version exists, and nothing in
+         the schema records which content belongs to one. What will fill this is
+         a game version's total size — the figure needed to buy hosting
+         elsewhere — and the same figure per version, so a build quietly growing
+         out of proportion is visible before it is a problem.
+
+         It is written down here rather than left in the TODO so the shape of
+         the page is decided while the surrounding panel is being built, and so
+         the reason it is empty is on the screen rather than in a document.
+         --------------------------------------------------------------- -->
+    <div class="border-top border-secondary-subtle mt-4 pt-3">
+      <h3 class="h6 mb-2">
+        Storage by game version
+        <span class="badge text-bg-secondary fw-normal ms-2">not built</span>
+      </h3>
+
+      <p class="text-secondary small mb-2">
+        Not built yet, and it cannot be until there is a game version to measure.
+        Nothing in the system currently records which content belongs to one.
+      </p>
+
+      <p class="text-secondary small mb-2">
+        When there is, this will show the total size of each version —
+        production, development, experimental, and any others — so the figure
+        needed to host a build elsewhere can be read off rather than estimated,
+        and so a version that is growing out of proportion to the others is
+        visible before it becomes a problem. The follow-on is a view of where
+        the bytes actually went inside a version, for deciding what is worth
+        optimising. Neither is being built now.
+      </p>
+
+      <p class="text-secondary small mb-0">
+        One thing that will be true when it is: content is stored once and
+        referenced by everything that needs it, so the same file counted under
+        two versions is one file on disk. Per-version figures will not add up to
+        the total above, and that is the design rather than an error in the
+        arithmetic.
+      </p>
+    </div>
 
   </div>
 </section>

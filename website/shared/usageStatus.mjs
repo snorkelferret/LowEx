@@ -13,26 +13,53 @@
 // sent a band and they display it. The client is not trusted to agree because
 // it is not asked.
 //
-// WARNING AT 85, CRITICAL AT 95, and the gap is not decoration. An upload needs
-// room to be written before it can be refused, and a filesystem at zero free is
-// not merely full — SQLite cannot write its WAL, so the portal stops accepting
-// anything at all, logins included, and the fix has to come from a shell. The
-// margin exists so the portal is still usable, and still saying what is wrong,
-// when the warning becomes true.
+// THE LEVELS ARE NOW ARGUMENTS, not constants, because they are an admin
+// setting (backend/lib/settings.js). The defaults below are what apply when
+// nobody has overridden them, and they are the values this file shipped with —
+// so a caller that passes nothing behaves exactly as it did before.
+//
+// THEY ARE PASSED IN RATHER THAN LOOKED UP HERE, and that is not a style
+// choice. This file lives in shared/, the directory for code BOTH halves of the
+// app use, so the frontend may import it. A module the browser can load must
+// never reach for the database, and a function that fetched its own thresholds
+// would have to. The caller reads the setting; this only does the arithmetic.
+//
+// THE GAP BETWEEN THEM IS NOT DECORATION. An upload needs room to be written
+// before it can be refused, and a filesystem at zero free is not merely full —
+// SQLite cannot write its WAL, so the portal stops accepting anything at all,
+// logins included, and the fix has to come from a shell. The margin exists so
+// the portal is still usable, and still saying what is wrong, when the warning
+// becomes true.
 
-export const WARNING_PERCENT = 85;
-export const CRITICAL_PERCENT = 95;
+export const DEFAULT_WARNING_PERCENT = 85;
+export const DEFAULT_CRITICAL_PERCENT = 95;
 
-// A percentage, a band. Unknown or missing input is 'ok' rather than 'critical':
-// a figure that failed to arrive is not evidence of a full disk, and a screen
-// that cries wolf on a missing number gets ignored on the day it is right.
-export function usageStatus(percent) {
+/**
+ * A percentage, a band.
+ *
+ * Unknown or missing input is 'ok' rather than 'critical': a figure that failed
+ * to arrive is not evidence of a full disk, and a screen that cries wolf on a
+ * missing number gets ignored on the day it is right.
+ *
+ * Levels that arrive malformed fall back to the defaults for the same reason —
+ * a bad threshold should not turn a healthy disk red.
+ */
+export function usageStatus(percent, levels = {}) {
+    const warning = finite(levels.warning, DEFAULT_WARNING_PERCENT);
+    const critical = finite(levels.critical, DEFAULT_CRITICAL_PERCENT);
+
     const value = Number(percent);
 
     if (!Number.isFinite(value)) return 'ok';
-    if (value >= CRITICAL_PERCENT) return 'critical';
-    if (value >= WARNING_PERCENT) return 'warning';
+    if (value >= critical) return 'critical';
+    if (value >= warning) return 'warning';
     return 'ok';
+}
+
+function finite(value, fallback) {
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : fallback;
 }
 
 // The worse of two bands — for a measurement that can fail two ways at once,

@@ -13,7 +13,11 @@
 
 const db = require('../db');
 const audit = require('./audit');
-const { RETENTION_DAYS } = require('./retention');
+// retentionDays(), NOT a destructured value. Destructuring a CommonJS export
+// copies it once at require time, so the purge would keep using the window
+// that was in force when the server started and an administrator's change
+// would never reach it.
+const { retentionDays } = require('./retention');
 
 /**
  * Remove a version's content, keeping the record of it.
@@ -114,7 +118,7 @@ function expiredVersions(limit = 500) {
           AND datetime(wv.deleted_at, '+' || ? || ' days') <= datetime('now')
         ORDER BY wv.deleted_at
         LIMIT ?
-    `).all(RETENTION_DAYS, limit);
+    `).all(retentionDays(), limit);
 }
 
 module.exports = { purgeVersionFiles, expiredVersions };

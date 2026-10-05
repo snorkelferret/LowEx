@@ -6,8 +6,11 @@ const db = require('../db');
 const audit = require('../lib/audit');
 // The quota accounting, shared with the admin Storage tab so the two pages
 // cannot show different figures for the same workspace.
-const { WORKSPACE_LIMIT_BYTES, workspaceUsage } = require('../lib/workspaceUsage');
-const { RETENTION_DAYS, retentionFor } = require('../lib/retention');
+const { workspaceUsage } = require('../lib/workspaceUsage');
+// retentionDays() is a FUNCTION, not a value, because the retention window is
+// an admin setting. Destructuring a value here would freeze it at boot and a
+// change on the admin page would never reach the bin this route serves.
+const { retentionDays, retentionFor } = require('../lib/retention');
 // The purge itself lives in lib/, because the daily job runs the same one.
 const { purgeVersionFiles } = require('../lib/wastebin');
 const {
@@ -918,7 +921,7 @@ router.post(
 //
 // What a developer has deleted, and what can still be taken back.
 //
-// Deleting is reversible for RETENTION_DAYS; after that the files are removed
+// Deleting is reversible for the retention window; after that the files go
 // and it is not. The bin exists so that grace period is visible — something a
 // developer can get back but cannot see is a grace period nobody can use.
 //
@@ -985,7 +988,7 @@ router.get(
 
             if (!workspace) {
                 return res.json({
-                    retention_days: RETENTION_DAYS,
+                    retention_days: retentionDays(),
                     totals: { assets: 0, versions: 0, bytes: 0 },
                     assets: [],
                     versions: [],
@@ -1061,7 +1064,7 @@ router.get(
                 .reduce((total, version) => total + version.bytes, 0);
 
             return res.json({
-                retention_days: RETENTION_DAYS,
+                retention_days: retentionDays(),
                 totals: {
                     assets: assets.length,
                     versions: versions.length,
@@ -2577,10 +2580,12 @@ router.post(
 
             const projectedBytes = usage.bytes + addedBytes;
 
-            if (projectedBytes > WORKSPACE_LIMIT_BYTES) {
+            // usage.limit_bytes, not a constant: the allowance is a setting, and
+            // the figure refused here has to be the one the developer was shown.
+            if (projectedBytes > usage.limit_bytes) {
                 const quotaError = new Error(
                     `This upload would take the workspace to ${formatBytes(projectedBytes)}, ` +
-                    `over the ${formatBytes(WORKSPACE_LIMIT_BYTES)} limit. ` +
+                    `over the ${formatBytes(usage.limit_bytes)} limit. ` +
                     `It is currently using ${formatBytes(usage.bytes)}, and this upload ` +
                     `adds ${formatBytes(addedBytes)} of content the workspace does not ` +
                     `already hold. Delete something from the workspace, or reduce ` +

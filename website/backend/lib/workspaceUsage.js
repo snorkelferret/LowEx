@@ -57,17 +57,28 @@ const db = require('../db');
 // "nearly full" must mean the same thing here as it does for the hardware, and
 // the admin panel and the developer panel must not be able to disagree — so it
 // is decided once, here, and sent rather than recomputed.
+//
+// The levels are an admin setting, read per call. shared/ does the arithmetic
+// and never touches the database — the frontend may import it.
 const { usageStatus } = require('../../shared/usageStatus.mjs');
+const settings = require('./settings');
 
-// Tunable without a code change. Default 5 GiB: a 500 MB .blend re-saved ten
-// times is 5 GB of genuinely new content, and dedup does not help with that,
-// so a smaller limit would strand a developer mid-iteration on a large asset.
-const WORKSPACE_LIMIT_BYTES = (() => {
-    const configured = Number(process.env.WORKSPACE_LIMIT_BYTES);
-    return Number.isFinite(configured) && configured > 0
-        ? configured
-        : 5 * 1024 * 1024 * 1024;
-})();
+// THE ALLOWANCE IS AN ADMIN SETTING, read per call.
+//
+// It used to be an environment variable, WORKSPACE_LIMIT_BYTES, which had to be
+// changed on the box and needed a restart. That is gone rather than kept
+// alongside: two places to set the same limit is how the number in the panel
+// and the number refusing an upload end up different.
+//
+// THIS IS THE ONLY CONVERSION FROM GB TO BYTES. The setting is stated in GB
+// because that is what an administrator types and reads; everything downstream
+// of here is bytes. One conversion, in one place, so "GB" cannot mean 10^9
+// here and 1024^3 there.
+const BYTES_PER_GB = 1024 * 1024 * 1024;
+
+function workspaceLimitBytes() {
+    return settings.getSetting('workspace_limit_gb') * BYTES_PER_GB;
+}
 
 // Distinct stored files the workspace currently holds, game-store content
 // excluded.
@@ -97,18 +108,27 @@ function workspaceUsage(workspaceId) {
         if (file) bytes += file.file_size;
     }
 
-    const percent_used = WORKSPACE_LIMIT_BYTES > 0
-        ? Math.round((bytes / WORKSPACE_LIMIT_BYTES) * 1000) / 10
+    const limit_bytes = workspaceLimitBytes();
+
+    const percent_used = limit_bytes > 0
+        ? Math.round((bytes / limit_bytes) * 1000) / 10
         : 0;
 
     return {
         bytes,
-        limit_bytes: WORKSPACE_LIMIT_BYTES,
-        remaining_bytes: Math.max(0, WORKSPACE_LIMIT_BYTES - bytes),
+        limit_bytes,
+        remaining_bytes: Math.max(0, limit_bytes - bytes),
         file_count: rows.length,
         percent_used,
-        status: usageStatus(percent_used)
+        status: usageStatus(percent_used, {
+            warning: settings.getSetting('usage_warning_percent'),
+            critical: settings.getSetting('usage_critical_percent'),
+        })
     };
 }
 
-module.exports = { WORKSPACE_LIMIT_BYTES, workspaceUsage };
+// No exported limit value: it is a setting, and a value exported from here
+// would be a snapshot a caller could hold. workspaceUsage() already reports the
+// limit it applied, as limit_bytes, so a caller that needs the figure has it
+// from the same read that produced the usage.
+module.exports = { BYTES_PER_GB, workspaceLimitBytes, workspaceUsage };

@@ -19,6 +19,9 @@
 
 import { FEEDBACK_KINDS, MAX_MESSAGE_LENGTH } from '../../shared/feedbackRules.mjs';
 import { $, escapeHtml } from './utils.js';
+// The bar, so this button can live in it on pages that have one. Returns null
+// on pages that do not, which is the signal to use the corner instead.
+import { addUtility } from './utilityBar.js';
 
 const API = '/api';
 
@@ -28,7 +31,6 @@ const API = '/api';
 const ID = {
     launch: 'feedback-launch',
     modal: 'feedback-modal',
-    form: 'feedback-form',
     kind: 'feedback-kind',
     message: 'feedback-message',
     contact: 'feedback-contact',
@@ -37,7 +39,6 @@ const ID = {
     page: 'feedback-page',
     error: 'feedback-error',
     submit: 'feedback-submit',
-    done: 'feedback-done',
     body: 'feedback-body',
 };
 
@@ -63,21 +64,70 @@ function thePage() {
 // Markup
 // ---------------------------------------------------------------------------
 
+// WHERE IT GOES — the utility bar if the page has one, and only otherwise the
+// corner.
+//
+// IT WAS ALWAYS THE CORNER, and the corner is the wrong place on any page that
+// has a bar. Fixed positioning means it sits OVER whatever is beneath it — which
+// is why it needed a z-index and why an empty page showed it hovering over the
+// workspace message. Worse, the button was btn-outline-secondary: on a dark page
+// that is a transparent ghost with a hairline border, so it drifted over the
+// content looking like a smudge rather than a control, and it competed with
+// everything it floated across.
+//
+// The bar exists for exactly this — "tools rather than places" — and already
+// holds the manual and the discussion link. A tool available on every signed-in
+// page belongs with them.
+//
+// THE FALLBACK IS FOR PAGES WITH NO BAR, which today are the ones nobody is
+// signed in to: index.html, shopfront.html and register.html. There, a report
+// button is most needed of all — someone who cannot sign in is the likeliest
+// person to want to report something — and there is no bar to put it in.
+//
+// AND THERE IT IS SOLID, not a ghost. btn-primary is opaque, so it reads as a
+// control sitting on top of the page rather than as content that has come
+// loose. Transparent was the part that made it confusing.
 function buildLaunchButton() {
     const button = document.createElement('button');
 
     button.id = ID.launch;
     button.type = 'button';
+    button.setAttribute('data-bs-toggle', 'modal');
+    button.setAttribute('data-bs-target', `#${ID.modal}`);
+    button.setAttribute('aria-label', 'Report a problem');
+    button.innerHTML =
+        '<i class="bi bi-bug"></i><span>Report a problem</span>';
+
+    return button;
+}
+
+// Offers the button to the page's utility bar. Returns true if it was taken.
+//
+// NO GUARD AROUND THIS CALL, deliberately. utilityBar.js is imported, so it is
+// bundled into every page that loads this file — including the ones with no bar,
+// where importing it is harmless because it only touches the document inside its
+// own functions. There is therefore nothing here that can throw, and a
+// try/catch would be a guard against a failure that cannot happen. addUtility
+// returns null when there is no bar, and that null is the whole decision.
+function placeInUtilityBar(button) {
+    return Boolean(addUtility(button));
+}
+
+// The corner, for pages with no bar. Solid and opaque — see the note above.
+function placeInCorner(button) {
+    // btn-primary, NOT btn-outline-secondary. Opaque, so it reads as a control
+    // over the page rather than as a translucent smudge on it.
     button.className =
-        'btn btn-sm btn-outline-secondary position-fixed shadow-sm ' +
-        'd-flex align-items-center gap-2';
+        'btn btn-sm btn-primary shadow d-inline-flex align-items-center gap-2 position-fixed';
+
     // --page-inset, not a number of its own. It was `1rem`, which put the
     // button 16px from the window edge while every panel sat at 24px — so it
     // hung outside the content it belongs to, visibly out of line with the
     // right-hand edge of every card above it.
     //
-    // The same variable the header and the page container use, so the button
-    // lines up with them and stays lined up if the inset ever changes.
+    // The same variable the header and the page container use, so it lines up
+    // with them and stays lined up if the inset ever changes.
+    //
     // The fallback is not decoration: index.html carries this button but does
     // NOT load styles.css, so the variable is undefined there and the whole
     // `right` declaration would be dropped, leaving the button positioned by
@@ -85,13 +135,6 @@ function buildLaunchButton() {
     button.style.cssText =
         'right:var(--page-inset, 1.5rem); bottom:var(--page-inset, 1.5rem);' +
         ' z-index:1040; border-radius:2rem; padding:.4rem .9rem;';
-    button.setAttribute('data-bs-toggle', 'modal');
-    button.setAttribute('data-bs-target', `#${ID.modal}`);
-    button.setAttribute('aria-label', 'Report a problem');
-    button.innerHTML =
-        '<i class="bi bi-bug"></i><span class="d-none d-sm-inline">Report a problem</span>';
-
-    return button;
 }
 
 function buildModal() {
@@ -108,11 +151,11 @@ function buildModal() {
     const kindOptions = FEEDBACK_KINDS
         .map((k, i) => `
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="feedback-kind"
-                     id="feedback-kind-${escapeHtml(k.value)}"
+              <input class="form-check-input" type="radio" name="${ID.kind}"
+                     id="${ID.kind}-${escapeHtml(k.value)}"
                      value="${escapeHtml(k.value)}" ${i === 0 ? 'checked' : ''}>
               <label class="form-check-label"
-                     for="feedback-kind-${escapeHtml(k.value)}">
+                     for="${ID.kind}-${escapeHtml(k.value)}">
                 ${escapeHtml(k.label)}
               </label>
             </div>
@@ -215,7 +258,7 @@ async function submit(button) {
     setError('');
 
     const kind =
-        document.querySelector('input[name="feedback-kind"]:checked')?.value || '';
+        document.querySelector(`input[name="${ID.kind}"]:checked`)?.value || '';
     const message = $(ID.message)?.value || '';
     const contact = $(ID.contact)?.value || '';
 
@@ -328,7 +371,14 @@ function init() {
     // Never twice, whatever a page does with its script tags.
     if (document.getElementById(ID.launch)) return;
 
-    document.body.appendChild(buildLaunchButton());
+    const button = buildLaunchButton();
+
+    // The bar first; the corner only if there is no bar to use.
+    if (!placeInUtilityBar(button)) {
+        placeInCorner(button);
+        document.body.appendChild(button);
+    }
+
     document.body.appendChild(buildModal());
     wire();
 }

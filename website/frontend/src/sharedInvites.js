@@ -203,11 +203,19 @@ async function refreshInvitationsList() {
 
             const actions = [];
 
+            // A stale invitation — one whose address already has an account —
+            // can only be revoked. Reissue is not offered because the server
+            // refuses it, and a button whose only outcome is an error is worse
+            // than no button.
+            const stale = Boolean(invite.accountId);
+
             if (invite.status === 'pending' || invite.status === 'expired') {
-                actions.push(
-                    `<button type="button" class="btn btn-sm btn-outline-warning py-0 px-2 btn-reissue-trigger"` +
-                    ` data-id="${Number(invite.id)}">Reissue</button>`
-                );
+                if (!stale) {
+                    actions.push(
+                        `<button type="button" class="btn btn-sm btn-outline-warning py-0 px-2 btn-reissue-trigger"` +
+                        ` data-id="${Number(invite.id)}">Reissue</button>`
+                    );
+                }
                 actions.push(
                     `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 btn-revoke-trigger"` +
                     ` data-id="${Number(invite.id)}">Revoke</button>`
@@ -218,9 +226,33 @@ async function refreshInvitationsList() {
                 actions.push('<span class="text-secondary small">—</span>');
             }
 
+            // SAID ON THE ROW, not left for somebody to work out by comparing
+            // this table against the accounts table. An invitation for an
+            // address that already has a login cannot be redeemed and should
+            // not exist; it is flagged so it can be revoked rather than
+            // discovered by whoever next tries to use it.
+            // A BADGE, NOT COLOURED TEXT ON A COLOURED ROW.
+            //
+            // This was amber text on Bootstrap's table-warning background, which
+            // is a pale yellow row — amber on yellow, and barely readable. The
+            // mistake was using two things that both carry colour and expecting
+            // them to sit together.
+            //
+            // text-bg-warning is Bootstrap's pairing helper: it sets the
+            // background AND the text colour together, so the contrast is the
+            // framework's problem rather than something to get right by eye.
+            // The same shape as the status badges beside it, which already read
+            // correctly on this table.
+            const clash = stale
+                ? `<span class="badge text-bg-warning mt-1">` +
+                  `<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>` +
+                  `Account exists: ${escapeHtml(invite.accountUsername || 'unknown')}` +
+                  `${invite.accountActive ? '' : ' (deactivated)'}</span>`
+                : '';
+
             return `
                 <tr>
-                  <td>${escapeHtml(invite.email)}</td>
+                  <td>${escapeHtml(invite.email)}${clash ? '<div>' + clash + '</div>' : ''}</td>
                   <td><span class="badge bg-dark border border-secondary text-light">${escapeHtml(invite.role)}</span></td>
                   <td><span class="badge ${badge.cls}">${escapeHtml(badge.label)}</span></td>
                   <td>${escapeHtml(expiry)}</td>
@@ -417,8 +449,38 @@ if (!window.copyInviteLink) {
     };
 }
 
+// How long a new invitation will last. An admin setting, so it is asked for
+// rather than assumed — the header used to carry a hardcoded "28 Days" that
+// would have gone on saying 28 after the window was changed.
+//
+// A FAILURE HERE LEAVES THE DASH. The panel's job is issuing invitations, and
+// the window is a caption on it; a caption that cannot be fetched should read
+// as unknown rather than stop anybody working or, worse, state a number that
+// might not be true.
+async function showInviteValidity() {
+    const target = document.getElementById('inviteValidity');
+    if (!target) return;
+
+    try {
+        const response = await apiFetch(`${API_URL}/admin/settings`, {
+            credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error('could not read the invite window');
+
+        const data = await response.json();
+        const setting = (data.settings || []).find(s => s.key === 'invite_valid_days');
+
+        if (setting) target.textContent = `${setting.value} days`;
+
+    } catch (err) {
+        console.error('Could not read the invitation window:', err.message);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initInviteDeveloper();
     populateAssignableRoles();
     refreshInvitationsList();
+    showInviteValidity();
 });

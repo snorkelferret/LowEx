@@ -414,6 +414,15 @@
 
     <div class="card-body">
 
+      <!-- WHERE THE "GETTING FULL" WARNING GOES, filled by renderQuotaPanel().
+
+           NOT IN THE CARD HEADER with the label and bar. That header is a flex
+           row, so anything put there is squeezed into the width of its own
+           content — a sentence would end up in a narrow column beside the
+           heading. The compact label and bar belong up there; a warning that
+           has to be read does not. -->
+      <div id="workspaceQuotaNotice"></div>
+
       <!-- SAID OUT LOUD, IN THE UI, not just in a code comment.
 
            A developer who does not know this is a staging area will treat it as

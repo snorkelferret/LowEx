@@ -1213,12 +1213,19 @@ function renderQuotaPanel() {
 
     el.textContent = '';
 
+    // The notice is a sibling of the header, not a child: see the markup.
+    const notice = $('workspaceQuotaNotice');
+    if (notice) notice.textContent = '';
+
     if (!workspaceUsage) return;
 
-    const variant =
-        workspaceUsage.percent_used >= 95 ? 'danger' :
-        workspaceUsage.percent_used >= 75 ? 'warning' :
-        'success';
+    // THE BAND COMES FROM THE SERVER. It used to be worked out here from 95 and
+    // 75 — two more thresholds, in a third place, that an administrator could
+    // not change and that already disagreed with the levels the admin page
+    // applies. The server sends the band its own settings produced, and this
+    // displays it. See shared/usageStatus.mjs.
+    const VARIANTS = { ok: 'success', warning: 'warning', critical: 'danger' };
+    const variant = VARIANTS[workspaceUsage.status] || 'success';
 
     const label = document.createElement('span');
     label.className = 'me-2';
@@ -1242,6 +1249,39 @@ function renderQuotaPanel() {
 
     el.appendChild(label);
     el.appendChild(bar);
+
+    // THE WARNING THEY ONLY GOT WHEN UPLOADING. Until now a developer near
+    // their limit found out at the moment an upload was refused, which is the
+    // worst possible moment — the work is selected and ready. This says so on
+    // the panel, while there is still time to clear space.
+    //
+    // Only for warning and critical. A permanent reassuring green line would be
+    // noise nobody reads, and would be the thing that makes the real warning
+    // invisible.
+    if (notice && workspaceUsage.status !== 'ok') {
+        const low = document.createElement('div');
+        low.className = 'alert py-2 px-3 small mb-3';
+
+        if (workspaceUsage.status === 'critical') {
+            low.classList.add('alert-danger');
+            low.textContent =
+                `Your workspace is almost full — ` +
+                `${formatBytes(workspaceUsage.remaining_bytes)} left of ` +
+                `${formatBytes(workspaceUsage.limit_bytes)}. Uploads will be ` +
+                `refused once it is full. Delete anything you no longer need, ` +
+                `or ask an administrator about the allowance.`;
+        } else {
+            low.classList.add('alert-warning');
+            low.textContent =
+                `Your workspace is getting full — ` +
+                `${formatBytes(workspaceUsage.remaining_bytes)} left of ` +
+                `${formatBytes(workspaceUsage.limit_bytes)}. It is a staging ` +
+                `area, so anything already accepted into the game store can be ` +
+                `deleted from here without losing it.`;
+        }
+
+        notice.appendChild(low);
+    }
 }
 
 // Pre-flight for a pending upload.

@@ -112,9 +112,15 @@
     <div id="register-expired" class="d-none text-center py-3">
       <i class="bi bi-clock-history text-warning display-4"></i>
       <h4 class="fw-bold text-white mt-3 mb-2">Invitation Expired</h4>
+      <!-- No number here, deliberately. The window is an admin setting, and
+           this page is about ONE invitation whose deadline was fixed when it
+           was issued — stating today's window would be a new untruth rather
+           than a fix for the old hardcoded "28 days". Whoever holds this link
+           needs to know it has expired and what to do, not how long the
+           current window is. -->
       <p class="text-secondary small mb-4">
-        Invitation links are valid for 28 days for security. This link has
-        passed its expiration window.
+        Invitation links expire for security, and this one has passed its
+        expiration window. Ask an administrator to send you a new one.
       </p>
 
       <button

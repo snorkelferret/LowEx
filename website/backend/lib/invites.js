@@ -4,8 +4,96 @@
 // that accepts them. Kept here rather than in either, so the two cannot drift
 // apart on what "still valid" means.
 
-const INVITE_VALID_DAYS = 28;
+// The window is an ADMIN SETTING, so it is read per use rather than held. A
+// module-scope `const INVITE_VALID_DAYS = getSetting(...)` would freeze it at
+// boot — the save would appear to work and nothing would change until a
+// restart, which is the exact failure the settings mechanism exists to avoid.
+const settings = require('./settings');
+
 const MAX_REISSUES = 6;
+
+// ---------------------------------------------------------------------------
+// Who may be invited
+// ---------------------------------------------------------------------------
+//
+// AN INVITATION IS FOR SOMEONE WHO HAS NO ACCOUNT. Issuing one for an address
+// that already has a login produces a dead link, a confusing failure at the
+// last step ("Username or Email already registered"), and a row in the admin's
+// list that looks like somebody is waiting to get in when nobody is.
+//
+// It is also how a stale invitation ends up sitting beside a live account with
+// nothing connecting them — which is exactly the state the portal was found in
+// on 2026-10-05: a pending invitation for an address that already had a
+// developer account, created a day earlier by hand rather than through the
+// invitation flow.
+
+// Emails are compared and stored LOWERCASED, because the column's UNIQUE
+// constraint is case-sensitive. Without this, "Val@x.com" and "val@x.com" are
+// two different invitations for one person, and an account for one does not
+// block an invitation for the other — a hole that produces precisely the
+// duplicate this function exists to prevent.
+function normaliseEmail(email) {
+    return String(email ?? '').trim().toLowerCase();
+}
+
+/**
+ * The existing account for an address, or null.
+ *
+ * Case-insensitive, so it agrees with normaliseEmail above rather than with
+ * whatever case the account happened to be created in.
+ */
+function accountFor(db, email) {
+    const wanted = normaliseEmail(email);
+
+    if (!wanted) return null;
+
+    return db.prepare(
+        'SELECT id, username, role, is_active FROM users WHERE LOWER(email) = ?'
+    ).get(wanted) || null;
+}
+
+/**
+ * May this address be invited? Returns { ok } or { ok: false, reason }.
+ *
+ * THE ONE PLACE THIS IS DECIDED, called by invitation creation and by both
+ * reissue paths — a reissue prolongs access for an address just as an issue
+ * does, so it needs the same answer.
+ */
+function inviteable(db, email) {
+    if (!normaliseEmail(email)) {
+        return { ok: false, reason: 'empty' };
+    }
+
+    const account = accountFor(db, email);
+
+    if (account) {
+        return { ok: false, reason: 'has_account', account };
+    }
+
+    return { ok: true };
+}
+
+// What to tell an administrator who tried. Names the account, because "this
+// person already has a login" is only half an answer without saying which.
+function inviteRefusal(email, account) {
+    return `${normaliseEmail(email)} already has an account ` +
+        `("${account.username}", ${account.role}` +
+        `${account.is_active ? '' : ', deactivated'}). ` +
+        `They can sign in — an invitation would be a dead link. ` +
+        (account.is_active
+            ? 'If they have lost their password, reset it rather than inviting them again.'
+            : 'Reactivate the account instead of inviting them again.');
+}
+
+/**
+ * How long a newly issued invitation lasts, in days.
+ *
+ * A function, not a value. Callers must call it where the number is used:
+ * `inviteValidDays()` in the SQL, not a local captured at module load.
+ */
+function inviteValidDays() {
+    return settings.getSetting('invite_valid_days');
+}
 
 const STATUSES = ['pending', 'used', 'revoked'];
 
@@ -96,7 +184,11 @@ const REISSUE_REFUSALS = {
 };
 
 module.exports = {
-    INVITE_VALID_DAYS,
+    inviteValidDays,
+    normaliseEmail,
+    accountFor,
+    inviteable,
+    inviteRefusal,
     MAX_REISSUES,
     STATUSES,
     DISPLAY_STATUS_SQL,

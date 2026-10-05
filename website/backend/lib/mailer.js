@@ -94,7 +94,7 @@ const ROLE_LABELS = {
  * Plain text and HTML both, because a token link in an HTML-only mail can be
  * mangled by some clients and this is the one link that has to survive intact.
  */
-async function sendInvitation(to, { role, link, expiresAt, reissued = false }) {
+async function sendInvitation(to, { role, link, expiresAt, validDays, reissued = false }) {
     const roleLabel = ROLE_LABELS[role] || role;
 
     const subject = reissued
@@ -111,9 +111,16 @@ async function sendInvitation(to, { role, link, expiresAt, reissued = false }) {
         'Open this link to choose a username and password:',
         link,
         '',
+        // The date is the truth; the window is the fallback for a caller that
+        // did not supply one. It used to say "28 days" here as a literal,
+        // which was a copy of the invite setting and would have outlived a
+        // change to it — hence validDays, passed by the route that issued the
+        // invitation and knows which window it used.
         expiresAt
             ? `This link is valid until ${expiresAt} (UTC).`
-            : 'This link is valid for 28 days.',
+            : validDays
+                ? `This link is valid for ${validDays} days.`
+                : 'Please use this link promptly.',
         '',
         'If you were not expecting this, you can ignore this message.',
         '',
@@ -130,7 +137,9 @@ async function sendInvitation(to, { role, link, expiresAt, reissued = false }) {
           <p style="color:#666; font-size: 0.9em;">
             ${expiresAt
                 ? `This link is valid until ${expiresAt} (UTC).`
-                : 'This link is valid for 28 days.'}
+                : validDays
+                    ? `This link is valid for ${validDays} days.`
+                    : 'Please use this link promptly.'}
           </p>
           <p style="color:#666; font-size: 0.9em;">
             If you were not expecting this, you can ignore this message.

@@ -116,6 +116,29 @@ const applySchemaPatches = () => {
       ADD COLUMN last_reissued_at DATETIME;
     `);
   }
+
+  // WHO ISSUED IT.
+  //
+  // The table recorded the address, the role and the dates, and nothing about
+  // who created the invitation — so "where did this invitation come from?" had
+  // no answer in the data, only in the audit log, which did not record
+  // invitation creation either. That is the wrong gap for the one table whose
+  // whole purpose is letting somebody in.
+  //
+  // NO ON DELETE, matching this file's convention for references to rows that
+  // carry history. Accounts are deactivated here, never deleted, so this
+  // cannot be left dangling.
+  //
+  // EXISTING ROWS ARE NULL, AND THAT IS THE TRUTH rather than a gap to
+  // backfill: the invitations created before this column existed were not
+  // recorded anywhere, and inventing an issuer for them would be worse than
+  // admitting it is unknown.
+  if (!columns.includes('created_by')) {
+    db.exec(`
+      ALTER TABLE invitations
+      ADD COLUMN created_by INTEGER REFERENCES users(id);
+    `);
+  }
 };
 
 
@@ -849,7 +872,11 @@ const initDb = () => {
       reissue_count INTEGER DEFAULT 0
         CHECK(reissue_count <= 6),
 
-      last_reissued_at DATETIME
+      last_reissued_at DATETIME,
+
+      -- Who issued it. NULL only for invitations that predate the column —
+      -- see the migration in applySchemaPatches.
+      created_by INTEGER REFERENCES users(id)
     );
   `);
 
@@ -926,6 +953,47 @@ const initDb = () => {
       details TEXT,
 
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+
+  /*
+   * ----------------------------------------------------------
+   * Application settings — values an administrator changes
+   *
+   * NO SURROGATE id, WHICH IS A DELIBERATE DEPARTURE from every
+   * other table here. The key IS the identity: nothing
+   * references a setting by number, so an autoincrementing
+   * column would be an extra thing to keep unique and nothing
+   * more.
+   *
+   * A MISSING ROW IS NOT AN ERROR. It means "not overridden",
+   * and the code default applies — the registry in
+   * backend/lib/settings.js holds it. A fresh database therefore
+   * needs no seeding, and the page can show an administrator
+   * what the value would fall back to before they change it.
+   *
+   * updated_by has no ON DELETE, matching this file's
+   * convention for references to rows that carry history.
+   * Users are never deleted here, only deactivated.
+   *
+   * THE VALUES ARE TEXT. Every one of them is a whole number
+   * today, but the column is the generic one so that a setting
+   * which is not a number does not need a schema change — the
+   * type is declared once, per key, in the registry, which is
+   * also where the bounds live.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+
+      value TEXT NOT NULL,
+
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      updated_by INTEGER REFERENCES users(id)
     );
   `);
 

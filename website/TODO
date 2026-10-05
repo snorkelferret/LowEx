@@ -687,14 +687,12 @@ WASTEBIN — DECIDED 2026-10-02, NOT BUILT.
     var: the admin changes it without a deploy, and the change is visible to
     whoever looks at the page rather than hidden in a file on the box.
 
-    THAT MEANS A SETTINGS MECHANISM, WHICH DOES NOT EXIST. Nothing in the
-    schema holds an admin-editable value today — every tunable so far is an env
-    var read at boot (WORKSPACE_LIMIT_BYTES, the SMTP settings). This is the
-    first setting that has to be changeable while the server is running, and
-    the first that needs an audit trail of who changed it. Worth building
-    properly rather than as a one-off: a key/value table with an audit record
-    covers the retention window and whatever the admin page needs next
-    (thresholds for the storage and health warnings, item 28).
+    THAT MEANS A SETTINGS MECHANISM — [BUILT 2026-10-05, see item 37]. The
+    reasoning below is what it was built from, and it holds. Everything this
+    paragraph asked for is there: a key/value table (app_settings), an audit
+    record of who changed what (settings.update / settings.reset, with from and
+    to), and four values behind it — this retention window, the invitation
+    window, and the two storage warning levels.
 
     Note the worker must READ it rather than cache it at boot, or an admin
     change does not take effect until the next restart — which is exactly the
@@ -1516,6 +1514,21 @@ They MUST be dealt with before any real user data exists.
     whoever builds these pages does not build the panel without it and then
     find the asset management has nowhere to live.
 
+    SETTINGS — [DONE 2026-10-05, see item 37]. A Settings tab on both
+    dashboards, four values behind it, and a mechanism that reads them when it
+    uses them rather than when it starts.
+
+    WHERE THIS SECTION NOW STANDS: Storage and Settings are built. Sessions is
+    still blocked on item 10 (nothing records a session). Health has not been
+    started — it needs memory and CPU beside the disk reading that
+    hostStorage() already does, and it owns the warning banner, which the
+    Storage tab cannot provide from behind a tab.
+
+    STORAGE — [DONE 2026-05-31]. Reworked after review: the storage allowance
+    is now a setting, the developer table sorts, and the wording no longer talks
+    about "charging". See item 38. The 2026-05-10 note below still describes the
+    two figures and why they do not reconcile.
+
     STORAGE — [DONE 2026-05-10]. The panel is built and shows both figures,
     side by side, with the note explaining why they do not reconcile. The two
     are now LIBRARIES rather than route-local code, because each is asked on
@@ -1592,10 +1605,13 @@ They MUST be dealt with before any real user data exists.
     volume the store is actually on, whether that is a mounted disk, an object
     store, or somewhere else entirely.
 
-    WARN WHEN IT IS GETTING FULL. Disk, and memory and CPU alongside it, with
-    thresholds that warn on the admin page before anyone notices the hard way.
-    This is the one panel whose job is to be boring until it is urgent, so an
-    alert has to be visible without going looking for it.
+    WARN WHEN IT IS GETTING FULL — STILL OPEN, AND STILL THE HEALTH PANEL'S
+    JOB. The thresholds are now settings (item 37) and the bands they produce
+    are live on the Storage tab, so the hard part is done. What is missing is
+    the part that matters: THE ALERT IS BEHIND A TAB. An administrator has to
+    go and look, which fails "visible without going looking". The banner belongs
+    in the header or the utility bar, and it needs memory and CPU beside it,
+    which hostStorage() does not cover.
 
     AND IT HAS TO BE READABLE BY CLAUDE. The admin needs to be able to discuss a
     problem and get help fixing it, which means the state of the system has to
@@ -2373,3 +2389,290 @@ They MUST be dealt with before any real user data exists.
     A note for whoever touches this next: daily.js is a SCRIPT, not a module.
     Requiring it RUNS it. It is safe without --collect, but that is a property
     of its arguments, not of requiring it.
+
+
+37) ADMIN-EDITABLE SETTINGS — BUILT 2026-10-05. The mechanism item 32 asked for,
+    and the import trap it exposed.
+
+    WHAT IT REPLACES. The invites panel printed "Default Expiration: 28 Days" as
+    a hardcoded string while the server issued invitations from
+    INVITE_VALID_DAYS = 28 in backend/lib/invites.js. Two copies of one number,
+    agreeing by luck, and no way to change either from the page. The wastebin
+    retention (14 days) had the same shape and was already recorded as settled
+    to be admin-configurable.
+
+    THE FOUR VALUES: invite_valid_days (28), retention_days (14),
+    usage_warning_percent (85), usage_critical_percent (95).
+
+    --- THE THING THAT DECIDES THE DESIGN ---
+
+    Item 32 named the failure: "the worker must READ it rather than cache it at
+    boot, or an admin change does not take effect until the next restart —
+    which is exactly the kind of silent no-op that makes people distrust a
+    settings page."
+
+    THAT TRAP WAS ALREADY ARMED IN SIX PLACES, and this is the part worth
+    remembering. Every consumer imported the number by destructuring:
+
+        const { INVITE_VALID_DAYS } = require('../lib/invites');
+
+    CommonJS, so that COPIES THE VALUE once, at require time. Four of those
+    reads sat inside request handlers — code that runs per request, reading a
+    number fixed when the server started. Converting the constant to a getter
+    and leaving the import alone would have produced a settings page that saves
+    successfully and changes nothing, which is precisely the failure the whole
+    exercise was to avoid.
+
+    SO THE IMPORT STYLE WAS THE FIX, NOT THE GETTER. Six files: inviteDevs.js
+    (five sites), wastebin.js's expiredVersions() SQL bind,
+    developerWorkspace.js's bin response, retention.js (already per-call, the
+    clean one), daily.js, and the two libs that band the storage figures.
+
+    --- WHAT IT IS ---
+
+    * app_settings — key TEXT PRIMARY KEY, value, updated_at, updated_by. No
+      surrogate id, deliberately: the key is the identity. A missing row means
+      "not overridden" and the code default applies, so a fresh database needs
+      no seeding.
+
+    * backend/lib/settings.js — the registry. One entry per key with its type,
+      default, bounds, label, unit and a note for the page. Every read hits the
+      database; nothing is cached. Adding a setting is a line here and nothing
+      else — the panel renders whatever the registry sends, so there is no
+      second list of keys to go stale.
+
+    * THE WRITE AND THE AUDIT ARE ONE TRANSACTION (settings.update /
+      settings.reset, with actor and { from, to }), following the same
+      reasoning as every other audited action.
+
+    * GET/POST /api/admin/settings, POST /api/admin/settings/:key, and
+      .../:key/reset — under admin.js, so requireAdmin applies and both admin
+      and superuser can use them.
+
+    * A Settings tab on BOTH dashboards, and the invites panel's window now
+      filled from the endpoint.
+
+    --- TWO DECISIONS WORTH KEEPING ---
+
+    THE BANDING STAYS PURE. shared/usageStatus.mjs now takes the levels as
+    arguments rather than reading them, because shared/ is the directory for
+    code both halves of the app use and the frontend may import it — so nothing
+    in there may touch the database. Callers read the setting and pass it in.
+
+    THE RELATION IS CHECKED, IN BOTH DIRECTIONS. Two independent keys with a
+    relationship between them is how a system ends up with warning 95 and
+    critical 85 — a band where everything is critical and nothing is ever
+    warned about in time. Equal is refused as well as inverted, and the refusal
+    names the field the caller actually changed: "The warning level must stay
+    below the critical level, which is 80" reads correctly beside a field
+    labelled Warning, where one shared sentence would not.
+
+    --- DELIBERATELY NOT CHANGED ---
+
+    backend/db.js hardcodes '+28 days' as the expires_at column DEFAULT in five
+    places. It is DEAD IN PRODUCTION — the invite route always supplies
+    expires_at explicitly — and changing a column default needs a table
+    rebuild, which this schema's migration style does not do (ADD COLUMN only).
+    Left in place. If it is ever wrong, it is wrong only for a hand-written
+    INSERT that omits the column.
+
+    --- VERIFIED ---
+
+    On ONE running server with NO restart: setting invite_valid_days to 3 made
+    the next invitation's stored expires_at exactly 3 days out (checked in the
+    database, not just the response); setting retention_days to 2 changed what
+    the developer's bin reported; a version deleted 5 days ago was NOT due for
+    purge under a 14-day window, WAS due under 3, and was not due again under
+    7 — so the setting reaches the SQL; setting the warning level to 12 flipped
+    a 21.1%-used disk from 'ok' to 'warning' on the storage endpoint.
+
+    Refusals checked over HTTP: 0, 999, "abc", 2.5, an unknown key, a missing
+    body, and the relation in both directions. The audit entries were read back
+    through the admin's own audit endpoint.
+
+    Test data removed afterwards — settings reset to their defaults by the same
+    route the panel's Reset uses, the test invitation deleted, and the audit
+    rows my testing wrote deleted too, because they named the admin as the
+    actor for changes the admin never made.
+
+
+38) STORAGE PANEL — REVIEWED AND REWORKED 2026-05-31. Four things, one of them
+    a correction to how the whole feature was described.
+
+    --- 1. NOBODY IS "CHARGED" FOR ANYTHING ---
+
+    The panel said "Charged" in a column heading and "Charged to developers" on
+    a tile. There is no billing in this system and there is not going to be.
+    The word invited exactly that misreading, on the screen an administrator
+    reads to understand where disk is going.
+
+    Now "Storage used", and "In developer workspaces". The API field was
+    `charged` too, and is now `workspaces` — the label went with the figure so
+    the distinction survives being read quickly. The comments in
+    workspaceUsage.js that argued about "what each developer is CHARGED" were
+    written in that vocabulary; they now say "holds" and "counted against".
+
+    The accounting itself did not change. It was right; it was described badly.
+
+    --- 2. THE ALLOWANCE IS A SETTING ---
+
+    WORKSPACE_LIMIT_BYTES was an environment variable on the box, which is the
+    same problem the invite window had: not changeable from the page, needs a
+    restart. It is now workspace_limit_gb in the settings registry (item 37),
+    default 5, range 1–10000.
+
+    STATED IN GB, STORED AS GB, CONVERTED IN ONE PLACE. The setting holds
+    gigabytes because that is what an administrator types and reads; the
+    multiplication by 1024^3 happens once, in workspaceUsage.js, so "GB" cannot
+    come to mean 10^9 in one file and 1024^3 in another. The environment
+    variable was removed rather than kept alongside — two places to set one
+    limit is how the number in the panel and the number refusing an upload end
+    up different.
+
+    An integer GB floor of 1 is deliberate: a sub-gigabyte allowance is not a
+    real allowance, and fractional GB would mean either a float in the settings
+    table or a second unit.
+
+    --- 3. THE DEVELOPER TABLE SORTS ---
+
+    Sortable in the browser rather than by re-querying: the list is bounded by
+    the number of developer accounts, so a sort is a re-render, not a round
+    trip. IF THAT EVER STOPS BEING TRUE this is the thing to move to the server,
+    and the comment in front of it says so.
+
+    SORTED NUMERICALLY, NOT AS TEXT. Sorting the formatted column would put
+    "9.5 MB" above "10 GB" and "1.2 GB" below "900 KB" — which looks like a bug
+    and is one. Verified with fixture sizes chosen to expose exactly that (1020
+    B, 1.46 KB, 1.43 MB): the order came out numeric, the direction flipped on
+    the second click, and aria-sort followed.
+
+    AND THE SORT THE TABLE ARRIVES IN IS NOW SHOWN. The server sends rows
+    largest-first, so the table is already sorted by storage before anyone
+    touches it — with no marker on that heading, the first click appeared to
+    sort ascending out of nowhere. The heading now carries the arrow from the
+    start, so a click visibly reverses what is already in effect.
+
+    --- 4. STORAGE BY GAME VERSION — PROVISION ONLY, AND THAT IS THE DECISION ---
+
+    What was asked for: how many bytes each game version takes, so the storage
+    needed to host a build elsewhere can be read off rather than estimated, and
+    so a version growing out of proportion is visible. Later, tools to break
+    that down and find what is worth optimising.
+
+    NONE OF IT IS BUILDABLE YET. No game version exists, and nothing in the
+    schema records which content belongs to one. `releases` is mentioned in
+    db.js as a future phase and has never been written.
+
+    So the Storage tab carries a marked "not built" section stating what it will
+    show, why it cannot yet, and one thing that will be true when it can:
+    content is stored once and referenced by everything that needs it, so a file
+    counted under two versions is one file on disk and the per-version figures
+    will not sum to the total. That belongs in the UI rather than only in this
+    file, because it is the first thing somebody will report as a bug.
+
+    The decision was explicitly to make provision in the UI and write the
+    backend once a real game version exists. Recorded here so the next person
+    does not build a releases model to fill a placeholder.
+
+    The total disk figure on this tab is unchanged and still wanted: it is this
+    machine, the studio server, and it stays.
+
+
+39) INVITATIONS FOR PEOPLE WHO ALREADY HAVE ACCOUNTS — 2026-10-05, found by
+    looking at the invites panel.
+
+    The admin invites list carried a pending invitation for val@thameslighter.net
+    while that address already had a developer account. Nothing flagged it, and
+    nothing prevented it.
+
+    --- HOW IT HAPPENED ---
+
+    Two routes to the same state, and only one of them is a mistake by a person.
+
+    1. THE ACCOUNT WAS CREATED BY HAND. There is no CLI in this repo that makes
+       users (searched: nothing under scripts/ or reset/ inserts into users), so
+       it was an ad-hoc command. The invitation was issued on 10 Aug and the
+       account created on 11 Aug, and nothing ever connected them. An invitation
+       records the address, the role and the dates, and NOTHING about who issued
+       it — so "where did this come from?" had no answer in the data either.
+
+    2. THE REDEMPTION WAS NOT ATOMIC, and this one is a bug in the code
+       regardless of the CLI. /api/auth/register-invited created the account and
+       marked the invitation used as TWO separate statements. A failure between
+       them — or the process dying — leaves a live account beside an invitation
+       that still looks unredeemed. That is the exact shape of the row found.
+
+    --- AND NOTHING WAS AUDITED ---
+
+    audit_logs recorded deactivations, retags, purges, feedback resolutions,
+    restores, settings changes and daily-job runs. It did NOT record a user
+    account being created, or an invitation being issued or redeemed. So the one
+    question the vigilance actually depends on — "how did this login come to
+    exist?" — had no answer in the trail, only in a schema that did not record
+    it either.
+
+    --- WHAT WAS BUILT ---
+
+    * THE RULE, ONCE, in backend/lib/invites.js: inviteable(db, email) and
+      accountFor(db, email), case-insensitively, plus inviteRefusal() which
+      names the account and says what to do instead. Called by invitation
+      creation AND by both reissue paths — a reissue prolongs access for an
+      address just as an issue does, so it needs the same answer. Reissue also
+      re-checks, because an account can appear AFTER the invitation was created.
+
+    * EMAILS ARE NORMALISED to lowercase on the way in. The UNIQUE constraint on
+      that column is case-sensitive, so "Val@x.com" and "val@x.com" were two
+      invitations for one person, and an account under one did not block an
+      invitation for the other. That hole produces exactly the duplicate the
+      check exists to prevent.
+
+    * REDEMPTION IS ONE TRANSACTION, with the audit record inside it. The
+      account and the invitation that authorised it appear together or not at
+      all. Verified: a redemption that fails on a taken username leaves the
+      invitation PENDING — the link is not burned — and records nothing, because
+      nothing happened.
+
+    * created_by ON invitations, with a guarded ADD COLUMN migration and the
+      column added to the canonical CREATE TABLE. Existing rows are NULL, and
+      that is the truth rather than a gap: those invitations were not recorded
+      anywhere, and inventing an issuer would be worse than admitting it is
+      unknown.
+
+    * AUDITED: invitation.create (actor, role, id, window), and user.create on
+      redemption (email, role, via, invitation_id, invited_by). The actor on a
+      redemption is NULL — nobody with a session acted, the person registering
+      had no account yet — so the link back to the administrator is invited_by
+      in the details.
+
+    * THE LIST NOW JOINS ACCOUNTS, and the panel flags a row whose address
+      already has a login: amber row, warning icon, "Already has an account: X".
+      REISSUE IS NOT OFFERED on those rows, because the server refuses it and a
+      button whose only outcome is an error is worse than no button. Revoke is
+      still offered, so a stale row can be cleared.
+
+    --- VERIFIED ---
+
+    Inviting val@thameslighter.net, VAL@Thameslighter.NET and the same with
+    surrounding whitespace: all three 409 with the account named. A fresh
+    address: 200, stored lowercased, created_by set, audited. Redemption:
+    account and status 'used' and the audit row, all present. Failure: rolled
+    back entirely.
+
+    --- STILL OPEN, AND THE REAL GAP FOR "SPURIOUS LOGINS" ---
+
+    THE CHECK ABOVE CANNOT SEE A CLI-CREATED ACCOUNT, and neither can any audit
+    trail, because the insert never goes through the application. Prevention
+    stops invitations being issued wrongly; it does not detect an account that
+    appeared without one.
+
+    What would: an "accounts not accounted for" check — every account whose
+    existence no audit entry explains. The seed accounts (admin/superuser,
+    created by db.js at first run) would need a bootstrap entry of their own so
+    they read as accounted for, and the accounts that predate this work
+    (including val) have no trail at all and would show as unaccounted until
+    somebody records why. That is a small piece of work and a decision about
+    what "accounted for" means, which is why it is not done here.
+
+    The stale row for val@thameslighter.net is LEFT IN PLACE and now flagged.
+    Revoking it is one click in the panel, and it is the user's record to clear
+    rather than mine.

@@ -200,21 +200,21 @@ function renderReconcile(data) {
     box.innerHTML = '';
 
     const store = data.store || { blob_count: 0, bytes: 0 };
-    const charged = data.charged || { bytes: 0, developer_count: 0 };
+    const workspaces = data.workspaces || { bytes: 0, developer_count: 0 };
 
     const tiles = document.createElement('div');
     tiles.className = 'd-flex flex-wrap gap-4';
-    tiles.appendChild(tile('Stored once', formatBytes(store.bytes),
-        line(`${store.blob_count} ${store.blob_count === 1 ? 'blob' : 'blobs'} on disk`, 'stat-label')));
-    tiles.appendChild(tile('Charged to developers', formatBytes(charged.bytes),
-        line(`across ${charged.developer_count} ${charged.developer_count === 1 ? 'account' : 'accounts'}`, 'stat-label')));
+    tiles.appendChild(tile('Stored on disk', formatBytes(store.bytes),
+        line(`${store.blob_count} ${store.blob_count === 1 ? 'blob' : 'blobs'}, one per SHA`, 'stat-label')));
+    tiles.appendChild(tile('In developer workspaces', formatBytes(workspaces.bytes),
+        line(`across ${workspaces.developer_count} ${workspaces.developer_count === 1 ? 'account' : 'accounts'}`, 'stat-label')));
 
     box.appendChild(tiles);
 
     box.appendChild(line(
-        'These do not match, and are not meant to. Charged bytes exclude the game ' +
-        'store — shared content belongs to nobody — and count a blob once for each ' +
-        'workspace holding it, so one stored file can be charged twice while ' +
+        'These do not match, and are not meant to. Workspace figures exclude the ' +
+        'game store — shared content belongs to nobody — and count a blob once for ' +
+        'each workspace holding it, so one stored file can be counted twice while ' +
         'occupying the disk once. The difference is the game store plus anything ' +
         'the collector has not reached yet, not a discrepancy to chase.', 'text-secondary small mt-2 mb-0'));
 }
@@ -252,80 +252,217 @@ function renderDevelopers(developers) {
           <th>Developer</th>
           <th>State</th>
           <th class="text-end">Files</th>
-          <th class="text-end">Charged</th>
+          <th class="text-end">Storage used</th>
           <th style="width: 30%">Of their ${formatBytes(developers[0].limit_bytes)}</th>
         </tr>
       </thead>
     `;
 
     const tbody = document.createElement('tbody');
+    // The server sends the rows largest-first, and this is the order they are
+    // put in until somebody clicks a heading. Re-sorting in the browser rather
+    // than re-fetching: the whole list is already here, and a round trip per
+    // click would make a sort feel like a reload.
+    tbody.dataset.sorted = 'bytes';
+    tbody.dataset.direction = 'desc';
 
-    for (const dev of developers) {
-        const tr = document.createElement('tr');
-
-        // textContent throughout: a username and an email are things a person
-        // wrote, and this table is read by the most privileged account.
-        const who = document.createElement('td');
-        const name = document.createElement('div');
-        name.textContent = dev.username;
-        const email = document.createElement('div');
-        email.className = 'text-secondary';
-        email.textContent = dev.email || '';
-        who.appendChild(name);
-        if (dev.email) who.appendChild(email);
-
-        tr.appendChild(who);
-
-        // A deactivated developer still holds their quota, so the row stays and
-        // says so — dropping them from the list would hide bytes that are
-        // genuinely still charged to somebody.
-        const state = document.createElement('td');
-        if (dev.is_active) {
-            state.className = 'text-secondary';
-            state.textContent = 'active';
-        } else {
-            const badge = document.createElement('span');
-            badge.className = 'badge text-bg-secondary';
-            badge.textContent = 'deactivated';
-            state.appendChild(badge);
-        }
-        tr.appendChild(state);
-
-        const files = document.createElement('td');
-        files.className = 'text-end';
-        files.textContent = String(dev.file_count);
-
-        const charged = document.createElement('td');
-        charged.className = 'text-end';
-        charged.textContent = formatBytes(dev.bytes);
-
-        const usage = document.createElement('td');
-        const row = document.createElement('div');
-        row.className = 'd-flex align-items-center gap-2';
-
-        const percent = document.createElement('span');
-        percent.className = 'text-secondary text-nowrap';
-        percent.textContent = `${dev.percent_used}%`;
-
-        const fill = document.createElement('div');
-        fill.className = 'flex-grow-1';
-        // dev.status, sent by workspaceUsage() — the same function and so the
-        // same band the developer sees on their own panel.
-        fill.appendChild(bar(dev.percent_used, dev.status));
-
-        row.appendChild(fill);
-        row.appendChild(percent);
-        usage.appendChild(row);
-
-        tr.appendChild(files);
-        tr.appendChild(charged);
-        tr.appendChild(usage);
-        tbody.appendChild(tr);
-    }
+    drawRows(tbody, developers, tbody.dataset.sorted, tbody.dataset.direction);
+    makeSortable(table, tbody, developers);
 
     table.appendChild(tbody);
     wrap.appendChild(table);
     box.appendChild(wrap);
+}
+
+// ---------------------------------------------------------------------------
+// Sorting
+// ---------------------------------------------------------------------------
+//
+// SORTED IN THE BROWSER, from the rows already fetched. The list is bounded by
+// the number of developer accounts — tens, not thousands — so a sort is a
+// re-render, not a query, and clicking a heading does not cost a round trip.
+//
+// IF THAT EVER STOPS BEING TRUE, this is the thing to move to the server. At
+// hundreds of accounts it would want to be a sorted, paged query, and this
+// function is where that decision would be made. Until then, fetching
+// everything and sorting it here is simpler than a query, a page parameter and
+// an offset that can disagree with the sort.
+
+// A value per column to order by, and how to compare two of them.
+//
+// `numeric` decides whether a column sorts as numbers or as text: sorting the
+// Storage column as text would put "9.5 MB" after "10 GB" and "1.2 GB" before
+// "900 KB", which looks like a bug and is one.
+const COLUMNS = {
+    developer: { index: 0, value: d => (d.username || '').toLowerCase() },
+    state:     { index: 1, value: d => (d.is_active ? 'active' : 'deactivated') },
+    files:     { index: 2, value: d => d.file_count, numeric: true },
+    bytes:     { index: 3, value: d => d.bytes, numeric: true },
+    percent:   { index: 4, value: d => d.percent_used, numeric: true },
+};
+
+function compare(a, b, key) {
+    const column = COLUMNS[key];
+    const left = column.value(a);
+    const right = column.value(b);
+
+    if (column.numeric) return left - right;
+
+    // localeCompare so a name starting with an accented letter sorts where a
+    // reader expects it rather than after Z.
+    return String(left).localeCompare(String(right));
+}
+
+function drawRows(tbody, developers, key, direction) {
+    const sorted = [...developers].sort((a, b) => {
+        const order = compare(a, b, key);
+        // Ties keep their previous order, which for the initial sort is the
+        // server's largest-first ordering rather than an arbitrary one.
+        return direction === 'asc' ? order : -order;
+    });
+
+    tbody.innerHTML = '';
+
+    for (const dev of sorted) {
+        tbody.appendChild(row(dev));
+    }
+}
+
+function makeSortable(table, tbody, developers) {
+    const heads = [...table.querySelectorAll('thead th')];
+    const keys = Object.keys(COLUMNS);
+
+    // THE HEADING REMEMBERS ITS OWN PLAIN LABEL, so the arrow can be redrawn
+    // without the label accumulating one arrow per click.
+    for (const head of heads) head.dataset.label = head.textContent.trim();
+
+    const mark = (key, direction) => {
+        for (const head of heads) {
+            head.removeAttribute('aria-sort');
+            head.textContent = head.dataset.label;
+        }
+
+        const head = heads[COLUMNS[key].index];
+        if (!head) return;
+
+        head.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
+        // Decoration only — aria-sort above is what a screen reader announces,
+        // so the arrow is hidden from it.
+        head.textContent = `${head.dataset.label} ${direction === 'asc' ? '\u2191' : '\u2193'}`;
+    };
+
+    heads.forEach((head, index) => {
+        const key = keys.find(k => COLUMNS[k].index === index);
+        if (!key) return;
+
+        head.classList.add('storage-sortable');
+        head.tabIndex = 0;
+        head.setAttribute('role', 'button');
+        head.title = 'Sort by this column';
+
+        const apply = () => {
+            // Same column again flips the direction. A new column starts at the
+            // order it is usually wanted in — descending for the size columns,
+            // ascending for a name or a state.
+            const sameColumn = tbody.dataset.sorted === key;
+
+            const startsDesc = key === 'bytes' || key === 'files' || key === 'percent';
+
+            const direction = sameColumn
+                ? (tbody.dataset.direction === 'asc' ? 'desc' : 'asc')
+                : (startsDesc ? 'desc' : 'asc');
+
+            tbody.dataset.sorted = key;
+            tbody.dataset.direction = direction;
+
+            drawRows(tbody, developers, key, direction);
+            mark(key, direction);
+        };
+
+        head.addEventListener('click', apply);
+        head.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                apply();
+            }
+        });
+    });
+
+    // THE SORT THE TABLE ARRIVED IN IS SHOWN, not implied. The server sends the
+    // rows largest-first, so this table is already sorted by storage before
+    // anybody clicks anything — and without a marker on that heading the first
+    // click on it looked like it sorted ascending out of nowhere. With the
+    // arrow there, the click reverses what is plainly already in effect.
+    mark(tbody.dataset.sorted, tbody.dataset.direction);
+}
+
+// One developer's row.
+function row(dev) {
+    const tr = document.createElement('tr');
+
+    // textContent throughout: a username and an email are things a person
+    // wrote, and this table is read by the most privileged account.
+    const who = document.createElement('td');
+    const name = document.createElement('div');
+    name.textContent = dev.username;
+    who.appendChild(name);
+
+    if (dev.email) {
+        const email = document.createElement('div');
+        email.className = 'text-secondary';
+        email.textContent = dev.email;
+        who.appendChild(email);
+    }
+
+    tr.appendChild(who);
+
+    // A deactivated developer still holds their storage, so the row stays and
+    // says so — dropping them would hide bytes that genuinely still occupy the
+    // disk and belong to an account that still exists.
+    const state = document.createElement('td');
+    if (dev.is_active) {
+        state.className = 'text-secondary';
+        state.textContent = 'active';
+    } else {
+        const badge = document.createElement('span');
+        badge.className = 'badge text-bg-secondary';
+        badge.textContent = 'deactivated';
+        state.appendChild(badge);
+    }
+    tr.appendChild(state);
+
+    const files = document.createElement('td');
+    files.className = 'text-end';
+    files.textContent = String(dev.file_count);
+    tr.appendChild(files);
+
+    const used = document.createElement('td');
+    used.className = 'text-end';
+    used.textContent = formatBytes(dev.bytes);
+    tr.appendChild(used);
+
+    const usage = document.createElement('td');
+    // Not named `row`: this function is called row(), and shadowing it inside
+    // its own body works right up until somebody adds a recursive call.
+    const cells = document.createElement('div');
+    cells.className = 'd-flex align-items-center gap-2';
+
+    const percent = document.createElement('span');
+    percent.className = 'text-secondary text-nowrap';
+    percent.textContent = `${dev.percent_used}%`;
+
+    const fill = document.createElement('div');
+    fill.className = 'flex-grow-1';
+    // dev.status, sent by workspaceUsage() — the same function, and so the same
+    // band the developer sees on their own panel.
+    fill.appendChild(bar(dev.percent_used, dev.status));
+
+    cells.appendChild(fill);
+    cells.appendChild(percent);
+    usage.appendChild(cells);
+    tr.appendChild(usage);
+
+    return tr;
 }
 
 async function loadStorage() {

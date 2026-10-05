@@ -26,6 +26,7 @@ const {
 
 // Import Shared DB Instance
 const db = require('./db');
+const audit = require('./lib/audit');
 
 // Shared invitation rules, so registration and creation cannot disagree about
 // what "still valid" means.
@@ -211,14 +212,41 @@ app.post('/api/auth/register-invited', async (req, res) => {
   try {
     const password_hash = await bcrypt.hash(password, 12);
 
-    queries.createUser.run({
-      username,
-      email: invite.email,
-      password_hash,
-      role: invite.assigned_role
+    // ONE TRANSACTION, and it was two statements before. The account and the
+    // invitation that authorised it have to appear together or not at all:
+    // creating the account and then failing to mark the invitation leaves a
+    // live account beside an invitation that still looks unredeemed — someone
+    // could try to use it, and an administrator looking at the list would see
+    // a pending invitation for a person who already has a login, with nothing
+    // saying why. That is the exact state the invites panel was found in.
+    //
+    // The audit record goes in the same transaction, for the same reason it
+    // does everywhere else here: the fact that this account exists and the
+    // record of where it came from are one fact, not two.
+    const redeem = db.transaction(() => {
+      queries.createUser.run({
+        username,
+        email: invite.email,
+        password_hash,
+        role: invite.assigned_role
+      });
+
+      queries.markInviteUsed.run(invite.id);
+
+      audit.record(null, 'user.create', username, {
+        email: invite.email,
+        role: invite.assigned_role,
+        via: 'invitation',
+        invitation_id: invite.id,
+        // Who issued the invitation that was redeemed. The actor on this
+        // record is null because nobody with a session did anything — the
+        // person registering had no account yet. This is the link back to the
+        // administrator who let them in.
+        invited_by: invite.created_by ?? null,
+      });
     });
 
-    queries.markInviteUsed.run(invite.id);
+    redeem();
 
     res.json({
       success: true,
@@ -226,6 +254,7 @@ app.post('/api/auth/register-invited', async (req, res) => {
       message: 'Account created successfully. You may now log in.'
     });
   } catch (err) {
+    console.error('Failed to redeem invitation:', err.message);
     res.status(400).json({ error: 'Username or Email already registered' });
   }
 });

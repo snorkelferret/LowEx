@@ -24,7 +24,10 @@ const audit = require('../lib/audit');
 // than one screen and the answers must not diverge — see each file for why they
 // are separate questions.
 const { hostStorage } = require('../lib/hostStorage');
-const { WORKSPACE_LIMIT_BYTES, workspaceUsage } = require('../lib/workspaceUsage');
+const { workspaceUsage, workspaceLimitBytes } = require('../lib/workspaceUsage');
+// The admin-editable values, and the registry that bounds them. Every read
+// inside hits the database, so a change made here is in force immediately.
+const settings = require('../lib/settings');
 
 // All routes require at least Admin privilege
 router.use(authenticateToken, requireAdmin);
@@ -169,15 +172,16 @@ router.get('/audit', (req, res) => {
  * WHAT THE DISK HOLDS — from backend/lib/hostStorage.js. Bytes and inodes on
  * the filesystem the blobs live on, with a status of ok / warning / critical.
  *
- * WHAT DEVELOPERS ARE CHARGED — per workspace, from
- * backend/lib/workspaceUsage.js. THE SAME FUNCTION THE DEVELOPER'S OWN PANEL
+ * WHAT DEVELOPER WORKSPACES HOLD — per workspace, from
+ * backend/lib/workspaceUsage.js. Not "charged": nobody is billed for putting
+ * files here, and the word invited exactly that misreading. THE SAME FUNCTION THE DEVELOPER'S OWN PANEL
  * CALLS, deliberately: if this route summed the tables itself the two screens
  * would eventually disagree, and the developer would be told they have room
  * while the admin was told they did not. Same function, same answer, by
  * construction.
  *
  * THE TWO TOTALS ARE NOT SUPPOSED TO MATCH and the panel says so in as many
- * words. Charged bytes exclude the game store, count a shared blob once per
+ * words. Workspace bytes exclude the game store, count a shared blob once per
  * workspace holding it, and ignore soft-deleted rows; disk bytes are every blob
  * once. The difference is the game store, plus whatever the collector has not
  * reached yet. An administrator who assumes one should equal the other will
@@ -223,8 +227,8 @@ router.get('/storage', (req, res) => {
                     file_count: 0,
                     percent_used: 0,
                     status: 'ok',
-                    limit_bytes: WORKSPACE_LIMIT_BYTES,
-                    remaining_bytes: WORKSPACE_LIMIT_BYTES
+                    limit_bytes: workspaceLimitBytes(),
+                    remaining_bytes: workspaceLimitBytes()
                 };
 
             return {
@@ -237,7 +241,7 @@ router.get('/storage', (req, res) => {
             };
         }).sort((a, b) => b.bytes - a.bytes);
 
-        const charged_bytes = developers.reduce((sum, d) => sum + d.bytes, 0);
+        const held_bytes = developers.reduce((sum, d) => sum + d.bytes, 0);
 
         return res.json({
             host,
@@ -245,12 +249,13 @@ router.get('/storage', (req, res) => {
                 blob_count: store.blob_count,
                 bytes: store.bytes
             },
-            charged: {
-                bytes: charged_bytes,
-                developer_count: developers.length,
-                // Named for what it is. The admin needs to know which figure
-                // the per-developer percentages are out of.
-                workspace_limit_bytes: WORKSPACE_LIMIT_BYTES
+            // NAMED FOR WHAT IT IS. This was "charged", which read as money owed
+            // — nobody is billed for putting files on this server. It is
+            // storage held in developer workspaces, and the label goes with the
+            // figure so the distinction survives being read quickly.
+            workspaces: {
+                bytes: held_bytes,
+                developer_count: developers.length
             },
             developers
         });
@@ -258,6 +263,111 @@ router.get('/storage', (req, res) => {
     } catch (err) {
         console.error('Failed to read storage figures:', err);
         return res.status(500).json({ error: 'Failed to load storage figures' });
+    }
+});
+
+
+/**
+ * GET /api/admin/settings
+ *
+ * Every setting, with what it is in force, what it would fall back to, what it
+ * may be set to, and the note to show beside it. The panel renders what it is
+ * given rather than knowing any of the keys, so adding a setting is a line in
+ * backend/lib/settings.js and nothing here.
+ *
+ * The values are read here and now, not cached — which is the point of the
+ * whole mechanism. See the header of settings.js for why.
+ */
+router.get('/settings', (req, res) => {
+    try {
+        return res.json({ settings: settings.getSettings() });
+
+    } catch (err) {
+        console.error('Failed to read settings:', err);
+        return res.status(500).json({ error: 'Failed to load settings' });
+    }
+});
+
+
+/**
+ * POST /api/admin/settings/:key  { value }
+ *
+ * Change one setting. Recorded in the audit trail with who did it and what it
+ * was before, in the same transaction as the change — an administrator changing
+ * the invite window is changing a rule everyone else is held to, so "who moved
+ * this" is part of the change rather than a note about it.
+ *
+ * A REFUSED VALUE IS NOT A FAILURE OF THE REQUEST. Out-of-range values come
+ * back as 400 with the reason, because the reason is the useful part: "must be
+ * between 1 and 365 days" tells the administrator what to type instead, and
+ * this message goes straight onto the page.
+ */
+router.post('/settings/:key', (req, res) => {
+    const key = String(req.params.key || '');
+
+    // The body arrives as JSON, but a form-encoded post would give a string,
+    // and the registry coerces either.
+    const value = req.body?.value;
+
+    if (value === undefined || value === null || value === '') {
+        return res.status(400).json({ error: 'No value was given.' });
+    }
+
+    try {
+        const result = settings.setSetting(key, value, req.user.id);
+
+        return res.json({
+            key: result.key,
+            value: result.value,
+            previous: result.previous,
+            settings: settings.getSettings(),
+        });
+
+    } catch (err) {
+        // An unknown key is a bad request, not a server fault: the caller named
+        // something that does not exist. Anything else is unexpected.
+        if (err.message?.startsWith('settings: unknown key')) {
+            return res.status(404).json({ error: 'No such setting.' });
+        }
+
+        if (err.message?.startsWith('settings:')) {
+            console.error('Failed to save setting:', err);
+            return res.status(500).json({ error: 'Failed to save the setting' });
+        }
+
+        return res.status(400).json({ error: err.message });
+    }
+});
+
+
+/**
+ * POST /api/admin/settings/:key/reset
+ *
+ * Back to the default, by removing the row rather than writing the default into
+ * it — so there is one place the default can come from, and "reset" leaves the
+ * table saying exactly what has been deliberately overridden.
+ */
+router.post('/settings/:key/reset', (req, res) => {
+    const key = String(req.params.key || '');
+
+    try {
+        const result = settings.resetSetting(key, req.user.id);
+
+        return res.json({
+            key: result.key,
+            value: result.value,
+            previous: result.previous,
+            changed: result.changed,
+            settings: settings.getSettings(),
+        });
+
+    } catch (err) {
+        if (err.message?.startsWith('settings: unknown key')) {
+            return res.status(404).json({ error: 'No such setting.' });
+        }
+
+        console.error('Failed to reset setting:', err);
+        return res.status(500).json({ error: 'Failed to reset the setting' });
     }
 });
 

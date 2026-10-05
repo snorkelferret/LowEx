@@ -31,10 +31,12 @@
 
 const fs = require('fs');
 
-// The thresholds. shared/, so the disk and a developer's quota cannot disagree
-// about what "nearly full" means.
-const { usageStatus, worstStatus, WARNING_PERCENT, CRITICAL_PERCENT } =
-    require('../../shared/usageStatus.mjs');
+// The banding. shared/, so the disk and a developer's quota cannot disagree
+// about what "nearly full" means — but the LEVELS are an admin setting, so they
+// are read here per call and passed in. shared/ must stay free of the database:
+// the frontend may import it.
+const { usageStatus, worstStatus } = require('../../shared/usageStatus.mjs');
+const settings = require('./settings');
 
 // The flat content-addressed blob directory — where the bytes actually land,
 // and therefore the thing to statfs. The repository directory itself may be on
@@ -86,14 +88,22 @@ function hostStorage(dir = BLOB_DIR) {
         ? Math.round((used_bytes / total_bytes) * 1000) / 10
         : 0;
 
+    // READ HERE, PER CALL. Storing these at module scope would freeze them at
+    // boot, and an administrator's new warning level would not take effect
+    // until the next restart — a save that silently does nothing.
+    const levels = {
+        warning: settings.getSetting('usage_warning_percent'),
+        critical: settings.getSetting('usage_critical_percent'),
+    };
+
     // Each band is reported separately as well as combined: the two bars are
     // separate questions and each is coloured for its own state, while the
     // headline badge is the worse of them, because either one alone stops
     // every write.
-    const space_status = usageStatus(percent_used);
+    const space_status = usageStatus(percent_used, levels);
     const inode_status = inodes_used_percent === null
         ? 'ok'
-        : usageStatus(inodes_used_percent);
+        : usageStatus(inodes_used_percent, levels);
 
     return {
         path: dir,
@@ -111,10 +121,8 @@ function hostStorage(dir = BLOB_DIR) {
     };
 }
 
-// BLOB_DIR is deliberately NOT re-exported. It is owned by storagePaths.js, and
-// a second way to reach it is a second place to look when it needs changing.
-module.exports = {
-    hostStorage,
-    WARNING_PERCENT,
-    CRITICAL_PERCENT
-};
+// Neither BLOB_DIR nor the warning levels are re-exported. Both are owned
+// elsewhere — storagePaths.js and the settings registry — and a second way to
+// reach a value is a second place to look when it needs changing. The levels
+// are not merely owned elsewhere now, they are not fixed values at all.
+module.exports = { hostStorage };

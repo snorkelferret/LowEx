@@ -1,0 +1,40 @@
+<!-- ============================================================
+     Settings — the values an administrator can change without a deploy.
+
+     THE POINT OF THIS PANEL IS THAT SAVING ACTUALLY DOES SOMETHING. Every one
+     of these was a constant in a file: changing it meant editing code,
+     redeploying and restarting. So the thing to get right is not the form — it
+     is that the server reads the value when it USES it rather than when it
+     started. See backend/lib/settings.js, which is written around that.
+
+     THE ROWS ARE BUILT BY adminSettings.js, not written into this markup. The
+     list of settings lives in one place on the server (the registry in
+     backend/lib/settings.js) and arrives with its label, its bounds, its
+     default and its note. Writing the fields out here as well would be a second
+     list to keep in step, and the first thing to go stale.
+
+     SAME CARD SHAPE AS THE REPORTS, AUDIT AND STORAGE PANELS: card-header, then
+     card-body holding the alert and the content. They share a tab strip and
+     should look like it.
+     ============================================================ -->
+
+<section class="card superuser-module mb-4" id="admin-settings-module">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">⚙️ Settings</h2>
+  </div>
+
+  <div class="card-body">
+
+    <p class="text-secondary">
+      Values that used to be fixed in the code. A change takes effect
+      immediately — no restart, and no deploy. Each one is recorded in the audit
+      log with who changed it and what it was before.
+    </p>
+
+    <div id="settingsAlert" class="alert py-2 px-3 small d-none"></div>
+
+    <div id="settingsList" class="text-secondary">Loading settings...</div>
+
+  </div>
+</section>

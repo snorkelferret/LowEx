@@ -24,7 +24,10 @@ const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { canAssignRole, assignableRolesFor } = require('../lib/roles');
 const {
-    INVITE_VALID_DAYS,
+    inviteValidDays,
+    normaliseEmail,
+    inviteable,
+    inviteRefusal,
     MAX_REISSUES,
     DISPLAY_STATUS_SQL,
     REISSUE_REFUSALS,
@@ -32,6 +35,7 @@ const {
     canReissue,
 } = require('../lib/invites');
 const { sendInvitation } = require('../lib/mailer');
+const audit = require('../lib/audit');
 
 const router = express.Router();
 
@@ -47,18 +51,37 @@ const linkFor = (token) => inviteLinkFor(CLIENT_URL, token);
  */
 router.get('/list', authenticateToken, requireAdmin, (req, res) => {
     try {
+        // THE JOIN IS THE POINT, not decoration. An invitation whose address
+        // already has an account is a stale record — it cannot be redeemed, and
+        // it makes the list say somebody is waiting to get in when nobody is.
+        // The panel flags them; this is what tells it.
+        //
+        // LOWER() on both sides, because the UNIQUE constraint on the column is
+        // case-sensitive and an account may have been created with different
+        // capitalisation from the invitation.
+        //
+        // created_by is joined too, so the list can say who issued each
+        // invitation. It is NULL for rows that predate the column, which is
+        // reported as "not recorded" rather than as nobody.
         const rows = db.prepare(`
             SELECT
-                id,
-                email,
-                assigned_role            AS role,
-                ${DISPLAY_STATUS_SQL}        AS status,
-                expires_at               AS expiresAt,
-                reissue_count            AS reissueCount,
-                last_reissued_at         AS lastReissuedAt,
-                created_at               AS createdAt
-            FROM invitations
-            ORDER BY id DESC
+                i.id,
+                i.email,
+                i.assigned_role          AS role,
+                ${DISPLAY_STATUS_SQL}    AS status,
+                i.expires_at             AS expiresAt,
+                i.reissue_count          AS reissueCount,
+                i.last_reissued_at       AS lastReissuedAt,
+                i.created_at             AS createdAt,
+                i.created_by             AS createdBy,
+                issuer.username          AS issuedBy,
+                account.id               AS accountId,
+                account.username         AS accountUsername,
+                account.is_active        AS accountActive
+            FROM invitations i
+            LEFT JOIN users account ON LOWER(account.email) = LOWER(i.email)
+            LEFT JOIN users issuer  ON issuer.id = i.created_by
+            ORDER BY i.id DESC
         `).all();
 
         return res.json(rows);
@@ -161,6 +184,22 @@ router.post('/generate-invite', authenticateToken, requireAdmin, async (req, res
         return res.status(400).json({ error: 'Email is required.' });
     }
 
+    // AN INVITATION IS FOR SOMEONE WITH NO ACCOUNT. Checked here rather than
+    // left to fail at the last step of registration, where the person holding
+    // the link gets "Username or Email already registered" and nobody learns
+    // that the invitation should never have existed.
+    const eligible = inviteable(db, email);
+
+    if (!eligible.ok) {
+        return res.status(409).json({
+            error: inviteRefusal(email, eligible.account),
+            reason: eligible.reason,
+            existing_account: eligible.account
+                ? { username: eligible.account.username, role: eligible.account.role }
+                : null,
+        });
+    }
+
     // Strictly below the inviter. See backend/lib/roles.js for why.
     if (!canAssignRole(req.user.role, role)) {
         const allowed = assignableRolesFor(req.user.role);
@@ -178,17 +217,42 @@ router.post('/generate-invite', authenticateToken, requireAdmin, async (req, res
     try {
         const token = crypto.randomBytes(32).toString('hex');
 
-        db.prepare(`
-            INSERT INTO invitations (
-                email, assigned_role, token, status,
-                reissue_count, expires_at, created_at
-            )
-            VALUES (?, ?, ?, 'pending', 0, datetime('now', ?), datetime('now'))
-        `).run(email, role, token, `+${INVITE_VALID_DAYS} days`);
+        // Stored lowercased, so the UNIQUE constraint on this column compares
+        // the way a person does. Otherwise "Val@x.com" and "val@x.com" are two
+        // invitations for one address.
+        // created_by records WHO ISSUED IT. The audit entry below says the same
+        // thing, but the audit log is a stream and this is the row — "which
+        // administrator let this address in?" should be answerable from the
+        // invitation itself, not only by searching a log.
+        const issued = db.transaction(() => {
+            const result = db.prepare(`
+                INSERT INTO invitations (
+                    email, assigned_role, token, status,
+                    reissue_count, expires_at, created_at, created_by
+                )
+                VALUES (?, ?, ?, 'pending', 0, datetime('now', ?), datetime('now'), ?)
+            `).run(
+                normaliseEmail(email),
+                role,
+                token,
+                `+${inviteValidDays()} days`,
+                req.user.id
+            );
+
+            audit.record(req.user.id, 'invitation.create', normaliseEmail(email), {
+                role,
+                invitation_id: result.lastInsertRowid,
+                expires_in_days: inviteValidDays(),
+            });
+
+            return result;
+        });
+
+        issued();
 
         const created = db.prepare(
             'SELECT expires_at FROM invitations WHERE email = ?'
-        ).get(email);
+        ).get(normaliseEmail(email));
 
         const inviteLink = linkFor(token);
 
@@ -196,15 +260,24 @@ router.post('/generate-invite', authenticateToken, requireAdmin, async (req, res
             role,
             link: inviteLink,
             expiresAt: created?.expires_at,
+            // The window this invitation was actually issued under, so the
+            // fallback line in the email cannot state a window that is not the
+            // one in force.
+            validDays: inviteValidDays(),
         });
 
         return res.json({
             success: true,
-            email,
+            // The NORMALISED address, not what was typed. These differ whenever
+            // somebody types a capital, and the panel is telling the
+            // administrator what was recorded — so it has to be what was
+            // recorded, or the screen and the database disagree about the same
+            // invitation.
+            email: normaliseEmail(email),
             role,
             inviteLink,
             expiresAt: created?.expires_at,
-            expiresInDays: INVITE_VALID_DAYS,
+            expiresInDays: inviteValidDays(),
             emailSent: mail.sent,
             // The link comes back either way. If the mail did not go it is the
             // only way to reach them; if it did, it is the fallback for an
@@ -251,6 +324,20 @@ router.post('/request-reissue', async (req, res) => {
 
         // Shared with the admin-side reissue below, so the two paths cannot
         // drift on what may be reissued.
+        // The same rule as issuing one: an invitation for an address that now
+        // has an account is a dead link, and reissuing extends the life of a
+        // dead link. It can also become true AFTER the invitation was created —
+        // an account made by hand, or a previous invitation redeemed — so this
+        // is checked at reissue time and not only at creation.
+        const eligible = inviteable(db, invite.email);
+
+        if (!eligible.ok) {
+            return res.status(409).json({
+                error: inviteRefusal(invite.email, eligible.account),
+                reason: eligible.reason,
+            });
+        }
+
         const reissueable = canReissue(invite);
 
         if (!reissueable.ok) {
@@ -270,7 +357,7 @@ router.post('/request-reissue', async (req, res) => {
                 expires_at = datetime('now', ?),
                 last_reissued_at = datetime('now')
             WHERE id = ?
-        `).run(newToken, `+${INVITE_VALID_DAYS} days`, invite.id);
+        `).run(newToken, `+${inviteValidDays()} days`, invite.id);
 
         const updated = db.prepare(
             'SELECT reissue_count, expires_at FROM invitations WHERE id = ?'
@@ -282,6 +369,7 @@ router.post('/request-reissue', async (req, res) => {
             role: invite.assigned_role,
             link: inviteLink,
             expiresAt: updated.expires_at,
+            validDays: inviteValidDays(),
             reissued: true,
         });
 
@@ -294,8 +382,8 @@ router.post('/request-reissue', async (req, res) => {
             inviteLink,
             emailSent: mail.sent,
             message: mail.sent
-                ? `Invitation reissued and emailed. A new ${INVITE_VALID_DAYS}-day link is on its way.`
-                : `Invitation reissued. A new ${INVITE_VALID_DAYS}-day link has been generated.`
+                ? `Invitation reissued and emailed. A new ${inviteValidDays()}-day link is on its way.`
+                : `Invitation reissued. A new ${inviteValidDays()}-day link has been generated.`
         });
 
     } catch (err) {
@@ -393,6 +481,20 @@ router.post('/:id/reissue', authenticateToken, requireAdmin, async (req, res) =>
             return res.status(404).json({ error: 'Invitation not found' });
         }
 
+        // The same rule as issuing one: an invitation for an address that now
+        // has an account is a dead link, and reissuing extends the life of a
+        // dead link. It can also become true AFTER the invitation was created —
+        // an account made by hand, or a previous invitation redeemed — so this
+        // is checked at reissue time and not only at creation.
+        const eligible = inviteable(db, invite.email);
+
+        if (!eligible.ok) {
+            return res.status(409).json({
+                error: inviteRefusal(invite.email, eligible.account),
+                reason: eligible.reason,
+            });
+        }
+
         const reissueable = canReissue(invite);
 
         if (!reissueable.ok) {
@@ -412,7 +514,7 @@ router.post('/:id/reissue', authenticateToken, requireAdmin, async (req, res) =>
                 expires_at = datetime('now', ?),
                 last_reissued_at = datetime('now')
             WHERE id = ?
-        `).run(newToken, `+${INVITE_VALID_DAYS} days`, id);
+        `).run(newToken, `+${inviteValidDays()} days`, id);
 
         const updated = db.prepare(
             'SELECT reissue_count, expires_at FROM invitations WHERE id = ?'
@@ -424,6 +526,7 @@ router.post('/:id/reissue', authenticateToken, requireAdmin, async (req, res) =>
             role: invite.assigned_role,
             link: inviteLink,
             expiresAt: updated.expires_at,
+            validDays: inviteValidDays(),
             reissued: true,
         });
 

@@ -9,7 +9,7 @@
  *
  * TWO JOBS, IN THIS ORDER, because the second feeds on the first:
  *
- *   1. THE PURGE — versions deleted more than RETENTION_DAYS ago lose their
+ *   1. THE PURGE — versions deleted longer ago than the retention window lose
  *      file rows. This is the operation a developer can also trigger by hand
  *      from their bin, and it is THE SAME FUNCTION (lib/wastebin.js), so the
  *      two cannot drift into deleting different things.
@@ -40,7 +40,10 @@ const db = require('../db');
 const audit = require('../lib/audit');
 const { findProblems } = require('../lib/storeIntegrity');
 const { purgeVersionFiles, expiredVersions } = require('../lib/wastebin');
-const { RETENTION_DAYS } = require('../lib/retention');
+// The window is an admin setting. This job is a fresh process on every cron
+// run, so reading it once here would be safe — but retentionDays() is called
+// at the point of use anyway, so there is no snapshot to forget about.
+const { retentionDays } = require('../lib/retention');
 // Where the blobs are, and the only safe way to build a path to one. This job
 // is the only thing in the system that deletes content, so it is the last place
 // that should be deriving the path for itself.
@@ -258,7 +261,7 @@ async function main() {
 
     say('');
     say(`  daily job — ${started.toISOString().replace('T', ' ').slice(0, 19)}`);
-    say(`  retention : ${RETENTION_DAYS} days   grace: ${GRACE_HOURS}h`);
+    say(`  retention : ${retentionDays()} days   grace: ${GRACE_HOURS}h`);
     if (DRY_RUN) say('  MODE      : dry run — nothing will be changed');
 
     const sound = await storeIsSound();

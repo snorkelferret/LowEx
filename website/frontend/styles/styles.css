@@ -381,3 +381,33 @@ body {
   min-width: 2px;
   background-color: rgba(255, 255, 255, 0.25);
 }
+
+/* ==========================================================================
+   Sortable table headings
+   ==========================================================================
+
+   A heading that sorts has to LOOK like something you can press, or nobody
+   presses it. The arrow is added by the script and the aria-sort attribute goes
+   with it, so the state is announced rather than conveyed by the glyph alone.
+
+   The direction arrow is inside the heading text, so the column widens by a
+   character when sorted — accepted, because the alternative is an absolutely
+   positioned marker that has to be kept clear of the label. */
+
+.storage-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.storage-sortable:hover,
+.storage-sortable:focus-visible {
+  color: var(--bs-body-color);
+}
+
+/* Focus ring for keyboard use: the heading is a button in all but markup, and
+   it has to be reachable and visible without a mouse. */
+.storage-sortable:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
