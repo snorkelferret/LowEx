@@ -1,41 +1,45 @@
 LOW EXPECTATIONS — TODO
 =======================
 
-FIRST THING 2026-10-03 — THE TOOLING, NOT THE PROJECT
------------------------------------------------------
-Agreed at the end of 2026-10-02, before anything else is built.
+RESOLVED 2026-10-05 — THE "PERMISSIONS PROBLEM" WAS TWO THINGS, NEITHER OF THEM
+PERMISSIONS
+------------------------------------------------------------------------------
+Written up because the diagnosis was wrong for most of a day, and the wrong
+diagnosis was expensive. Kept rather than deleted so it is not repeated.
 
-THE PROBLEM. `node` and `npm` are not on the PATH in Claude Code's tool
-shells. They come from shell.nix, which is entered interactively — so a command
-run by the agent starts from the profile and does not have them.
+WHAT IT LOOKED LIKE. Commands failing, commands being declined, and the
+conclusion "the agent does not have the access it needs".
 
-WHAT THAT COST TODAY, and it was a lot: `node build.js` fails with "command
-not found"; `npm run build` fails the same way, and FAILS SILENTLY inside
-`&&` chains, so a stale bundle survived one build and a change appeared not to
-work. Most commands needed `nix-shell --run "..."` or a hardcoded
-/nix/store/...-nodejs-22.23.2/bin prefix. The prefix works but is noise on every
-line and dies the day that store path is garbage-collected, because nothing
-references it.
+WHAT IT ACTUALLY WAS:
 
-WHAT TO DECIDE:
+  1. THE PATH. `node` and `npm` were not on the PATH, so `node build.js` said
+     "command not found". That is an ENVIRONMENT gap, not a permissions one —
+     no permission rule can put a binary on the PATH. The worst symptom was not
+     the failure but the SILENT one: `npm run build` failing inside an `&&`
+     chain, so a stale bundle survived and a change genuinely appeared not to
+     have worked.
 
-  * whether to install node into the user profile — `nix profile install
-    nixpkgs#nodejs_22` puts it in ~/.nix-profile/bin, which is ALREADY on the
-    PATH. No config, survives garbage collection, works for every shell. This
-    is the recommendation.
-  * or a SessionStart hook appending `export PATH="$PATH:..."` to
-    $CLAUDE_ENV_FILE — documented and works, but pins the same store path.
-  * NOT an `env` block in .claude/settings.json. Checked against the docs: env
-    values are LITERAL and REPLACE the variable, so `"PATH": "x:${PATH}"` sets
-    PATH to that literal text and breaks every command in the session.
+     FIXED by direnv: /jobs/LowEx/.envrc contains `use nix`, so the devshell in
+     website/shell.nix is loaded for the repo and nodejs, nginx and sqlite are
+     all on the PATH. `node build.js` works plainly now. Do NOT reach for
+     `nix-shell --run "..."` or a /nix/store/...-nodejs-... bin prefix again —
+     both were workarounds for a problem that no longer exists, and the
+     hardcoded path was fragile besides.
 
-ALSO WORTH SETTLING WHILE THERE: several ordinary commands were declined during
-the session without explanation — `nix-shell --run "node build.js"` among them,
-after being told to use nix-shell. Worth finding out whether something is
-auto-declining rather than it being a deliberate choice, because a decline that
-looks identical to a decision is impossible to work with.
+  2. NO PERMISSION RULES EXISTED. ~/.claude/settings.json holds a theme and
+     `blockReadsOutsideWorkingDirectories` and NOTHING ELSE — no allow list, no
+     deny list, no ask list. So nothing was granting or refusing anything
+     specific; every Bash command went to the default prompt and each decline
+     was a one-off answer to it. That is why it felt arbitrary: there was no
+     rule to find, and time went into looking for one.
 
-See memory: node-builds-via-nix-shell.
+WHAT IS STILL WORTH DOING, and it is optional: an allow list for the routine
+commands — git status/log/diff, grep, the five check scripts, node and npm —
+so they stop asking. That is a convenience, not a fix for anything broken.
+
+THE LESSON: "command not found" and "access denied" look similar in a
+transcript and are not the same thing. Read the error before deciding which
+one it is.
 
 
 PRE-EXISTING
