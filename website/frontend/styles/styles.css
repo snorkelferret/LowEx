@@ -277,3 +277,45 @@ body {
    `.table-responsive`. `table-dark` is deliberately absent: it is for a dark
    table on a LIGHT page, and in a dark theme it fights the theme's own
    variables. */
+
+/* ==========================================================================
+   Stat tiles
+   ==========================================================================
+
+   A handful of headline numbers — the admin dashboard's counts. Chosen
+   deliberately over a chart: three unrelated totals have no shared scale, no
+   trend and no magnitude to compare, so bars would invent a comparison that
+   does not exist.
+
+   Label above value, both in TEXT tokens. The number is the information; a
+   coloured number would spend the identity channel on nothing. The one
+   exception is a count that is a genuine state — invitations waiting on
+   somebody — which takes the status warning colour, and only ever with an icon
+   and its label beside it, so the colour never carries the meaning alone.
+
+   NOT tabular-nums. That gives every digit the width of a zero, which is right
+   for a column of figures that must align and wrong for a standalone value —
+   `121` looks loose at this size. */
+
+.stat-tile {
+  min-width: 8rem;
+}
+
+.stat-label {
+  font-size: 0.8125rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0.15rem;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* Status warning. Fixed step from the reserved status scale, not a theme
+   colour: it means "waiting on somebody" here and must not drift with the
+   palette. 8.41:1 on the dark card, so it is legible as ordinary text. */
+.stat-value--attention {
+  color: #fab219;
+}
