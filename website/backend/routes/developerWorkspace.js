@@ -37,13 +37,20 @@ const {
 // the client formatter used to be a second implementation and the two had
 // already drifted apart.
 const { formatBytes } = require('../../shared/formatBytes.mjs');
+// Where the store's files live, and the only safe way to build a path to one.
+const { BLOB_DIR, TMP_DIR, isStorageKey, blobPath } = require('../lib/storagePaths');
 
 
 // ============================================================
 // Temporary upload storage
 // ============================================================
+//
+// Both directories come from backend/lib/storagePaths.js rather than being
+// joined here. '<something>/uploads/files' depends on how deep the file writing
+// it sits, and there were five copies of it across the backend that agreed only
+// because all five happened to be two levels under backend/.
 
-const tempUploadDir = path.join(__dirname, '../uploads/tmp');
+const tempUploadDir = TMP_DIR;
 
 fs.mkdirSync(tempUploadDir, { recursive: true });
 
@@ -1538,11 +1545,10 @@ router.get(
 //
 // ============================================================
 
-// The content store is flat: one file per SHA, named by its hash. Nothing else
-// is ever used to build a filesystem path.
-const UPLOAD_STORAGE_DIR = path.join(__dirname, '../uploads/files');
-
-const SHA256_HEX = /^[0-9a-f]{64}$/;
+// SHA256_HEX used to be defined here as well as in backend/lib/storeIntegrity.js
+// — the same regex, twice. It now lives with the path it protects, in
+// backend/lib/storagePaths.js: the key format is what makes the path safe, and
+// splitting them is how one of the two checks gets forgotten.
 
 // Content-Disposition values are built from a developer-supplied filename, so
 // they are sanitised rather than interpolated. RFC 5987 carries the real name
@@ -1777,7 +1783,11 @@ router.get(
             }
 
             // Refuse to build a path from anything that is not a plain SHA-256.
-            if (!SHA256_HEX.test(String(file.storage_key))) {
+            // blobPath() does the checking, so the guard and the join cannot
+            // drift apart — and a null is the only way it can fail.
+            const absolutePath = blobPath(file.storage_key);
+
+            if (!absolutePath) {
                 console.error(
                     'Refusing to serve stored file with a malformed storage_key:',
                     file.storage_key
@@ -1787,8 +1797,6 @@ router.get(
                     error: 'Stored file record is malformed'
                 });
             }
-
-            const absolutePath = path.join(UPLOAD_STORAGE_DIR, file.storage_key);
 
             let stat;
 
@@ -2587,11 +2595,7 @@ router.post(
             // Permanent content storage directory.
             // ----------------------------------------------------
 
-            const storageDir =
-                path.join(
-                    __dirname,
-                    '../uploads/files'
-                );
+            const storageDir = BLOB_DIR;
 
             fs.mkdirSync(
                 storageDir,
@@ -2871,11 +2875,21 @@ router.post(
 
                             if (storedFile) {
 
+                                // blobPath() refuses a key that is not a
+                                // plain SHA-256, so a null here means the ROW
+                                // is corrupt rather than the caller. Throwing
+                                // rolls the transaction back and removes
+                                // anything this upload has already written,
+                                // which is the right outcome for a store that
+                                // cannot be trusted.
                                 const storagePath =
-                                    path.join(
-                                        storageDir,
-                                        storedFile.storage_key
+                                    blobPath(storedFile.storage_key);
+
+                                if (!storagePath) {
+                                    throw new Error(
+                                        `stored_files #${storedFile.id} has a malformed storage_key`
                                     );
+                                }
 
 
                                 // The database says the file exists.
@@ -2898,11 +2912,17 @@ router.post(
 
                                 const storageKey = sha256;
 
-                                const storagePath =
-                                    path.join(
-                                        storageDir,
-                                        storageKey
+                                // storageKey is the hash this server just
+                                // computed from the bytes, so it is always a
+                                // valid key; blobPath still builds it, so there
+                                // is one way to make a store path.
+                                const storagePath = blobPath(storageKey);
+
+                                if (!storagePath) {
+                                    throw new Error(
+                                        `refusing to store content under a malformed key: ${storageKey}`
                                     );
+                                }
 
 
                                 // Normally this path cannot already
@@ -3316,12 +3336,7 @@ router.post(
 
             for (const file of files) {
 
-                const storagePath =
-                    path.join(
-                        __dirname,
-                        '../uploads/files',
-                        file.storage_key
-                    );
+                const storagePath = blobPath(file.storage_key);
 
 
                 let exists = false;
@@ -3500,11 +3515,7 @@ router.post(
 
             for (const file of files) {
 
-                const storagePath = path.join(
-                    __dirname,
-                    '../uploads/files',
-                    file.storage_key
-                );
+                const storagePath = blobPath(file.storage_key);
 
                 let head;
 

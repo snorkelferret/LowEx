@@ -30,18 +30,18 @@
 // the accounting as broken.
 
 const fs = require('fs');
-const path = require('path');
 
 // The thresholds. shared/, so the disk and a developer's quota cannot disagree
 // about what "nearly full" means.
 const { usageStatus, worstStatus, WARNING_PERCENT, CRITICAL_PERCENT } =
     require('../../shared/usageStatus.mjs');
 
-// The flat content-addressed blob directory: one file per SHA, named for the
-// SHA. Where the bytes actually land, and therefore the thing to statfs — the
-// repository directory itself may be on a different filesystem from the uploads
-// mount, and it is the uploads mount that fills up.
-const BLOB_DIR = path.join(__dirname, '../uploads/files');
+// The flat content-addressed blob directory — where the bytes actually land,
+// and therefore the thing to statfs. The repository directory itself may be on
+// a different filesystem from the uploads mount, and it is the uploads mount
+// that fills up. The path is defined in storagePaths.js, not here: this module
+// measures it, it does not own it, and five other callers need the same answer.
+const { BLOB_DIR } = require('./storagePaths');
 
 // Used, not merely allocated: bfree counts blocks the filesystem keeps in
 // reserve for root, which a non-root process cannot have. bavail is what is
@@ -111,8 +111,9 @@ function hostStorage(dir = BLOB_DIR) {
     };
 }
 
+// BLOB_DIR is deliberately NOT re-exported. It is owned by storagePaths.js, and
+// a second way to reach it is a second place to look when it needs changing.
 module.exports = {
-    BLOB_DIR,
     hostStorage,
     WARNING_PERCENT,
     CRITICAL_PERCENT

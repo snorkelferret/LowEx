@@ -20,7 +20,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const SHA256_HEX = /^[0-9a-f]{64}$/;
+// The key format, from the module that owns the layout. This file used to carry
+// its own copy of the regex — which is how a second copy starts, and the other
+// copy guards a download path.
+const { isStorageKey } = require('./storagePaths');
 
 function sha256OfFile(filePath) {
     return new Promise((resolve, reject) => {
@@ -88,7 +91,7 @@ async function findProblems(db, storeDir, { deep = true } = {}) {
         seenSha.add(row.sha256);
         seenKey.add(row.storage_key);
 
-        if (!SHA256_HEX.test(String(row.sha256))) {
+        if (!isStorageKey(row.sha256)) {
             problems.push({
                 level: 'fatal',
                 message: `${label}: sha256 is not 64 lowercase hex`,
@@ -107,12 +110,19 @@ async function findProblems(db, storeDir, { deep = true } = {}) {
             });
         }
 
-        const blobPath = path.join(storeDir, String(row.storage_key));
+        // Built from THIS function's storeDir argument, not from BLOB_DIR:
+        // scripts/check-store.js points this at a backup or a copy via STORE_DIR,
+        // and a global path here would quietly check the live store instead of
+        // the one it was asked about.
+        //
+        // The join is still safe without re-checking: the sha256 was validated
+        // above and storage_key must equal it, or that was reported as fatal.
+        const blob = path.join(storeDir, String(row.storage_key));
 
         let stat;
 
         try {
-            stat = fs.statSync(blobPath);
+            stat = fs.statSync(blob);
         } catch {
             problems.push({
                 level: 'fatal',
@@ -131,7 +141,7 @@ async function findProblems(db, storeDir, { deep = true } = {}) {
         }
 
         if (deep) {
-            const actual = await sha256OfFile(blobPath);
+            const actual = await sha256OfFile(blob);
 
             if (actual !== row.sha256) {
                 problems.push({

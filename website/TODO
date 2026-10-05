@@ -1549,11 +1549,9 @@ They MUST be dealt with before any real user data exists.
         wants them admin-editable through the settings mechanism, which does not
         exist yet. When it lands, the constants move behind it and the worker
         must READ the setting rather than cache it at boot.
-      * The blob directory path '../uploads/files' is written out in FIVE
-        places (this lib, jobs/daily.js, the upload route, two reset scripts).
-        hostStorage.js exports BLOB_DIR; the other four should use it. Not done
-        in this change because two of them are destructive reset scripts that
-        would need re-testing to touch safely.
+      * (Done, in the change below.) The blob directory path was written out in
+        SIX places — this lib, jobs/daily.js, the upload route, two reset
+        scripts and scripts/check-store.js — and is now defined once.
 
     The rest of this section is the reasoning that produced the above, kept
     because the accounting rules are easy to break later:
@@ -2302,3 +2300,76 @@ They MUST be dealt with before any real user data exists.
         .json a tool would read as configuration, not a build file. If we ever
         run a developer's build, that is a decision with a sandbox attached, not
         a feature.
+
+
+36) ONE DEFINITION OF WHERE THE BYTES LIVE — 2026-10-05. Six copies, and they
+    agreed only by luck.
+
+    The string '../uploads/files' joined onto __dirname appeared in SIX places:
+    backend/lib/hostStorage.js, backend/jobs/daily.js, the upload and download
+    routes in backend/routes/developerWorkspace.js, both reset scripts, and
+    scripts/check-store.js. All six resolved to backend/uploads/files, because
+    every one of those files sits exactly two levels under backend/.
+
+    THEY WERE RIGHT BY COINCIDENCE OF DEPTH, and the failure mode is already in
+    this file. resetAssetData.js still carries the comment: it used
+    '../../uploads/files', which resolves to <repo>/uploads/files — a directory
+    that does not exist. So the script deleted every stored_files row, found no
+    files to delete, reported "nothing to delete", and left the physical blobs
+    on disk with nothing referencing them. A relative path that is right by luck
+    is wrong the moment the file containing it moves. That is item 30's
+    territory, and this is the same bug waiting to happen five more times.
+
+    NOW: backend/lib/storagePaths.js owns UPLOADS_DIR, BLOB_DIR and TMP_DIR,
+    resolved once from that file's own location. An absolute path cannot be got
+    wrong by moving a caller. It also documents the two directories and why they
+    are separate — BLOB_DIR is the permanent flat store (one file per SHA, named
+    for the SHA), TMP_DIR is scratch for uploads in flight, referenced by no
+    table and safe to empty.
+
+    THE SAME SWEEP TURNED UP TWO MORE COPIES OF THE SAME DISEASE, both fixed:
+
+      * SHA256_HEX was written out twice — in storeIntegrity.js and in the
+        download route. It guards a path built from a database column, and it is
+        the only thing standing between a corrupt storage_key and
+        path.join(storeDir, '../../etc/passwd'). Two copies of a security check
+        is one copy too many, and the one that gets forgotten is the one that
+        matters.
+
+      * The blob path was BUILT in three places and VALIDATED in only two.
+        daily.js — the collector, the only thing in the system that unlinks
+        content — joined the path without checking. It was covered by policy
+        (the collector refuses to run unless the store passes its integrity
+        check) but not by code.
+
+    So the check and the join are now ONE CALL: storagePaths.blobPath(key)
+    returns the absolute path, or NULL if the key is not a plain SHA-256. A
+    caller cannot build a blob path without the key having been validated,
+    because there is no other way to build one.
+
+    VERIFIED, not assumed:
+
+      * Every path re-resolved and compared against what the six old copies each
+        produced — identical, both directories, and both exist on disk.
+
+      * blobPath() returns null for 'AAAA…' (uppercase), a 63-character key,
+        '', null, undefined and '../../etc/passwd'.
+
+      * A REAL UPLOAD of two files through the changed route: both blobs landed
+        in BLOB_DIR named for their SHA, storage_key === sha256 for both, the
+        deep store check re-hashed them and passed, /tmp was left empty, and the
+        download route served bytes hashing to exactly the blob's own name.
+
+      * THE GUARD, END TO END: storage_key was temporarily corrupted to
+        '../../../../etc/passwd' against a live row, and the download route
+        answered 500 "Stored file record is malformed" without serving anything.
+        The key was restored and the test data removed afterwards.
+
+      * check-store.js --quick with STORE_DIR pointed at a directory containing
+        a stray file reported the orphan THERE rather than checking the live
+        store — the override is the reason storeIntegrity keeps taking storeDir
+        as a parameter instead of using BLOB_DIR, and it very nearly got broken.
+
+    A note for whoever touches this next: daily.js is a SCRIPT, not a module.
+    Requiring it RUNS it. It is safe without --collect, but that is a property
+    of its arguments, not of requiring it.

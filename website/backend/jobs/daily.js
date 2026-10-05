@@ -35,15 +35,16 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 
 const db = require('../db');
 const audit = require('../lib/audit');
 const { findProblems } = require('../lib/storeIntegrity');
 const { purgeVersionFiles, expiredVersions } = require('../lib/wastebin');
 const { RETENTION_DAYS } = require('../lib/retention');
-
-const STORE_DIR = path.join(__dirname, '../uploads/files');
+// Where the blobs are, and the only safe way to build a path to one. This job
+// is the only thing in the system that deletes content, so it is the last place
+// that should be deriving the path for itself.
+const { BLOB_DIR: STORE_DIR, blobPath } = require('../lib/storagePaths');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const COLLECT = process.argv.includes('--collect');
@@ -196,8 +197,20 @@ function runCollector(sound) {
     const gone = [];
 
     for (const row of garbage) {
+        // blobPath() returns null for a key that is not a plain SHA-256. There
+        // should never be one — the collector refuses to run on a store that
+        // fails its integrity check, which reports a malformed key as fatal —
+        // but this is the line that destroys data, and a null here means
+        // "nothing to delete" rather than a path built from a bad string.
+        const blob = blobPath(row.storage_key);
+
+        if (!blob) {
+            say(`  collector : REFUSING malformed storage_key ${row.storage_key}`);
+            continue;
+        }
+
         try {
-            fs.unlinkSync(path.join(STORE_DIR, row.storage_key));
+            fs.unlinkSync(blob);
         } catch (err) {
             if (err.code !== 'ENOENT') {
                 say(`  collector : could not remove ${row.storage_key}: ${err.message}`);

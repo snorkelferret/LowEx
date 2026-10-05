@@ -53,9 +53,12 @@ const DB_PATH = process.env.DB_PATH
     ? path.resolve(process.env.DB_PATH)
     : path.join(ROOT, 'backend/database.db');
 
+// The default comes from the module that owns the layout; STORE_DIR still
+// overrides it, because checking a backup without touching the live store is
+// the whole reason this script takes one.
 const STORE_DIR = process.env.STORE_DIR
     ? path.resolve(process.env.STORE_DIR)
-    : path.join(ROOT, 'backend/uploads/files');
+    : require('../backend/lib/storagePaths').BLOB_DIR;
 
 const quick = process.argv.includes('--quick');
 

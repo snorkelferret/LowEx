@@ -8,7 +8,10 @@ const path = require('path');
 // exist, so this script deleted every stored_files row and then reported
 // "nothing to delete", orphaning the physical files it had just untracked.)
 const dbPath = path.join(__dirname, '../database.db');
-const storageDir = path.join(__dirname, '../uploads/files');
+// The blob directory, from the module that owns the layout — see the
+// comment above about the '../../' that made this script untrack every
+// file and then report that there was nothing to delete.
+const { BLOB_DIR: storageDir } = require('../lib/storagePaths');
 
 const db = new Database(dbPath);
 

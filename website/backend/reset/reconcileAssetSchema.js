@@ -50,7 +50,10 @@ const fs = require('fs');
 const Database = require(path.join(__dirname, '../../node_modules/better-sqlite3'));
 
 const dbPath = path.join(__dirname, '../database.db');
-const uploadsDir = path.join(__dirname, '../uploads/files');
+// The blob directory, from the module that owns the layout. This script
+// DELETES what is in it, which is the last place that should be deriving
+// the path for itself.
+const { BLOB_DIR: uploadsDir } = require('../lib/storagePaths');
 
 // Asset domain: dropped and recreated from db.js. Contains only disposable
 // test data.
