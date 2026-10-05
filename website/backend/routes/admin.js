@@ -83,6 +83,80 @@ router.get('/stats', (req, res) => {
 
 
 /**
+ * GET /api/admin/audit?action=...&limit=...
+ *
+ * The audit trail, newest first.
+ *
+ * THIS HAS BEEN WRITTEN TO SINCE THE BEGINNING AND READABLE BY NOTHING. Every
+ * deactivation, category retag, report resolution, restore, purge and daily job
+ * run lands in audit_logs, and until now the only way to see any of it was a
+ * terminal. An audit trail nobody can read is a write-only table.
+ *
+ * WHO. actor_id joins to users for a name, but it is NULLABLE ON PURPOSE and
+ * that is meaningful rather than missing: the daily job acts on its own, and
+ * attributing that to whoever happened to be signed in would be a lie. A null
+ * actor is rendered as "system" here, from the server, so the client cannot
+ * invent its own wording for it.
+ *
+ * details is JSON and its shape DIFFERS PER ACTION — from/to for a retag,
+ * files/bytes for a purge. It is passed through as text rather than parsed into
+ * columns, because inventing a common shape would lose whichever fields do not
+ * fit it.
+ */
+router.get('/audit', (req, res) => {
+    const action = String(req.query?.action || '').trim();
+
+    // A cap, because this table only ever grows. Newest first, so the cap drops
+    // the oldest rather than the most relevant.
+    const requested = Number(req.query?.limit);
+    const limit = Number.isInteger(requested) && requested > 0
+        ? Math.min(requested, 500)
+        : 100;
+
+    try {
+        const entries = db.prepare(`
+            SELECT
+                al.id,
+                al.action,
+                al.target,
+                al.details,
+                al.created_at,
+                al.actor_id,
+                u.username AS actor_username,
+                u.role     AS actor_role
+            FROM audit_logs al
+            LEFT JOIN users u ON u.id = al.actor_id
+            ${action ? 'WHERE al.action = ?' : ''}
+            ORDER BY al.created_at DESC, al.id DESC
+            LIMIT ?
+        `).all(...(action ? [action, limit] : [limit]));
+
+        // What the filter offers, from the data rather than a list in the code:
+        // a new action appears in the dropdown the first time it is recorded,
+        // with nothing to remember to update.
+        const actions = db.prepare(`
+            SELECT action, COUNT(*) AS count
+            FROM audit_logs
+            GROUP BY action
+            ORDER BY action
+        `).all();
+
+        return res.json({
+            action: action || null,
+            limit,
+            total: db.prepare('SELECT COUNT(*) AS c FROM audit_logs').get().c,
+            actions,
+            entries,
+        });
+
+    } catch (err) {
+        console.error('Failed to read the audit log:', err);
+        return res.status(500).json({ error: 'Failed to load the audit log' });
+    }
+});
+
+
+/**
  * GET /api/admin/users?status=active|inactive|all
  *
  * Everyone, newest-role-first. The caller's own account is included and marked,

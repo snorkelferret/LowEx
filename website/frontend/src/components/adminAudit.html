@@ -1,0 +1,54 @@
+<!-- ============================================================
+     Audit log — who did what, to what, and when.
+
+     THE LAST OF THE "WE ALREADY RECORD THIS AND NOBODY CAN SEE IT" GROUP.
+     audit_logs has been written to since the beginning — every deactivation,
+     every category retag, every report resolution, every restore and purge, and
+     every daily job run — and the only way to read any of it has been a
+     terminal. A trail nobody can read is a write-only table.
+
+     SAME SHAPE AS THE REPORTS PANEL, deliberately: a card-header with the
+     title, then a card-body holding the filter row, the alert and the content.
+     The two sit side by side in the same tab strip and should look it.
+
+     THE TABLE IS IN THE MARKUP, the rows are not. A table is right for a log —
+     many rows, columns to scan down — and it gives the sticky header and the
+     column alignment for free. The body is filled by adminAudit.js.
+     ============================================================ -->
+
+<section class="card superuser-module mb-4" id="admin-audit-module">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">📋 Audit log</h2>
+  </div>
+
+  <div class="card-body">
+
+    <p class="text-secondary">
+      Every action the portal records, newest first. Written by the server as it
+      happens — nothing here can be edited or removed from this page, which is
+      the point of it.
+    </p>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="h6 mb-0">
+        Recorded actions
+        <span id="auditCounts" class="text-secondary fw-normal small ms-1"></span>
+      </h3>
+
+      <!-- Built from the actions actually present in the log, so a new one
+           appears here the first time it is recorded rather than waiting for
+           somebody to remember to add it. -->
+      <select id="auditActionFilter" class="form-select form-select-sm w-auto">
+        <option value="">Everything</option>
+      </select>
+    </div>
+
+    <div id="auditAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+
+    <div id="auditList" class="text-secondary">
+      Loading the audit log...
+    </div>
+
+  </div>
+</section>

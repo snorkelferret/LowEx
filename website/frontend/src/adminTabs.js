@@ -46,6 +46,19 @@ function select(nav, section) {
     }
 }
 
+// The URL carries which section is open, so a tab can be linked to, bookmarked
+// and reloaded into. Without it every visit starts at the first tab and
+// whichever one you wanted has to be found again.
+//
+// replaceState rather than pushState: switching tabs is not navigation, and a
+// back button that walks back through every tab you looked at would be worse
+// than one that leaves the page.
+function remember(section) {
+    if (!window.history || !window.history.replaceState) return;
+
+    window.history.replaceState(null, '', `#${section}`);
+}
+
 function init() {
     const nav = document.getElementById(NAV_ID);
     if (!nav) return;
@@ -62,10 +75,20 @@ function init() {
     if (remaining.length === 0) return;
 
     for (const entry of remaining) {
-        entry.addEventListener('click', () => select(nav, entry.dataset.section));
+        entry.addEventListener('click', () => {
+            select(nav, entry.dataset.section);
+            remember(entry.dataset.section);
+        });
     }
 
-    select(nav, remaining[0].dataset.section);
+    // Whatever the URL asked for, if this page has it. Anything else — no hash,
+    // or a hash naming a section that is not here — falls back to the first.
+    const wanted = window.location.hash.replace(/^#/, '');
+    const opening = remaining.some(e => e.dataset.section === wanted)
+        ? wanted
+        : remaining[0].dataset.section;
+
+    select(nav, opening);
 }
 
 if (document.readyState === 'loading') {
