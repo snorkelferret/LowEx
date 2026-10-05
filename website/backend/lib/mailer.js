@@ -55,8 +55,12 @@ function getTransporter() {
  * { sent: false, reason, error? } so the caller can decide what to tell the
  * user rather than having to handle an exception on a path where the
  * important work has already succeeded.
+ *
+ * `cc` is optional and takes an array of addresses. See the note at the call
+ * below for why anyone receiving an alert together with someone else can see
+ * that they have.
  */
-async function sendMail({ to, subject, text, html }) {
+async function sendMail({ to, cc, subject, text, html }) {
     if (!isConfigured()) {
         return { sent: false, reason: 'not_configured' };
     }
@@ -65,6 +69,11 @@ async function sendMail({ to, subject, text, html }) {
         const info = await getTransporter().sendMail({
             from: MAIL_FROM,
             to,
+            // CC RATHER THAN BCC, for messages that go to several people. An
+            // alert that several people receive is one they need to be able to
+            // talk about, and they cannot do that without knowing who else has
+            // it. BCC would hide exactly the thing that makes it collaborative.
+            cc: cc && cc.length ? cc : undefined,
             subject,
             text,
             html,

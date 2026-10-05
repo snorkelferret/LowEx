@@ -2,6 +2,33 @@
 
 For whoever runs the box. Read-only unless stated otherwise.
 
+## Creating a privileged account
+
+Administrators and superusers cannot be created through the website. This is the
+only way:
+
+```bash
+node scripts/create-superuser.js                  # create a superuser
+node scripts/create-superuser.js --role admin     # create an administrator
+node scripts/create-superuser.js --list           # who is on the system
+node scripts/create-superuser.js --reset <name>   # set a new password
+```
+
+**Run it on the machine the portal runs on.** Needing access to the machine is
+the control, not the obscurity of the command.
+
+**The password is typed, never passed in.** There is no flag for it and no
+environment variable: an argument appears in `ps` output and in the shell's
+history, and the environment is readable by other processes. The script refuses
+to run without a terminal rather than accept one. Nothing is echoed as you type,
+and nothing is printed afterwards.
+
+`--reset` is the only way to change a password. There is no in-app password
+change and no "forgot my password" link.
+
+**On a brand new installation there are no accounts at all**, so this is how you
+get in the first time. That is deliberate — see *Administering*.
+
 ## Look at the database
 
 The database is a single SQLite file, so anything you want to know is one query
@@ -17,13 +44,13 @@ Useful tables:
 
 | Table | Holds |
 |---|---|
-| `users` | Accounts, roles, whether they are active |
+| `users` | Accounts, roles, whether they are active, and `created_via` — how each account came to exist. NULL there means nothing in the portal created it. |
 | `workspace_assets`, `workspace_versions` | What developers have uploaded |
 | `assets`, `asset_versions` | The game asset store |
 | `stored_files` | One row per SHA-256. **One copy of any content, ever.** |
 | `technical_check_runs`, `technical_check_results` | What each check said and why |
 | `creative_approvals` | Who approved or rejected what, and their comment |
-| `audit_logs` | Deactivations, category changes, resolved reports |
+| `audit_logs` | Deactivations, category changes, resolved reports, settings changes, invitations, account creation, restores and purges, daily job runs |
 | `feedback` | Bug reports and suggestions |
 
 To see what a developer is holding:

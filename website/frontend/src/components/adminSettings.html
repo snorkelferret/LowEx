@@ -36,5 +36,39 @@
 
     <div id="settingsList" class="text-secondary">Loading settings...</div>
 
+    <!-- ---------------------------------------------------------------
+         Urgent alerts.
+
+         A test button, because the only way to know whether an alert will
+         reach you is to send one and see. Everything about it is built to
+         report what ACTUALLY happened: "sent" and "email is not configured on
+         this server" are both ordinary outcomes, and a button that says it
+         worked when nothing left the building is worse than no button.
+
+         This is the delivery half only. Nothing here decides when something is
+         urgent — see backend/lib/notify.js and TODO 41.
+         --------------------------------------------------------------- -->
+    <div class="border-top border-secondary-subtle mt-4 pt-3">
+
+      <h3 class="h6 mb-2">Urgent alerts</h3>
+
+      <p class="text-secondary small mb-2">
+        Where a message goes when something needs attention before anyone
+        notices the hard way. Sent to every admin and superuser, on one message,
+        so you can all see who else has it.
+      </p>
+
+      <div id="notificationStatus" class="text-secondary small mb-3">
+        Checking how alerts are set up...
+      </div>
+
+      <button type="button" id="notificationTestBtn" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-send me-1" aria-hidden="true"></i>Send a test message
+      </button>
+
+      <div id="notificationTestResult" class="mt-2"></div>
+
+    </div>
+
   </div>
 </section>

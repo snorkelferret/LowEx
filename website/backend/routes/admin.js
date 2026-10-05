@@ -18,7 +18,7 @@ const router = express.Router();
 
 const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const { isStrictlyBelow } = require('../lib/roles');
+const { isStrictlyBelow, isAdminOrAbove } = require('../lib/roles');
 const audit = require('../lib/audit');
 // The two storage questions. Kept as libraries because each is asked on more
 // than one screen and the answers must not diverge — see each file for why they
@@ -28,6 +28,9 @@ const { workspaceUsage, workspaceLimitBytes } = require('../lib/workspaceUsage')
 // The admin-editable values, and the registry that bounds them. Every read
 // inside hits the database, so a change made here is in force immediately.
 const settings = require('../lib/settings');
+// Telling people about something urgent. Nothing here decides WHEN something is
+// urgent — it answers who gets told, and whether the message actually went.
+const notify = require('../lib/notify');
 
 // All routes require at least Admin privilege
 router.use(authenticateToken, requireAdmin);
@@ -377,6 +380,92 @@ router.post('/settings/:key/reset', (req, res) => {
 
 
 /**
+ * GET /api/admin/notifications
+ *
+ * Whether anything can actually be sent, and to whom.
+ *
+ * Asked by the admin page so it can say BEFORE an incident that alerts are
+ * going nowhere, rather than that being discovered during the incident. The
+ * recipient list is returned rather than just a count, because "3 people would
+ * be told" is much easier to trust when you can see which three.
+ */
+router.get('/notifications', (req, res) => {
+    try {
+        return res.json({
+            channels: notify.channels(),
+            recipients: notify.staffRecipients(),
+        });
+
+    } catch (err) {
+        console.error('Failed to read notification settings:', err);
+        return res.status(500).json({ error: 'Failed to load notification settings' });
+    }
+});
+
+
+/**
+ * POST /api/admin/notifications/test
+ *
+ * Send a test alert to every admin and superuser.
+ *
+ * REPORTS WHAT ACTUALLY HAPPENED. "Sent" and "email is not configured on this
+ * server" are both ordinary outcomes, and a button that says it worked when
+ * nothing left the building is worse than no button at all — it is a reason to
+ * stop worrying.
+ *
+ * Deliberately allowed even where the outcome is known to be a failure: the
+ * point of the test is to find that out.
+ */
+router.post('/notifications/test', async (req, res) => {
+    try {
+        const message = notify.testMessage({
+            requestedBy: req.user.username,
+            host: require('os').hostname(),
+        });
+
+        const result = await notify.notifyStaff({
+            level: 'urgent',
+            ...message,
+        });
+
+        if (result.sent) {
+            return res.json({
+                sent: true,
+                to: result.to,
+                cc: result.cc,
+                message: `Test alert sent to ${result.to.length + result.cc.length} ` +
+                    `admin${result.to.length + result.cc.length === 1 ? '' : 's'}.`,
+            });
+        }
+
+        // The refusals, said plainly, with what to do about each.
+        const explanations = {
+            no_recipients:
+                'Nobody to send to. Alerts go to every admin and superuser, and ' +
+                'none of those accounts has an email address.',
+            not_configured:
+                'Email is not configured on this server, so nothing was sent. ' +
+                'The SMTP settings are in the server environment, not on this page.',
+            error:
+                `The mail server refused the message: ${result.error || 'no reason given'}`,
+        };
+
+        return res.status(200).json({
+            sent: false,
+            reason: result.reason,
+            to: result.to || [],
+            cc: result.cc || [],
+            message: explanations[result.reason] || 'The test message was not sent.',
+        });
+
+    } catch (err) {
+        console.error('Failed to send a test notification:', err);
+        return res.status(500).json({ error: 'Failed to send the test message' });
+    }
+});
+
+
+/**
  * GET /api/admin/users?status=active|inactive|all
  *
  * Everyone, newest-role-first. The caller's own account is included and marked,
@@ -407,29 +496,67 @@ router.get('/users', (req, res) => {
 
         // ACCOUNTS NOT ACCOUNTED FOR.
         //
-        // Every account should be explicable: made at bootstrap, redeemed from
-        // an invitation, or arrived through Google. An account with no recorded
-        // origin is one that nothing in this application created — somebody
-        // inserted it directly.
+        // TWO QUESTIONS, and they are different enough to need different
+        // sentences when they fail:
         //
-        // It cannot be a complete answer, and it is not pretending to be one: a
-        // determined hand can write a created_via alongside the row. What it
-        // catches is the ordinary case, which is an ad-hoc command that does
-        // not know the column exists. That is how the account this check was
-        // written for got here.
-        const unaccounted = users.filter(user => !user.created_via);
+        //   1. DOES ANYTHING ACCOUNT FOR THIS ACCOUNT AT ALL? A NULL
+        //      created_via means nothing in this application created it —
+        //      somebody inserted the row directly.
+        //
+        //   2. IS ITS ORIGIN ALLOWED FOR ITS ROLE? Admin and superuser cannot
+        //      be created through the web interface by anyone (see
+        //      backend/lib/roles.js). So a privileged account whose origin is a
+        //      web path is a violation even though its origin is recorded —
+        //      which is exactly the case (1) cannot catch, because the row
+        //      looks perfectly explicable.
+        //
+        // Neither can be a complete answer, and neither pretends to be: a
+        // determined hand can write any created_via it likes. What they catch is
+        // the ordinary case — an ad-hoc command that does not know the column
+        // exists, or a privileged account created the way the web creates
+        // accounts. That is how the account this check was written for got here.
+        // Origins that only exist because the WEB created the account. A
+        // privileged account carrying one of these was made through the
+        // interface, which the rule forbids.
+        //
+        // 'manual', 'console' and 'bootstrap' are all host-machine origins and
+        // are accepted for any role — 'manual' covers the accounts that predate
+        // the column, which were made by hand on the machine, and that is a
+        // legitimate way for an admin to have come about.
+        const WEB_ORIGINS = ['invitation', 'google'];
+
+        const unaccounted = users
+            .map(user => {
+                if (!user.created_via) {
+                    return { reason: 'unrecorded' };
+                }
+
+                // Only privileged accounts have a restricted origin. A
+                // developer or tester made by invitation is entirely normal,
+                // and flagging that would bury the two that matter.
+                if (isAdminOrAbove(user.role) && WEB_ORIGINS.includes(user.created_via)) {
+                    return { reason: 'privileged_from_web' };
+                }
+
+                return null;
+            })
+            .map((verdict, index) => verdict && ({
+                id: users[index].id,
+                username: users[index].username,
+                role: users[index].role,
+                created_at: users[index].created_at,
+                created_via: users[index].created_via,
+                reason: verdict.reason,
+            }))
+            .filter(Boolean);
 
         return res.json({
             status,
             count: users.length,
-            // Named so the panel does not have to derive it, and so the rule
-            // lives here rather than in the client.
-            unaccounted: unaccounted.map(user => ({
-                id: user.id,
-                username: user.username,
-                role: user.role,
-                created_at: user.created_at,
-            })),
+            // Passed through as built above, reason included. Named and shaped
+            // here so the panel does not have to derive it, and so the rule
+            // lives on the server rather than in the client.
+            unaccounted,
             users: users.map(user => ({
                 ...user,
                 is_self: user.id === req.user.id,

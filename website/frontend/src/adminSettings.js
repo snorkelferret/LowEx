@@ -247,10 +247,122 @@ async function onAction(event) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Urgent alerts
+// ---------------------------------------------------------------------------
+
+// SHOWS THE STATE BEFORE THE BUTTON IS PRESSED. Who would be told, and whether
+// anything can be sent at all — so that "email is not configured" is something
+// read while calmly setting things up rather than discovered during the
+// incident the alerts were supposed to report.
+function renderNotificationStatus(data) {
+    const box = $('notificationStatus');
+    if (!box) return;
+
+    box.textContent = '';
+    box.className = 'small mb-3';
+
+    const email = data.channels?.email?.configured;
+    const recipients = data.recipients || [];
+
+    const line = document.createElement('div');
+    line.innerHTML = email
+        ? '<span class="badge text-bg-success me-2">email ready</span>' +
+          'Messages will be sent from this server.'
+        : '<span class="badge text-bg-warning me-2">email not set up</span>' +
+          'No mail transport is configured on this server, so nothing will be ' +
+          'sent. The SMTP settings live in the server environment, not on this page.';
+    box.appendChild(line);
+
+    const who = document.createElement('div');
+    who.className = 'mt-1';
+    who.textContent = recipients.length === 0
+        ? 'Nobody would be told: no admin or superuser account has an email address.'
+        : `Would go to ${recipients.length} ` +
+          `${recipients.length === 1 ? 'account' : 'accounts'}: ` +
+          recipients.map(r => `${r.username} <${r.email}>`).join(', ');
+    box.appendChild(who);
+}
+
+function showTestResult(message, variant) {
+    const box = $('notificationTestResult');
+    if (!box) return;
+
+    box.className = variant === 'success'
+        ? 'alert alert-success py-2 px-3 small mb-0'
+        : 'alert alert-warning py-2 px-3 small mb-0';
+    box.textContent = message;
+}
+
+async function loadNotificationStatus() {
+    const box = $('notificationStatus');
+    if (!box) return;
+
+    try {
+        const response = await apiFetch(`${API}/admin/notifications`, { credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) throw new Error(data.error || 'Could not read the alert setup.');
+
+        renderNotificationStatus(data);
+
+    } catch (err) {
+        box.className = 'small mb-3';
+        box.textContent = err.message;
+    }
+}
+
+async function sendTestAlert(button) {
+    button.disabled = true;
+    showTestResult('Sending...', 'success');
+
+    try {
+        const response = await apiFetch(`${API}/admin/notifications/test`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        // A 200 WITH sent:false IS THE ORDINARY "it could not be sent" ANSWER,
+        // not an error — the request succeeded and the answer is that nothing
+        // went. Reporting it as a failure would be reporting the wrong thing.
+        if (!response.ok) {
+            throw new Error(data.error || 'The test could not be sent.');
+        }
+
+        if (!data.sent) {
+            showTestResult(data.message, 'warning');
+            return;
+        }
+
+        const cc = (data.cc || []).length
+            ? ` (cc: ${data.cc.join(', ')})`
+            : '';
+
+        showTestResult(
+            `Sent to ${data.to.join(', ')}${cc}. Everyone on it can see who else ` +
+            `received it.`,
+            'success'
+        );
+
+    } catch (err) {
+        showTestResult(err.message, 'warning');
+
+    } finally {
+        button.disabled = false;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Only present on the admin and superuser dashboards.
     const list = $('settingsList');
     if (!list) return;
+
+    loadNotificationStatus();
+    $('notificationTestBtn')?.addEventListener('click', event => {
+        sendTestAlert(event.currentTarget);
+    });
 
     // One listener for the whole panel and every redraw, so a save cannot leave
     // a listener attached to an element that no longer exists.

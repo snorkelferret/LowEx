@@ -22,7 +22,7 @@ const crypto = require('crypto');
 const db = require('../db');
 
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const { canAssignRole, assignableRolesFor } = require('../lib/roles');
+const { canAssignRole, assignableRolesFor, webAssignable } = require('../lib/roles');
 const {
     inviteValidDays,
     normaliseEmail,
@@ -197,6 +197,23 @@ router.post('/generate-invite', authenticateToken, requireAdmin, async (req, res
             existing_account: eligible.account
                 ? { username: eligible.account.username, role: eligible.account.role }
                 : null,
+        });
+    }
+
+    // TWO DIFFERENT REFUSALS, SAID DIFFERENTLY.
+    //
+    // "The web cannot grant that role at all" and "you are not senior enough"
+    // are separate facts, and the person reading the message needs the right
+    // one. A superuser told "you are not senior enough to invite an admin"
+    // would reasonably conclude that somebody more senior could — and there is
+    // nobody more senior, which is the whole point.
+    if (!webAssignable(role)) {
+        return res.status(403).json({
+            error:
+                `Admin and superuser accounts cannot be created from this page, ` +
+                `by anyone. They are created on the studio machine, by somebody ` +
+                `with access to it. Developers and testers are invited here.`,
+            reason: 'not_web_assignable',
         });
     }
 

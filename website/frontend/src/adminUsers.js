@@ -54,22 +54,56 @@ function renderOriginCheck(unaccounted) {
     box.className = 'alert alert-warning py-2 px-3 small mb-3';
     box.classList.remove('d-none');
 
-    const names = unaccounted
-        .map(u => `${u.username} (${u.role}, added ${u.created_at})`)
-        .join(', ');
+    // TWO REASONS, EXPLAINED SEPARATELY. They call for different responses —
+    // one is "something got in without going through the portal", the other is
+    // "something privileged got in through the portal" — and lumping them under
+    // one sentence would describe one of them wrongly.
+    const REASONS = {
+        unrecorded: {
+            title: 'no recorded origin',
+            detail: 'Nothing in the portal created these — not setup, not an ' +
+                'invitation, not Google — so the rows were inserted directly ' +
+                'into the database.',
+        },
+        privileged_from_web: {
+            title: 'privileged, created through the website',
+            detail: 'Admin and superuser accounts can only be created on the ' +
+                'studio machine, by someone with access to it. These were ' +
+                'created through the web interface, which is not supposed to be ' +
+                'possible.',
+        },
+    };
+
+    const groups = {};
+    for (const u of unaccounted) {
+        (groups[u.reason] = groups[u.reason] || []).push(u);
+    }
 
     box.innerHTML =
         '<div class="fw-semibold mb-1">' +
         '<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>' +
         (unaccounted.length === 1
-            ? '1 account has no recorded origin'
-            : `${unaccounted.length} accounts have no recorded origin`) +
+            ? '1 account needs explaining'
+            : `${unaccounted.length} accounts need explaining`) +
         '</div>' +
-        `<div>${escapeHtml(names)}</div>` +
-        '<div class="mt-1">These were not created at setup, from an invitation, ' +
-        'or through Google — nothing in the portal made them, so they were ' +
-        'inserted directly into the database. If that was intended, record why; ' +
-        'if it was not, deactivate them and find out how they got there.</div>';
+        Object.entries(groups).map(([reason, list]) => {
+            const explained = REASONS[reason] || {
+                title: reason,
+                detail: '',
+            };
+
+            const names = list
+                .map(u => `${u.username} (${u.role}, added ${u.created_at}` +
+                    `${u.created_via ? ', via ' + u.created_via : ''})`)
+                .join(', ');
+
+            return `<div class="mt-1">` +
+                `<strong>${escapeHtml(list.length)} with ${escapeHtml(explained.title)}:</strong> ` +
+                `${escapeHtml(names)}. ${escapeHtml(explained.detail)}` +
+                `</div>`;
+        }).join('') +
+        '<div class="mt-1">If either was intended, record why; if it was not, ' +
+        'deactivate the account and find out how it got there.</div>';
 }
 
 function showAlert(message, variant) {
@@ -110,6 +144,14 @@ async function loadUsers() {
 
         renderOriginCheck(data.unaccounted || []);
 
+        // Which rows are flagged, and why, so the badge can say which problem
+        // it is. Keyed by id rather than re-derived here: the rule lives on the
+        // server (backend/routes/admin.js) and this only renders its answer.
+        const unaccountedById = {};
+        for (const entry of data.unaccounted || []) {
+            unaccountedById[entry.id] = entry.reason;
+        }
+
         // Every value ESCAPED. Usernames and email addresses are chosen by
         // people, and this table is rendered for the account with the most
         // power in the system.
@@ -141,13 +183,22 @@ async function loadUsers() {
             // whole job is to be noticed when it says something unexpected, so
             // an unexplained account gets the status badge rather than a quiet
             // word in grey next to three other quiet words in grey.
+            // The row says WHICH problem it is, not merely that there is one —
+            // "unrecorded" and "created here, but privileged" need different
+            // responses from whoever reads the table.
+            const flagged = (unaccountedById || {})[user.id];
+
             const origin = ORIGINS[user.created_via];
 
-            const originCell = origin
-                ? `<span class="text-secondary small">${escapeHtml(origin)}</span>`
-                : '<span class="badge text-bg-warning">' +
+            const originCell = flagged === 'privileged_from_web'
+                ? '<span class="badge text-bg-warning">' +
                   '<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>' +
-                  'unrecorded</span>';
+                  'created via the web</span>'
+                : flagged
+                    ? '<span class="badge text-bg-warning">' +
+                      '<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>' +
+                      'unrecorded</span>'
+                    : `<span class="text-secondary small">${escapeHtml(origin || '')}</span>`;
 
             return `
                 <tr>

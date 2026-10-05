@@ -3,7 +3,6 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
-const bcrypt = require('bcryptjs');
 
 const dbPath = path.join(__dirname, 'database.db');
 const db = new Database(dbPath);
@@ -1201,42 +1200,35 @@ const initDb = () => {
 
   /*
    * ----------------------------------------------------------
-   * Initial superuser
+   * NO ACCOUNTS ARE CREATED HERE. DELIBERATELY.
    * ----------------------------------------------------------
+   *
+   * This used to seed a superuser called "admin" with a known, published
+   * password whenever the users table was empty, and print that password to
+   * the console.
+   *
+   * Two things were wrong with it and only one of them was the password being
+   * weak. The literal was IN THE REPOSITORY, on the most privileged account in
+   * the system — and it was PRINTED, where anybody watching the terminal, or
+   * reading a captured log, could read it.
+   *
+   * The deeper problem is that it existed at all: a database that gives itself
+   * a known credential the moment it is created is the weakest thing in the
+   * system, and it was there only so a fresh install had a way in.
+   *
+   * SO A FRESH DATABASE NOW HAS NO ACCOUNTS AND NO WAY IN, and that is the
+   * intended property rather than an oversight:
+   *
+   *     node scripts/create-superuser.js
+   *
+   * Admin and superuser accounts are created on the studio machine, by
+   * somebody with shell access to it, and never through the web interface. The
+   * fact that it needs a shell IS the control. See scripts/create-superuser.js
+   * and TODO 43.
+   *
+   * If you are looking at a database with no accounts and wondering why you
+   * cannot sign in: that is why, and the command above is the way back in.
    */
-
-  const userCount = db
-    .prepare('SELECT COUNT(*) as count FROM users')
-    .get()
-    .count;
-
-  if (userCount === 0) {
-    const salt = bcrypt.genSaltSync(12);
-
-    const hashedPassword = bcrypt.hashSync(
-      'SuperPassword123!',
-      salt
-    );
-
-    db.prepare(`
-      INSERT INTO users (
-        username,
-        email,
-        password_hash,
-        role,
-        created_via
-      )
-      VALUES (?, ?, ?, 'superuser', 'bootstrap')
-    `).run(
-      'admin',
-      'admin@lowexpectations.com',
-      hashedPassword
-    );
-
-    console.log(
-      '🔑 Initial superuser created: username="admin", password="SuperPassword123!"'
-    );
-  }
 
   console.log(
     '⚡ SQLite Database & Auth Tables Ready.'

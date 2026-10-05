@@ -2766,3 +2766,352 @@ They MUST be dealt with before any real user data exists.
     would have been fine and every new one broken. Caught by check:schema, which
     builds a fresh scratch database by design. The migration now sits immediately
     after the CREATE TABLE.
+
+
+41) URGENT NOTIFICATIONS — the test button is built. The rest is a discussion.
+
+    The admin page can show a warning, but only to somebody looking at the admin
+    page. A disk at 95% and climbing needs to reach a person who is not at their
+    desk. This records the design, the decisions taken so far, and the two open
+    questions. NOT to be confused with the discussion board (item 27), which is
+    decided but not built — so this discussion is here rather than on it.
+
+    --- DECIDED ---
+
+    * WHO: EVERY ACTIVE ADMIN AND SUPERUSER. All of them, not one — an alert
+      that reaches one person reaches nobody when that person is on holiday, and
+      the point of an urgent message is that it arrives. Deactivated accounts
+      are skipped: mailing an address nobody is watching is the wrong thing to
+      do with the message that has to arrive.
+
+    * EMAIL FIRST, AND CC RATHER THAN BCC, so everyone on the message can see
+      who else is on it and talk to each other. BCC would hide exactly the thing
+      that makes it collaborative, and would let two people investigate the same
+      disk without ever finding out. (In the mailer this is `cc`, an array; the
+      first recipient goes in To, the rest in Cc, because a message with an
+      empty To is treated as suspicious by some spam filters.)
+
+    * THREE LEVELS, and what separates them is not how bad something is but
+      WHETHER IT INTERRUPTS SOMEBODY. info and warning belong on the admin page;
+      urgent leaves the building. Defined in backend/lib/notify.js.
+
+    * WHAT COUNTS AS URGENT, given so far: disk over the critical threshold AND
+      RISING; the production server being down; a security breach. "And rising"
+      is the important part — a disk sitting at 95% is stable, a disk at 95% and
+      climbing will fill. So an alert fires ON ENTRY into the condition, carries
+      the trend, and then stays quiet while it persists rather than messaging on
+      every check. That is the difference between an alert somebody acts on and
+      one they mute. NOT YET BUILT: whether to also send a daily reminder while
+      something stays critical — my inclination is yes, once a day, but it is a
+      decision rather than an obvious one.
+
+    * "THERE WILL BE OTHER SITUATIONS MARKED URGENT" is why the design is a
+      registry of conditions with a severity each, the same shape as the
+      settings registry, rather than a fixed list. Adding one should be a line.
+      Not built yet.
+
+    --- BUILT: THE TEST BUTTON ---
+
+    Settings tab, both dashboards. It shows who would be told and whether
+    anything can be sent BEFORE the button is pressed, so "email is not
+    configured" is read while calmly setting things up rather than discovered
+    during the incident it was supposed to report.
+
+    The message it sends is SHAPED LIKE A REAL ALERT — same subject prefix, same
+    level, same recipient list — because a test that sends something prettier
+    than the real thing proves less than it appears to. backend/lib/notify.js
+    holds the recipient rule, the levels and the message; mailer.js gained an
+    optional `cc`.
+
+    IT REPORTS WHAT ACTUALLY HAPPENED, and all three outcomes were verified
+    against a throwaway SMTP sink rather than assumed:
+
+      * email configured, sent  -> sent:true. The sink confirmed the envelope
+        carried BOTH recipients and the headers read To: superuser, Cc: admin —
+        so the collaboration requirement is verified at the SMTP level, not just
+        in the API response.
+      * email not configured    -> sent:false, reason not_configured, with the
+        sentence to put on screen. This is the state on THIS machine: SMTP_HOST
+        is empty, so invitations silently fall back to showing the link and
+        alerts would go nowhere.
+      * the mail server refused -> sent:false with the REAL reason,
+        "connect ECONNREFUSED 127.0.0.1:2525", not a vague failure.
+
+    A 200 with sent:false is the ordinary "it could not be sent" answer and the
+    panel treats it as information rather than as an error — reporting it as an
+    error would report the wrong thing.
+
+    --- OPEN 1: SMS ---
+
+    Wanted, and the user's words were "either phone txt or whatsapp". NEITHER IS
+    POSSIBLE WITHOUT A THIRD-PARTY SERVICE. Nothing in this codebase talks to
+    any gateway, so this is a new integration rather than a setting: an account
+    with Twilio, Vonage, MessageBird or a WhatsApp Business provider;
+    credentials; a sending number; and a cost per message.
+
+    Worth deciding before building: SMS to one number or several, whether
+    WhatsApp is really wanted (it is a different API from SMS and, for a
+    Business account, a different approval process), and whether every urgent
+    message should go to a phone or only the ones nobody is awake for.
+
+    --- OPEN 2: THE SERVER CANNOT REPORT ITS OWN DEATH ---
+
+    "The production server has gone down" is the one condition on the list that
+    the portal can never send, because the thing that would send the message is
+    the thing that is dead. It needs something OUTSIDE the portal watching it: a
+    health endpoint, and a monitor that notices when it stops answering. Either
+    a third-party watcher (healthchecks.io and similar) or a job on a different
+    machine. Cron runs the daily job here, but cron does not report its own
+    failures.
+
+    This is a real piece of work and it is not the same piece as the rest. It is
+    recorded here so it is not assumed to be covered by the alerting above,
+    which it is not.
+
+    --- ALSO OPEN ---
+
+    "Security breach" is not yet a thing that can fire. It has to become
+    concrete conditions first. One exists — an account appearing that nothing in
+    the portal created, item 40 — and others would be repeated failed sign-ins,
+    or a new admin or superuser appearing. Each is buildable; the phrase alone
+    is not a trigger.
+
+
+42) BEFORE THIS GOES LIVE — IMPORTANT. Security items that must not be forgotten
+    between now and deployment.
+
+    --- PASSWORDS ---
+
+    THE ADMIN AND SUPERUSER PASSWORDS MUST BOTH BE CHANGED BEFORE GO-LIVE.
+
+    Checked on 2026-10-05: the live `admin` account still opens with
+    the seed password, the value in db.js. The `superuser` account does NOT
+    match that string, so it was set to something else by hand — which means its
+    password is written down nowhere and must be reset deliberately rather than
+    assumed.
+
+    The rule going forward, stated once:
+
+        A PASSWORD IS NEVER ECHOED — NOT TO THE CONSOLE, NOT INTO A LOG, NOT IN
+        AN API RESPONSE, NOT IN AN ERROR MESSAGE. It exists as a bcrypt hash in
+        the database and as the plain text the person typed, and nowhere else.
+
+    db.js breaks this twice today: it contains the literal the seed password
+    and it prints it to the console at first run ("🔑 Initial superuser created:
+    username="admin", password=<the seed password>"). Both go.
+
+    --- AND THE SEED GOES WITH THEM ---
+
+    The right fix is not to hide the password, it is to stop db.js creating a
+    superuser at all. A database that seeds itself with a known credential on
+    the most privileged account is the weakest thing in the system, and it
+    exists only so that a fresh install has a way in.
+
+    scripts/create-superuser.js replaces it (item 43). A fresh database then has
+    no accounts and no way in except by somebody with shell access to the host —
+    which is exactly the intended property, and it is better than a default
+    password nobody remembers to change.
+
+    NOT DONE NOW, deliberately: the live admin account is left alone until
+    go-live, per the decision on 2026-10-05. Do not forget it.
+
+
+43) PRIVILEGED ACCOUNTS ARE CREATED OUT OF BAND — decided 2026-10-05.
+
+    ADMIN AND SUPERUSER CANNOT BE CREATED THROUGH THE WEB INTERFACE AT ALL. They
+    are created only by somebody with superuser rights on the host machine,
+    running a script from a scripts/ directory that the web application cannot
+    reach. The web app never has a path to grant those roles.
+
+    WHY: it limits PERSISTENCE, not impact. A stolen superuser session can still
+    change settings, deactivate people and read everything. What it cannot do is
+    plant a lasting privileged account — which is the difference between an
+    incident you clean up and one you keep finding again.
+
+    WHERE THE SYSTEM STANDS TODAY, checked rather than assumed:
+
+      * superuser — ALREADY correct, by accident. The strictly-below rule in
+        backend/lib/roles.js means nobody can assign it, including a superuser.
+      * admin — THE GAP. assignableRolesFor('superuser') returns
+        ['user','developer','admin'], so a superuser can invite an admin through
+        the panel today.
+      * No route anywhere changes an existing account's role, so there is no
+        promotion path to close. That helps.
+
+    BUILT 2026-10-05. All three:
+
+      * THE WEB REFUSES ADMIN AND ABOVE, whoever is asking. roles.js now has
+        WEB_ASSIGNABLE_ROLES = ['user','developer'], and canAssignRole checks it
+        BEFORE rank — so a superuser asking for admin is refused like anybody
+        else. A REFUSAL IN THE APP, not a hidden dropdown: verified by posting
+        role=admin and role=superuser straight at the API as a superuser, both
+        403, while role=developer still succeeds.
+
+        THE TWO REFUSALS ARE SAID DIFFERENTLY, and that matters. "The web cannot
+        grant that role at all" and "you are not senior enough" are separate
+        facts — a superuser told "you are not senior enough to invite an admin"
+        would reasonably look for somebody more senior, and there is nobody,
+        which is the whole point. webAssignable() exists to tell them apart.
+
+      * scripts/create-superuser.js — see item 45.
+
+      * THE ACCOUNTS CHECK IS ROLE-AWARE, and asks TWO questions now rather than
+        one, because they fail differently:
+
+          1. DOES ANYTHING ACCOUNT FOR THIS ACCOUNT AT ALL? A NULL created_via
+             means nothing in this application made it.
+          2. IS ITS ORIGIN ALLOWED FOR ITS ROLE? A privileged account created
+             through a web path is a violation even though its origin is
+             recorded — which question 1 cannot see, because the row looks
+             perfectly explicable.
+
+        Only privileged accounts have a restricted origin: a developer made by
+        invitation is entirely normal, and flagging that would bury the two that
+        matter. The panel names each account and gives the matching explanation,
+        because "needs explaining" means different things in the two cases.
+
+        The three accounts that exist are NOT flagged: their created_via is
+        'manual', which is a host-machine origin, and that is a legitimate way
+        for an admin to have come about.
+
+        Verified by planting both kinds — an admin with created_via='invitation'
+        (flagged as privileged-from-web) and a developer with no origin at all
+        (flagged as unrecorded) — seeing both described correctly, and removing
+        them.
+
+    ONE INVARIANT THIS DOES NOT CHANGE, but which item 45 records: the rank rule
+    still means nobody can invite a peer, so the web can never make a superuser
+    even if the role list were wrong. The two defences are independent.
+
+    ONE INVARIANT THIS CHANGES, worth writing down: today NOBODY can create a
+    superuser, so there is exactly one for ever and no backup. A script that can
+    create one allows a second — better for recovery, and a deliberate change to
+    a property that was previously guaranteed by the role rule.
+
+    ONE COST TO ACCEPT DELIBERATELY: with a single machine, no admin can be
+    created while whoever needs one is away from the studio computer. That is
+    the point of the rule; it should be a decision rather than a surprise on the
+    day somebody is travelling.
+
+    ALSO OPEN — WHAT "AT THE MACHINE" MEANS. Two different things could enforce
+    it and they are not equivalent:
+
+      (a) SHELL ACCESS TO THE HOST, via the scripts directory. This is the real
+          control: an attacker holding only a web session cannot reach it.
+      (b) THE REQUEST COMING FROM THE MACHINE, via a loopback check in the app.
+          Worth having as a second layer, but it is not the control on its own —
+          and note the app currently binds to every interface (item 44), so
+          there is nothing distinguishing a local request today.
+
+    Recommended: (a) as the control, (b) as belt and braces.
+
+
+44) WHAT THE SERVER LISTENS ON — decided in principle 2026-10-05, to implement
+    with deployment.
+
+    TODAY: app.listen(PORT, callback) with no host argument, so Express binds
+    EVERY INTERFACE — ss shows *:5000. The .env value HOST=localhost does NOT
+    control this; it is only used to build the OAuth callback URL, so it looks
+    like a restriction that is not one. Meanwhile the Vite dev server binds
+    loopback only ([::1]:5173), so the API is the exposed surface and the
+    frontend is not.
+
+    THE SHAPE IT SHOULD HAVE:
+
+      * Express binds 127.0.0.1:5000 — LOOPBACK ONLY, not reachable from the
+        network at all.
+      * A reverse proxy (nginx, Caddy) faces the world on 443, with 80
+        redirecting to it, terminating TLS and forwarding to loopback.
+      * Vite's dev server never runs in production. It is a development tool.
+      * The firewall denies inbound 5000 from anywhere but the machine itself.
+
+    WHY A PROXY RATHER THAN BINDING THE APP TO THE LAN: the application process
+    should not be the thing facing the network. The proxy is where TLS lives,
+    where rate limiting lives, and — relevant to item 43 — where "admin routes
+    only from the studio" can be enforced on requests that never reach Node.
+    The app also cannot serve https on its own here.
+
+    WHAT IS NOT SERVED, and must stay that way: the database file and the
+    uploads directory. Only frontend/dist and frontend/public are mounted as
+    static, which is correct — worth knowing it is deliberate.
+
+    OPEN QUESTION: does anything OTHER than this machine reach the portal today?
+    If a tester on a laptop does, binding to loopback is not enough on its own
+    and the proxy has to exist first. If nothing does — only the Vite setup on
+    this box, whose proxy targets localhost:5000 — then the loopback change is
+    safe to make at any time and breaks nothing.
+
+    TIMING: this is deployment configuration rather than code, so it can wait
+    until just before deployment EXCEPT for the item below, which is worth doing
+    early because it is the recovery path rather than a hardening measure.
+
+
+45) THE SEED IS GONE — done 2026-10-05. scripts/create-superuser.js replaces it.
+
+    db.js no longer creates any account. It used to seed a superuser called
+    "admin" with the password the seed password whenever the users table was
+    empty, and print that password to the console.
+
+    TWO THINGS WERE WRONG AND ONLY ONE WAS THE WEAK PASSWORD. The literal was in
+    the repository, on the most privileged account in the system — and it was
+    PRINTED, where anybody at the terminal or reading a captured log could read
+    it. The deeper problem is that it existed at all: a database that hands
+    itself a known credential the moment it is created is the weakest thing in
+    the system, and it was only there so a fresh install had a way in.
+
+    A FRESH DATABASE NOW HAS NO ACCOUNTS AND NO WAY IN, and that is the intended
+    property. Verified by building a scratch database the way check:schema does
+    and counting the users: zero, and no password printed.
+
+    --- WHAT REPLACES IT ---
+
+    scripts/create-superuser.js. Runs on the studio machine, needs a shell, and
+    is not reachable from the web — scripts/ is not served; only frontend/dist
+    and frontend/public are mounted as static.
+
+      node scripts/create-superuser.js                  create a superuser
+      node scripts/create-superuser.js --role admin     create an admin
+      node scripts/create-superuser.js --reset <name>   set a new password
+      node scripts/create-superuser.js --list           who is on the system
+
+    Only admin and superuser can be created here. Developers and testers come
+    through invitations, which is what the invitation system is for — so the
+    privileged path is the one that needs a shell.
+
+    --- THE PASSWORD IS NEVER ECHOED, AND THAT DECIDED THE DESIGN ---
+
+    Not to the console, not into a log, not into an audit record, not into a
+    shell history file. It exists as a bcrypt hash in the database and as the
+    characters the person typed, and nowhere else.
+
+    WHICH IS WHY IT IS PROMPTED FOR AND NOT PASSED IN. An argument lands in
+    `ps` output and in the shell's history; an environment variable is readable
+    from /proc by the same user and is inherited by child processes. So there is
+    no --password flag, no environment variable, and no "generate one and print
+    it" mode — a password printed to a terminal is a password in a scrollback
+    buffer and possibly a screenshot. A run without a terminal is REFUSED with
+    an explanation rather than compromised, verified by piping input in.
+
+    THE PROMPT IS SWITCHED TO NO-ECHO BEFORE IT IS PRINTED, not after. My test
+    harness found this: input arriving before echo is switched off is echoed by
+    the terminal itself. Nobody types that fast, but a PASTE arrives all at once
+    and does not care how brief the window is.
+
+    Verified through a real pty rather than assumed: the created account holds a
+    $2b$ bcrypt hash that matches what was typed and the plain text appears
+    nowhere in the terminal output; --reset changes it and rejects the old one;
+    a mismatched confirmation changes nothing; and every action is audited with
+    action user.create / user.password_reset, actor NULL, and details carrying
+    via:'console', the OS user and the hostname — so a console action names the
+    human and the machine, which is the most that can honestly be claimed when
+    nobody signed in.
+
+    --- AND IT CLOSED A HOLE I WOULD OTHERWISE HAVE OPENED ---
+
+    There is NO PASSWORD-CHANGE FACILITY ANYWHERE IN THE APPLICATION — the only
+    auth routes are login, logout and invitation registration. So removing the
+    seed without --reset would have left a forgotten password with no recovery
+    path, and would have made the go-live requirement in item 42 ("both
+    passwords must be changed") impossible to satisfy. --reset is that
+    mechanism. Anyone who still wants an in-app password change should say so;
+    it is a separate piece of work and is not needed for go-live now.
