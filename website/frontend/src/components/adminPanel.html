@@ -157,6 +157,10 @@
         </select>
       </div>
 
+      <!-- Accounts not accounted for. Filled by adminUsers.js, and left
+           hidden when every account is explicable — see the note there. -->
+      <div id="accountOriginCheck" class="d-none"></div>
+
       <div id="userListAlert" class="alert py-2 px-3 small d-none"></div>
 
       <div class="table-responsive">
@@ -167,11 +171,12 @@
               <th>Email</th>
               <th>Role</th>
               <th>Status</th>
+              <th>Created</th>
               <th class="text-end"></th>
             </tr>
           </thead>
           <tbody id="user-list-body">
-            <tr><td colspan="5" class="text-secondary py-3">Loading accounts...</td></tr>
+            <tr><td colspan="6" class="text-secondary py-3">Loading accounts...</td></tr>
           </tbody>
         </table>
       </div>

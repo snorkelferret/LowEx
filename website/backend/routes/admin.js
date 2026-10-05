@@ -53,7 +53,11 @@ const USER_FIELDS = `
     role,
     is_active,
     is_2fa_enabled,
-    created_at
+    created_at,
+    -- How this account came to exist. NULL means nothing in this application
+    -- created it, which is the thing the check below looks for. See the column
+    -- declaration in db.js for why it has no default.
+    created_via
 `;
 
 /**
@@ -401,9 +405,31 @@ router.get('/users', (req, res) => {
             ${BY_RANK}
         `).all();
 
+        // ACCOUNTS NOT ACCOUNTED FOR.
+        //
+        // Every account should be explicable: made at bootstrap, redeemed from
+        // an invitation, or arrived through Google. An account with no recorded
+        // origin is one that nothing in this application created — somebody
+        // inserted it directly.
+        //
+        // It cannot be a complete answer, and it is not pretending to be one: a
+        // determined hand can write a created_via alongside the row. What it
+        // catches is the ordinary case, which is an ad-hoc command that does
+        // not know the column exists. That is how the account this check was
+        // written for got here.
+        const unaccounted = users.filter(user => !user.created_via);
+
         return res.json({
             status,
             count: users.length,
+            // Named so the panel does not have to derive it, and so the rule
+            // lives here rather than in the client.
+            unaccounted: unaccounted.map(user => ({
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                created_at: user.created_at,
+            })),
             users: users.map(user => ({
                 ...user,
                 is_self: user.id === req.user.id,

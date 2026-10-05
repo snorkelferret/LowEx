@@ -107,13 +107,17 @@ const queries = {
   // already used, or expired — instead of reporting all three as invalid.
   getInvitation: db.prepare('SELECT * FROM invitations WHERE token = ?'),
   markInviteUsed: db.prepare("UPDATE invitations SET status = 'used' WHERE id = ?"),
+  // created_via is set EXPLICITLY by both of these. It has no default, so a
+  // row inserted without it lands as NULL — which is how the admin's check
+  // spots an account that nothing in this application created. Adding a
+  // DEFAULT here would make every insert look explained and the check useless.
   createUser: db.prepare(`
-    INSERT INTO users (username, email, password_hash, role)
-    VALUES (@username, @email, @password_hash, @role)
+    INSERT INTO users (username, email, password_hash, role, created_via)
+    VALUES (@username, @email, @password_hash, @role, 'invitation')
   `),
   createGoogleUser: db.prepare(`
-    INSERT INTO users (username, email, google_id, role)
-    VALUES (?, ?, ?, 'user')
+    INSERT INTO users (username, email, google_id, role, created_via)
+    VALUES (?, ?, ?, 'user', 'google')
   `)
 };
 
@@ -135,8 +139,30 @@ passport.use(new GoogleStrategy({
       let user = queries.getUserByGoogleId.get(googleId) || queries.getUserByEmail.get(email);
 
       if (!user) {
-        const result = queries.createGoogleUser.run(username, email, googleId);
-        user = queries.getUserById.get(result.lastInsertRowid);
+        // One transaction, like the invitation path: the account and the record
+        // of where it came from are one fact, and this was the third and last
+        // way an account could appear with nothing written down about it.
+        //
+        // The actor is null, for the same reason it is on a redeemed
+        // invitation — nobody signed in acted; this is a person arriving
+        // through Google for the first time and having an account created for
+        // them.
+        let created = null;
+
+        db.transaction(() => {
+          const result = queries.createGoogleUser.run(username, email, googleId);
+
+          created = result.lastInsertRowid;
+
+          audit.record(null, 'user.create', username, {
+            email,
+            role: 'user',
+            via: 'google',
+            google_id: googleId,
+          });
+        })();
+
+        user = queries.getUserById.get(created);
       }
 
       return done(null, user);

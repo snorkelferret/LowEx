@@ -2676,3 +2676,93 @@ They MUST be dealt with before any real user data exists.
     The stale row for val@thameslighter.net is LEFT IN PLACE and now flagged.
     Revoking it is one click in the panel, and it is the user's record to clear
     rather than mine.
+
+
+40) ACCOUNTS NOT ACCOUNTED FOR — BUILT 2026-10-05. The safeguard item 39 said was
+    missing.
+
+    Item 39 stopped invitations being issued for people who already have a login,
+    and made redemption atomic and audited. None of that could SEE an account
+    created by a CLI, because the insert never goes through the application. This
+    is the check for that.
+
+    --- THE MECHANISM IS A COLUMN WITH NO DEFAULT ---
+
+    users.created_via, holding one of 'bootstrap' (made by db.js when the
+    database was empty), 'invitation' (redeemed an invitation), 'google' (first
+    sign-in through Google), or 'manual' (made by hand, outside the application).
+
+    NO DEFAULT, AND THAT IS THE WHOLE TRICK. Every path in the application sets
+    it explicitly. A row inserted by something that does not know about the
+    column — an ad-hoc command, a script written in a hurry — lands as NULL.
+    NULL therefore means "nothing in this application created this account",
+    which is exactly the question worth asking about a login nobody expected.
+
+    A DEFAULT WOULD DEFEAT IT COMPLETELY: every insert would look explained.
+
+    --- THERE ARE EXACTLY THREE WAYS AN ACCOUNT IS MADE ---
+
+    Checked, not assumed: INSERT INTO users appears in db.js (the bootstrap seed)
+    and in two prepared statements in server.js. Nothing else in the tree creates
+    users — no CLI under scripts/, no impersonation route. All three now record
+    their route, and the Google path was not audited at all before this; it is
+    now, in the same transaction as the insert, with the same null actor a
+    redeemed invitation gets (nobody signed in acted — a person arrived through
+    Google and had an account made for them).
+
+    --- THE BACKFILL IS A JUDGEMENT, RECORDED ---
+
+    The three accounts that existed when the column was added (admin, superuser,
+    val) are marked 'manual'. That is a deduction rather than a guess: db.js's own
+    seed inserts 'admin' with the address admin@lowexpectations.com and the live
+    row has admin@lowexpectations.zone, so the seed did not make it, and the
+    application has no other way to make an account. Something outside the
+    application made all three, which is what 'manual' means.
+
+    The alternative was to leave them NULL and let the check report them for
+    ever. That is how a check that always has something in it becomes a check
+    nobody reads — and the point of this one is to be believed on the day it
+    speaks. Marked, with the reasoning in the migration comment.
+
+    --- WHERE IT SHOWS ---
+
+    The admin Accounts tab, on both dashboards. A "Created" column on every row
+    saying how that account came to exist, and a warning above the table that
+    appears ONLY when something is unaccounted for — naming the accounts, when
+    they were added, and what to do about it. Silent when everything is
+    explicable, because a warning that is always on screen is a warning nobody
+    reads.
+
+    An unaccounted row is badged in the status warning colour with an icon,
+    never left as a blank cell: a blank reads as a rendering fault rather than as
+    a finding.
+
+    --- WHAT IT CANNOT DO ---
+
+    A determined hand can write a created_via alongside the row and the check
+    will believe it. It cannot be otherwise without a signature. What it catches
+    is the ordinary case, which is an ad-hoc command that does not know the
+    column exists — and that is precisely how the account this was written for
+    got here.
+
+    Possible follow-ons, not built and not obviously wanted yet: warning an
+    administrator when an unaccounted account SIGNS IN (there is no notification
+    channel — SMTP exists but is optional and used for invitations), and putting
+    this in the manual.
+
+    --- VERIFIED ---
+
+    Baseline: no accounts unaccounted, banner hidden. Inserted an account the way
+    a CLI does — no created_via — and the endpoint returned it in `unaccounted`
+    and the panel badged the row and showed the banner. Redeemed a real
+    invitation and confirmed the account records 'invitation' and the count stays
+    zero. Removed the probes and confirmed the banner container is back to
+    d-none in the DOM, not merely assumed to be.
+
+    FOUND WHILE BUILDING IT, AND WORTH RECORDING: the migration was first written
+    at the TOP of initDb(), before the users table is created — so on a FRESH
+    database, PRAGMA table_info(users) returned empty, ALTER TABLE ran against a
+    table that did not exist, and db.js threw at startup. Every existing database
+    would have been fine and every new one broken. Caught by check:schema, which
+    builds a fresh scratch database by design. The migration now sits immediately
+    after the CREATE TABLE.

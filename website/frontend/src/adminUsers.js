@@ -24,6 +24,54 @@ const ROLE_BADGES = {
     user: 'bg-secondary',
 };
 
+// How each account came to exist, in a word an administrator reads rather than
+// a code they have to know. Anything NOT in this map is unaccounted for — see
+// the column declaration in db.js — and is rendered as a warning, never as a
+// blank cell, because a blank would look like a rendering fault rather than a
+// finding.
+const ORIGINS = {
+    bootstrap: 'created at setup',
+    invitation: 'invitation',
+    google: 'Google sign-in',
+    manual: 'by hand',
+};
+
+// THE CHECK, AND WHY IT IS QUIET WHEN IT HAS NOTHING TO SAY.
+//
+// A warning that is always on screen is a warning nobody reads. This says
+// nothing at all when every account is explicable, and names the accounts when
+// one is not — including what to do about it, because "unrecorded" on its own
+// is a fact with no next step.
+function renderOriginCheck(unaccounted) {
+    const box = $('accountOriginCheck');
+    if (!box) return;
+
+    box.textContent = '';
+    box.classList.add('d-none');
+
+    if (unaccounted.length === 0) return;
+
+    box.className = 'alert alert-warning py-2 px-3 small mb-3';
+    box.classList.remove('d-none');
+
+    const names = unaccounted
+        .map(u => `${u.username} (${u.role}, added ${u.created_at})`)
+        .join(', ');
+
+    box.innerHTML =
+        '<div class="fw-semibold mb-1">' +
+        '<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>' +
+        (unaccounted.length === 1
+            ? '1 account has no recorded origin'
+            : `${unaccounted.length} accounts have no recorded origin`) +
+        '</div>' +
+        `<div>${escapeHtml(names)}</div>` +
+        '<div class="mt-1">These were not created at setup, from an invitation, ' +
+        'or through Google — nothing in the portal made them, so they were ' +
+        'inserted directly into the database. If that was intended, record why; ' +
+        'if it was not, deactivate them and find out how they got there.</div>';
+}
+
 function showAlert(message, variant) {
     const box = $('userListAlert');
     if (!box) return;
@@ -56,9 +104,11 @@ async function loadUsers() {
         }
 
         if (data.users.length === 0) {
-            body.innerHTML = '<tr><td colspan="5" class="text-secondary py-3">No accounts.</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="text-secondary py-3">No accounts.</td></tr>';
             return;
         }
+
+        renderOriginCheck(data.unaccounted || []);
 
         // Every value ESCAPED. Usernames and email addresses are chosen by
         // people, and this table is rendered for the account with the most
@@ -87,12 +137,25 @@ async function loadUsers() {
                 action = `<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" disabled title="Not below your own role">—</button>`;
             }
 
+            // AN UNACCOUNTED ROW IS NOT SUBTLE. This is the one column whose
+            // whole job is to be noticed when it says something unexpected, so
+            // an unexplained account gets the status badge rather than a quiet
+            // word in grey next to three other quiet words in grey.
+            const origin = ORIGINS[user.created_via];
+
+            const originCell = origin
+                ? `<span class="text-secondary small">${escapeHtml(origin)}</span>`
+                : '<span class="badge text-bg-warning">' +
+                  '<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>' +
+                  'unrecorded</span>';
+
             return `
                 <tr>
                   <td>${escapeHtml(user.username)}${you}</td>
                   <td class="text-secondary">${escapeHtml(user.email)}</td>
                   <td><span class="badge ${roleBadge}">${escapeHtml(user.role)}</span></td>
                   <td>${statusBadge}</td>
+                  <td>${originCell}</td>
                   <td class="text-end">${action}</td>
                 </tr>
             `;
@@ -102,7 +165,7 @@ async function loadUsers() {
 
     } catch (err) {
         console.error('Could not load accounts:', err.message);
-        body.innerHTML = `<tr><td colspan="5" class="text-danger py-3">${escapeHtml(err.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="6" class="text-danger py-3">${escapeHtml(err.message)}</td></tr>`;
     }
 }
 

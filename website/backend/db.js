@@ -925,6 +925,24 @@ const initDb = () => {
 
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
+      -- HOW THIS ACCOUNT CAME TO EXIST.
+      --
+      -- One of: 'bootstrap' (made by db.js when the database was empty),
+      -- 'invitation' (somebody redeemed an invitation), 'google' (first
+      -- sign-in through Google), or 'manual' (made by hand, outside the
+      -- application).
+      --
+      -- NO DEFAULT, AND THAT IS THE WHOLE MECHANISM. Every path in the
+      -- application sets it explicitly, so a row inserted by something that
+      -- does not know about this column — an ad-hoc command, a script somebody
+      -- wrote in a hurry — lands as NULL. NULL therefore means "nothing that
+      -- runs in this application created this account", which is the question
+      -- worth asking about a login nobody expected.
+      --
+      -- A DEFAULT would defeat it completely: every insert would look
+      -- explained.
+      created_via TEXT,
+
       CHECK (
         password_hash IS NOT NULL
         OR github_id IS NOT NULL
@@ -932,6 +950,57 @@ const initDb = () => {
       )
     );
   `);
+
+  /*
+   * ----------------------------------------------------------
+   * Migrations that are not tied to one table
+   *
+   * Kept in the same guarded style as applySchemaPatches: read the columns,
+   * add what is missing, run again safely on every start.
+   * ----------------------------------------------------------
+   */
+
+  const userColumns = db
+    .prepare("PRAGMA table_info(users)")
+    .all()
+    .map(c => c.name);
+
+  /*
+   * created_via — how each account came to exist.
+   *
+   * See the column declaration for why it has no default. This adds it, and
+   * then deals with the rows that were already here.
+   *
+   * THE BACKFILL IS A JUDGEMENT, RECORDED RATHER THAN ASSUMED. The three
+   * accounts that existed when this column was added (admin, superuser, val)
+   * were all made by hand: db.js's own seed inserts 'admin' with the address
+   * admin@lowexpectations.com, and the live row has
+   * admin@lowexpectations.zone, so the seed did not create it. They are
+   * therefore marked 'manual', which is what they are.
+   *
+   * The alternative was to leave them NULL and let the new check report them
+   * for ever. That is how a check that always has something in it becomes a
+   * check nobody reads — and the point of this one is to be believed on the
+   * day it speaks. Marking them is the honest record; leaving them would have
+   * been the honest state and a useless alarm.
+   *
+   * If a row here is NOT actually what it says, the check cannot tell — but
+   * nothing can, and this at least says somebody looked.
+   */
+  if (!userColumns.includes('created_via')) {
+    db.exec('ALTER TABLE users ADD COLUMN created_via TEXT;');
+
+    db.exec(`
+      UPDATE users
+      SET created_via = 'manual'
+      WHERE created_via IS NULL;
+    `);
+
+    console.log(
+      '🔎 users.created_via added; existing accounts recorded as created by hand'
+    );
+  }
+
 
 
   /*
@@ -1154,9 +1223,10 @@ const initDb = () => {
         username,
         email,
         password_hash,
-        role
+        role,
+        created_via
       )
-      VALUES (?, ?, ?, 'superuser')
+      VALUES (?, ?, ?, 'superuser', 'bootstrap')
     `).run(
       'admin',
       'admin@lowexpectations.com',
