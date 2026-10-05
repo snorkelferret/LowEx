@@ -112,3 +112,14 @@ website/logiNNotes.txt
 # nix store and a profile path named for this machine, so it is local state
 # rather than anything to share. Its absence is not a broken checkout.
 .direnv/
+
+
+# ==========================================
+# Reference documents
+# ==========================================
+
+# Design and asset reference PDFs, kept locally. They are large binaries that
+# change, so committing them bloats the repository permanently for something
+# that is read rather than built from. Scoped to docs/ rather than a blanket
+# *.pdf so a PDF that genuinely belongs in the tree is not silently excluded.
+docs/*.pdf
