@@ -19,6 +19,13 @@ import { executeGlobalLogout } from './authUtils.js';
     // There was a guard for superuserDashboard.html here. The page is gone
     // (2026-10-06) — a superuser uses the admin dashboard, which the guard
     // below already covers for both roles.
+    // Guard the production page. Prod is a craft role with no administrative
+    // power, and the server refuses an admin the approval routes — so letting
+    // one through this page would only show them buttons that 403.
+    if (path.includes('prodDashboard.html') && user.role !== 'prod') {
+      alert('Access Denied: Production clearance required.');
+      window.location.href = '/index.html';
+    }
     // Guard Admin views
     if (path.includes('adminDashboard.html') && user.role !== 'admin') {
       alert('Access Denied: Admin clearance required.');

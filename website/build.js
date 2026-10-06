@@ -52,6 +52,29 @@ const pageConfigurations = [
 },
 
 {
+    // Production — where a `prod` account lands after signing in.
+    //
+    // ONE JOB, ONE PANEL. Prod has no workspace, no admin powers, and cannot
+    // deactivate or invite anybody, so there is nothing else to put here and
+    // offering more would be offering what the server refuses.
+    //
+    // No loginModal: that dialog belonged to the removed superuser page.
+    output: 'frontend/prodDashboard.html',
+    title: 'Production',
+    scripts: [
+      './src/header.js',          // Fills in who is signed in, and signs them out
+      './src/prodPanel.js',       // The queue of what is waiting, and the decisions
+      './src/feedback.js',        // Report-a-problem button
+      './src/utilityBar.js',      // The utility bar
+    ],
+    styles: '/styles/styles.css',
+    modules: [
+      'frontend/src/components/header.html',
+      'frontend/src/components/prodPanel.html',
+    ],
+},
+
+{
     // The tester's home — where a `user` account lands after signing in.
     //
     // ASSEMBLED LIKE EVERY OTHER SIGNED-IN PAGE, which it was not until

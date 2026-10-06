@@ -14,6 +14,17 @@ router.get('/user', authenticateToken, (req, res) => {
   res.sendFile(path.join(__dirname, '../../frontend/dist/user.html'));
 });
 
+// The production reviewer's page. Prod only — an administrator reaching it
+// would find buttons the server refuses, which is worse than a clear refusal.
+router.get(
+  '/prod',
+  authenticateToken,
+  requireRole('prod'),
+  (req, res) => {
+    res.sendFile(path.join(__dirname, '../../frontend/dist/prodDashboard.html'));
+  }
+);
+
 // Protected Admin View
 router.get('/admin', authenticateToken, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, '../../frontend/dist/adminDashboard.html'));

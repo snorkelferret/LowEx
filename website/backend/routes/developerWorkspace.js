@@ -1400,15 +1400,24 @@ router.get(
 // GET /api/developer/workspace/creative-approvals
 // ============================================================
 //
-// The review queue. Admin/superuser only.
+// The review queue. PROD ONLY, as of 2026-10-06.
 //
-// Without this there was no way to discover a pending approval: the approve and
-// reject routes take an approval id, and nothing listed them, so the workflow
-// could not actually be driven. Optional ?status= filter, defaulting to
-// pending.
+// IT WAS requireRole('admin') — and admin is precisely the role that may NOT
+// decide a creative approval, so the queue was readable by everyone except the
+// person whose job it is. The approve and reject routes had the same problem
+// and were fixed with it. See TODO 51.
 //
-// Returns the requesting developer and the submitted files, so a decision can
-// be made without a second round trip.
+// Without this there was no way to discover a pending approval: those routes
+// take an approval id, and nothing else listed them, so the workflow could not
+// be driven at all.
+//
+// Optional ?status= filter, defaulting to pending. Returns the requesting
+// developer and the submitted files.
+//
+// WHAT "THE SUBMITTED FILES" CANNOT MEAN YET: a workspace is private and there
+// is no read path into one, for anybody — so a reviewer sees the file LIST and
+// cannot open the content. That is recorded as work to do once the game exists;
+// see the AFTER THE GAME EXISTS section of the TODO.
 // ============================================================
 
 const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
@@ -1416,7 +1425,7 @@ const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
 router.get(
     '/creative-approvals',
     authenticateToken,
-    requireRole('admin'),
+    requireRole('prod'),
 
     async (req, res) => {
         const status = req.query?.status === undefined
@@ -4002,7 +4011,13 @@ router.post(
 router.post(
     '/creative-approvals/:approvalId/reject',
     authenticateToken,
-    requireRole('admin'),
+    // PROD, NOT ADMIN — and until now it WAS admin, which is the opposite of
+    // the decision. These two were requireRole('admin','superuser'); a sweep
+    // removing the removed role turned them into requireRole('admin') and
+    // silently handed the power to the one role that is not supposed to have
+    // it. Approving work is a judgement about the WORK; administering the
+    // system is a different job. See TODO 51.
+    requireRole('prod'),
 
     async (req, res) => {
 
@@ -4145,7 +4160,13 @@ router.post(
 router.post(
     '/creative-approvals/:approvalId/approve',
     authenticateToken,
-    requireRole('admin'),
+    // PROD, NOT ADMIN — and until now it WAS admin, which is the opposite of
+    // the decision. These two were requireRole('admin','superuser'); a sweep
+    // removing the removed role turned them into requireRole('admin') and
+    // silently handed the power to the one role that is not supposed to have
+    // it. Approving work is a judgement about the WORK; administering the
+    // system is a different job. See TODO 51.
+    requireRole('prod'),
 
     async (req, res) => {
 

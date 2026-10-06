@@ -3936,3 +3936,85 @@ They MUST be dealt with before any real user data exists.
     small enough for a map in code, and worth watching — if it reaches a dozen,
     that is the point to reconsider roles-as-capability-sets properly rather
     than bolting another name onto the map.
+
+
+===========================================================================
+
+AFTER THE GAME EXISTS — work that cannot be done, or cannot be finished, until
+there is a game. Kept in its own section because the website and the game are
+functionally different things: the portal is built, and the game is not, and
+several items only LOOK like website work until you try to write them.
+
+===========================================================================
+
+NOTHING HERE IS BLOCKED ON THE WEBSITE. Each one is blocked on the game existing
+— a build, a version, a release, or content that has been through the store. If
+an item below could be done today, it should not be in this section.
+
+A) HOW DOES A REVIEWER SEE THE WORK THEY ARE JUDGING? — the blocker found while
+   building the prod page (2026-10-06).
+
+   A prod can decide a creative approval. It cannot open what it is deciding.
+
+   A developer's workspace is PRIVATE — that is a deliberate rule, stated in the
+   manual: "There is no read path into a developer's workspace. Not for
+   administrators, not for superusers." The only mechanism that answers it is
+   IMPERSONATION (item 5), which is marked, time-bounded, audit-logged, and NOT
+   BUILT.
+
+   The prod page says this on screen rather than letting a reviewer hunt for a
+   bug. Three ways out, and they are genuinely different decisions:
+
+     * Build impersonation (item 5 as designed). Honours the rule exactly.
+       Largest piece of work, and the only one that does not change the rule.
+     * A REVIEW VIEW: when a version is submitted for approval, expose THAT
+       version's files to the reviewer and nobody else. The submission is the
+       developer offering the work for judgement, so showing it to the judge is
+       arguably the point rather than a leak — but it IS an exception to a rule
+       that was stated firmly, and exceptions to privacy rules are how privacy
+       rules end.
+     * Not at all: keep deciding on metadata. Workable for a small studio where
+       the reviewer and the maker sit together, and useless otherwise.
+
+   Not decided. It has been postponed twice — first while designing prod, then
+   while building its page — and the page now carries a visible note about it, so
+   the postponement is at least honest.
+
+B) DEPLOYING THE GAME. The powerful half of what the removed superuser page
+   could do: triggering a release via GitHub. Withdrawn with that page and
+   currently with NO home at all — see item 50. It cannot be finished until there
+   is something to deploy and a decided shape for what "deploying" means: which
+   branch, which build, who is told.
+
+   It is recorded here rather than in item 50 because item 50 is an inventory of
+   what was removed, and this is a piece of work in its own right.
+
+C) STORAGE BY GAME VERSION. The Storage tab has a marked "not built" section for
+   it. It needs a game version to measure, and nothing in the schema records
+   which content belongs to one — db.js anticipates a `releases` table that was
+   never built. When versions exist: the bytes per version, so hosting elsewhere
+   can be bought rather than estimated, and so a version quietly growing out of
+   proportion is visible before it is a problem.
+
+   THE ARITHMETIC IS ALREADY KNOWN AND IS WRITTEN DOWN BECAUSE SOMEBODY WILL
+   REPORT IT AS A BUG: content is stored once and referenced by everything that
+   needs it, so a file in two versions is one file on disk and the per-version
+   figures will not sum to the total.
+
+D) OPTIMISATION — where the bytes actually went. The follow-on to (C), and the
+   thing to build when a build is too big to host. Needs (C) first.
+
+E) TESTERS PLAYING A BUILD. The tester page's first card, badged "not built
+   yet", and it is accurate: there is no build to download and no route that
+   would serve one. The manual promises testers "download, comment, report", and
+   two of the three exist.
+
+F) COMMENTS (item 51) cannot be finished either. The table is unbuilt, the write
+   route does not exist, and NOTHING RENDERS A COMMENT — and comments are about
+   versions of work. "This jump feels wrong" has nowhere to attach until there is
+   something being tested.
+
+G) THE DISCUSSION BOARD (item 27) is not game-dependent, and is NOT in this
+   section for that reason — but note it is now the third thing waiting on
+   itself, after the tester page's "Talk to the team" card and the utility bar's
+   Discussion link. Prod creating boards (item 52) is a capability for it.

@@ -1,0 +1,61 @@
+<!-- ============================================================
+     Production — where a `prod` account lands after signing in.
+
+     PROD IS A CRAFT ROLE, NOT A SENIORITY. This page exists because approving
+     work is a judgement about the work, and until 2026-10-06 the only people who
+     could make it were administrators — who can also deactivate accounts and
+     change every setting. See TODO 51.
+
+     WHAT IS HERE IS ONE JOB: decide what is waiting. There is deliberately no
+     menu of admin sections, no accounts, no settings — prod has no
+     administrative power at all, and a page that offered one would be offering
+     something the server refuses.
+
+     AND ONE THING THAT IS NOT HERE, SAID PLAINLY ON THE PAGE: the files. A
+     developer's workspace is private — no read path into it, not even for
+     administrators — so a reviewer can see what was submitted, by whom and what
+     they said about it, and CANNOT OPEN THE CONTENT. That is a real limit rather
+     than an oversight, and it is recorded as work to do once the game exists.
+     ============================================================ -->
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="mb-0">Production</h1>
+    <p class="text-secondary mb-0 small">
+      Deciding what is good enough for the game.
+    </p>
+  </div>
+
+  <div class="utility-bar" data-utility-bar></div>
+</div>
+
+<section class="card panel-module mb-4" id="prod-queue-module">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">👀 Awaiting your decision</h2>
+  </div>
+
+  <div class="card-body">
+
+    <p class="text-secondary">
+      Versions a developer has submitted for creative approval. Approving one
+      moves it into the game's asset store; rejecting it hands the work back with
+      your reason.
+    </p>
+
+    <!-- THE LIMIT, ON THE PAGE RATHER THAN IN A DOCUMENT. A reviewer who cannot
+         find the files will look for a bug; one who is told why will not. -->
+    <div class="alert alert-secondary py-2 px-3 small">
+      <strong>You cannot open the submitted files here.</strong>
+      A developer's workspace is private — nobody has a read path into it, not
+      even an administrator — so these decisions are made on what was submitted,
+      by whom, and what they said about it, without seeing the content. Giving a
+      reviewer sight of the files is work that comes with the game itself.
+    </div>
+
+    <div id="prodAlert" class="alert py-2 px-3 small d-none"></div>
+
+    <div id="prodQueue" class="text-secondary">Loading what is waiting...</div>
+
+  </div>
+</section>

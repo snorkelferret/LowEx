@@ -131,6 +131,12 @@ function saveSessionAndFinish(user) {
     case 'developer':
       window.location.href = '/devDashboard.html';
       break;
+    case 'prod':
+      // Production reviews work; it has no workspace and no admin powers, so
+      // the reviewer's queue is its whole page. Until 2026-10-06 this case did
+      // not exist and a prod signing in was told "No match for login".
+      window.location.href = '/prodDashboard.html';
+      break;
     case 'user':
       alert(`Welcome back, ${user?.username || 'user'}!`);
       window.location.href = '/user.html';

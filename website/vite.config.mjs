@@ -55,6 +55,7 @@ export default defineConfig(({ mode }) => {
           admin: path.resolve(rootDir, 'frontend/adminDashboard.html'),
           developer: path.resolve(rootDir, 'frontend/devDashboard.html'),
           user: path.resolve(rootDir, 'frontend/user.html'),
+          prod: path.resolve(rootDir, 'frontend/prodDashboard.html'),
           // The invitation landing page. Not behind the app shell — whoever
           // arrives has no account yet.
           register: path.resolve(rootDir, 'frontend/register.html'),
