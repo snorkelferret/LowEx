@@ -3115,3 +3115,824 @@ They MUST be dealt with before any real user data exists.
     passwords must be changed") impossible to satisfy. --reset is that
     mechanism. Anyone who still wants an in-app password change should say so;
     it is a separate piece of work and is not needed for go-live now.
+
+
+46) MAKING AN ADMINISTRATOR — reworked 2026-10-06. Invite, do not hand over a
+    password.
+
+    Item 43 said privileged accounts come from the machine. That was right, but
+    the PROCEDURE was wrong: the script created the account and typed a password
+    at the machine, which somebody then had to convey to the other person.
+    Awkward, and it made a third party the author of a password they should
+    never know.
+
+    THE BETTER PATTERN, and it is the ordinary one — role mapping, or
+    pre-authorised provisioning, the shape nearly every SSO integration uses:
+    the grant happens out of band, and it MATERIALISES through the normal
+    account-creation flow. Here the machine issues an invitation that carries
+    the privileged role, and the person redeems it and chooses their own
+    password.
+
+    WHY IT IS STILL SAFE, and this is the part that matters: what preserves the
+    property is that the web interface cannot issue a privileged invitation at
+    all. WEB_ASSIGNABLE_ROLES refuses admin and superuser to every web request,
+    so an admin-role invitation can only have come from the console. The grant
+    still requires machine access; only the moment it lands has moved.
+
+    --- WHAT WAS BUILT ---
+
+      * --invite --email them@example.com [--role admin|superuser]
+        Issues an invitation with the privileged role and sends it. Prints the
+        link when mail is not configured, the same degrade the panel does.
+
+      * --promote <username> --role admin|superuser
+        For somebody who ALREADY has a login. AN INVITATION CANNOT DO THIS:
+        redeeming one creates an account, and invitations are unique per address
+        (email TEXT UNIQUE) as are accounts — so a developer cannot be invited
+        again. Without this, promoting an existing person meant editing the
+        database by hand. Leaves their password alone; takes effect on their
+        next request.
+
+      * --role admin, unchanged, for the first account on a new installation
+        (nobody exists to invite) and for when the mail path is broken. Now
+        documented as the exception rather than the way.
+
+      * invitations.source ('web' | 'console'), added with a guarded migration,
+        defaulting to 'web' — which is true of every invitation that existed
+        before it. RECORDED RATHER THAN INFERRED from the role: the inference
+        would be correct today and silently wrong the day the role rule changes.
+
+      * THE REDEMPTION RECORDS THE TRUE ORIGIN. createUser's created_via is
+        bound rather than hardcoded: a console-issued invitation produces an
+        account whose created_via is 'console', not 'invitation'. Without that,
+        the accounts check would flag every legitimately-granted administrator
+        as "created through the website" — the exact alarm it exists to raise,
+        fired at the wrong people.
+
+      * The invitations list and panel show "issued on the studio machine", so
+        an administrator does not have to wonder who created a privileged row.
+
+    --- VERIFIED END TO END ---
+
+    Issued an admin invitation from the console: the row records
+    source='console', role='admin', created_by NULL, and an audit entry with
+    via:'console', the OS user and the hostname. Redeemed it through the API the
+    way the person does: the account came out as admin with created_via
+    'console', the password was the one THEY set, the invitation went to 'used',
+    and the accounts check stayed QUIET — which is the point, because a
+    console-granted administrator is exactly what it should accept.
+
+    Promoted an existing account: role changed, password untouched, audited with
+    from/to. Refusals checked: inviting an address that already has an account
+    (which now points at --promote), inviting an address already invited, and
+    --promote without a role.
+
+    --- STILL OPEN ---
+
+    DEMOTION. There is no --demote. Removing somebody's privileged role means
+    editing the database, which is the gap --promote was built to close on the
+    other side. Deactivating the account is the available answer today, and it
+    is a different thing.
+
+    AND NOTHING RE-CHECKS. Once granted, the role is a stored value — the script
+    is not consulted on later logins, and there is no list to remove somebody
+    from. That is simpler than the allow-list variant considered on 2026-10-06
+    and was chosen deliberately, but it means revoking a grant is a manual act
+    rather than a consequence of editing a file.
+
+
+47) THE LOGIN PATH — audited 2026-10-06, while discussing whether a banned list is
+    needed. It is not; this is. FOUR FINDINGS, one of them an open door.
+
+    --- 1. `000000` IS THE SECOND FACTOR FOR EVERY ACCOUNT ---
+
+    backend/server.js, in /api/auth/login-step2:
+
+        if (user.two_factor_secret) { ...verify TOTP... }
+        else if (code === '000000') { verified = true; }
+
+    "Fallback demo code before initial 2FA setup."
+
+    EVERY ACCOUNT IN THE DATABASE HAS is_2fa_enabled = 1 AND NO SECRET:
+
+        admin      admin      2FA enabled: 1 | has a secret: false
+        superuser  superuser  2FA enabled: 1 | has a secret: false
+        val        developer  2FA enabled: 1 | has a secret: false
+
+    So the `else if` is not a fallback — it is the ONLY way through step 2, and
+    the fixed string 000000 is the actual second factor for everybody. The flag
+    is set automatically on first login (enable2FA is called when it is 0), so
+    the system reports "2FA enabled" while there is nothing behind it.
+
+    WITH NO RATE LIMITING ON LOGIN AND THE ADMIN PASSWORD IN GIT HISTORY, this
+    is a complete chain to full administrator access: guessable username,
+    password from the repository, fixed code.
+
+    NO AMOUNT OF NETWORK FILTERING TOUCHES THIS. To the application it is a
+    successful, valid login. That is the answer to "do we need a banned list" —
+    not for this.
+
+    TO FIX, and it needs a DECISION because removing the fallback without a rule
+    locks every account out of step 2:
+
+      * Delete the 000000 branch. There is no version of production where it
+        belongs, and a "demo" bypass on the login path is a backdoor whatever it
+        is called.
+      * Decide the real rule. The line directly above, commented out, already
+        had it right:
+            //const requires2FA = user.is_2fa_enabled === 1
+            //                    || ['admin', 'superuser'].includes(user.role);
+        REQUIRED for admin and superuser, optional below that. It was replaced
+        with `const requires2FA = true;`, which asks everybody for a code that
+        nobody actually has.
+      * Accounts with no secret then need a way forward: either skip step 2, or
+        force enrolment on first sign-in. Enrolment is the better answer for
+        privileged accounts and is more work.
+      * is_2fa_enabled must MEAN something. Setting it on login because there is
+        no secret is how the flag came to be true while being false.
+
+    --- 2. NO RATE LIMITING ON LOGIN ---
+
+    The only rate limiting anywhere is in routes/feedback.js, for anonymous
+    reports. /api/auth/login accepts unlimited attempts. bcrypt at cost 12 makes
+    each attempt slow, which is a speed bump and not a control.
+
+    Needs: per-source and per-account limits, with backoff. Careful with
+    per-account lockout — it is a denial-of-service against the account holder,
+    so prefer slowing down over locking out, at least for privileged accounts.
+
+    --- 3. FAILED LOGINS ARE NOT RECORDED ---
+
+    audit.record is called for account creation, settings, invitations,
+    deactivations, purges and job runs. Nothing records a failed sign-in. So the
+    one question that matters during an incident — "is somebody trying?" — has
+    no answer in the data.
+
+    AND IT IS THE MISSING TRIGGER for item 41: "repeated failed sign-ins" was
+    named there as a condition that would make "security breach" a real
+    notification rather than a phrase. Recording them is what makes it fire.
+
+    --- 4. THE HANDLER TELLS AN ATTACKER WHICH ACCOUNTS ARE REAL ---
+
+    routes/auth.js, /login:
+
+      * A missing user returns 401 "Invalid username or password" — good.
+      * A DEACTIVATED user returns 403 "Account has been deactivated" — which
+        confirms the account EXISTS and says what state it is in. That is an
+        enumeration oracle. Distinguishing "deactivated" from "wrong password"
+        is useful to the account holder and useful to an attacker; the holder
+        can be told by email instead.
+      * The comment says "Prevent Timing Attacks & Verify Account Exists", and
+        the code does the opposite: it returns immediately when no user is
+        found, so a missing username answers in microseconds while a wrong
+        password waits for bcrypt — roughly 100ms. That difference is
+        measurable and enumerates usernames. A dummy hash comparison on the
+        no-user path is the standard fix.
+
+    --- AND A PREREQUISITE, NOT A FINDING ---
+
+    `trust proxy` IS NOT SET, and nothing reads CF-Connecting-IP. Behind
+    Cloudflare, req.ip is a Cloudflare address — see item 48, where that also
+    explains why an app-side IP blocklist would be actively wrong.
+
+    The consequence today is smaller but real: the ANONYMOUS feedback limiter in
+    routes/feedback.js keys on req.ip, so behind Cloudflare every anonymous
+    report would share one bucket — one person could exhaust it, and an attacker
+    would be hidden among legitimate reporters.
+
+    Setting it must wait until the origin is only reachable through Cloudflare
+    (item 48), because otherwise X-Forwarded-For is client-controlled and the
+    "fix" becomes a spoofing hole that is worse than the problem.
+
+    --- ORDER ---
+
+      1. The 000000 branch, plus the rule that replaces it.
+      2. The two privileged passwords (item 42 — the likeliest real vector now).
+      3. Rate limiting and failed-login auditing.
+      4. The enumeration and timing leak.
+      5. trust proxy, once the origin is protected.
+
+
+48) HOSTING BEHIND CLOUDFLARE — where each control belongs. Decided 2026-10-06.
+
+    The question was whether the portal needs a banned list. The answer is no,
+    and the reasoning is worth keeping because it is not "we can live without
+    one" — it is that AN APP-SIDE IP BLOCKLIST WOULD BE ACTIVELY WRONG HERE.
+
+    --- WHY NOT IN THE APPLICATION ---
+
+      * THE APP CANNOT SEE THE ATTACKER. There is no `trust proxy` and nothing
+        reads CF-Connecting-IP, so behind Cloudflare req.ip is CLOUDFLARE'S
+        address. A blocklist built on it would block Cloudflare — which is
+        everybody — or nothing at all, depending on which way the comparison
+        fell. Either way it is not a control.
+      * IT IS LEAKY. VPNs, mobile carriers, IPv6 rotations, botnets. An address
+        block stops the lazy and inconveniences nobody else.
+      * IT PRODUCES FALSE POSITIVES WITH REAL COSTS. An office or a carrier NAT
+        is one address for many people, so a block can lock out the team while
+        the attacker moves on.
+      * IT DUPLICATES WHAT SITS IN FRONT OF IT, WORSE. Cloudflare has the
+        reputation data, the bot scores and the ASN information. Anything the
+        app could write, Cloudflare already does earlier and better.
+
+    --- AND THE THING IT CANNOT DO AT ALL ---
+
+    A banned list does nothing about item 47's 000000 backdoor, because that is
+    a VALID LOGIN. Network-layer filtering cannot distinguish an attacker who
+    has the password from the person who owns it. Fixing the login path is not
+    something a blocklist can substitute for.
+
+    --- WHERE THE CONTROLS BELONG ---
+
+    FIRST, AND BEFORE ANY OF THE REST: PROTECT THE ORIGIN.
+
+    If the origin accepts connections from anywhere, every Cloudflare rule is
+    bypassable by connecting straight to the IP and sending the right Host
+    header. So:
+
+      * firewall the origin to Cloudflare's published address ranges, or
+      * run the origin behind a Tunnel so it has no inbound port at all.
+
+    Until this is done, everything below is decoration. It is also the
+    prerequisite for `trust proxy` in item 47 — after this, and only after
+    this, X-Forwarded-For can be trusted, because nothing else can reach the
+    app to forge it.
+
+    ALSO WORTH SETTLING WHILE IT IS BEING SET UP: the app currently binds every
+    interface (item 44). With a firewall or a Tunnel in front, it should bind
+    loopback only.
+
+    THEN, AT CLOUDFLARE:
+
+      * RATE LIMITING on /api/auth/* — the app has none, and this is the
+        cheapest place to add the first layer.
+      * TURNSTILE on the login form. This is the real answer to credential
+        stuffing, and it is the piece that scales.
+      * WAF MANAGED RULES, on by default.
+      * COUNTRY OR ASN RULES if the team is geographically known. For a studio
+        this gets most of the benefit of a blocklist for none of the
+        maintenance — and it is a blocklist, just one somebody else maintains
+        and updates.
+      * CLOUDFLARE ACCESS IN FRONT OF /app/admin AND /app/superuser. This is the
+        strongest control available here and it is the right shape for the rule
+        in item 43: the admin pages become reachable only by identities that
+        passed a second, independent check before the request ever reached the
+        application. Worth comparing against item 47's 2FA work — they overlap,
+        and Access may be the cheaper half.
+      * "UNDER ATTACK" as the break-glass switch.
+
+    AND A BANNED LIST OF ACCOUNTS ALREADY EXISTS: deactivation. It is immediate
+    (authenticateToken re-reads is_active on every request) and audited.
+
+    --- WHAT IS NOT BUILT AND IS NOT PLANNED ---
+
+    No IP blocklist in the application. If one is ever wanted, it belongs at
+    Cloudflare, where the real client address is known — and the reasoning above
+    is the reason to write it there rather than here.
+
+
+49) THE TESTER'S PAGE — rebuilt 2026-10-06. It is generated now, like everything
+    else.
+
+    IT WAS THE ONLY HAND-WRITTEN PAGE BEHIND THE SIGN-IN. index.html,
+    shopfront.html and discussion.html are hand-written by design — nobody is
+    signed in when they load, and they carry no components. user.html was not,
+    and that is exactly why it had drifted:
+
+      * its own navbar where every other signed-in page has the shared header,
+        including a sign-out button carrying the same id the shared header uses;
+      * a Discussion button duplicating the one in the utility bar loaded beside
+        it, on the same line;
+      * a card badged "Not built yet" for a report-a-problem form that had been
+        working for weeks, and a closing paragraph repeating the same false
+        claim.
+
+    Nothing generated it, so every change to the rest of the app left it behind.
+
+    NOW: frontend/src/components/userLanding.html plus an entry in build.js,
+    with the shared header and the utility bar as components. It looks like the
+    pages either side of it because it is made of the same parts.
+
+    --- AND IT ASKS THE SERVER WHO YOU ARE ---
+
+    The old page drew its "Your account" panel from localStorage.user_info.
+    That value is written at sign-in and NEVER EXPIRES while the session cookie
+    behind it does — so hours in, the page would greet you by name, print your
+    role, and head a panel called "Your account" with details that were no
+    longer true of anybody. It looked certain and it was stale.
+
+    So there is a new endpoint, GET /api/auth/me, which reads the row on the
+    request. The panel is the server's answer or it says it cannot reach one.
+    The greeting still uses the stored profile, because a greeting is a courtesy
+    rather than a claim.
+
+    VERIFIED: with a stored profile and NO session cookie — exactly the stale
+    state the old page would have drawn a full panel for — the page now lands on
+    the sign-in page instead. apiFetch handles the 401, the same way it does
+    everywhere else.
+
+    --- TWO ROUTE BUGS, FOUND WHILE WIRING IT UP ---
+
+    Neither was reachable, which is why both had survived. Nothing links to
+    either.
+
+      * GET /app/user SERVED shopfront.html — the protected route for a signed-in
+        tester sent them to the sign-in page.
+      * GET /app/developer REQUIRED superuser, so a developer asking for the
+        developer dashboard would have been refused. Now
+        requireRole('developer','admin','superuser'), following the rule in
+        middleware/auth.js that naming 'admin' means naming 'superuser'.
+
+    Both verified after the fix: /app/user serves the tester page, and a
+    developer gets 200 from /app/developer.
+
+    --- THE TWO-FACTOR ROW, AND WHY IT READS has_2fa_secret ---
+
+    The row was briefly removed and then put back, because the honest answer
+    turned out to be available. It reads whether a SECRET EXISTS, not
+    is_2fa_enabled — that flag is set automatically on first sign-in while no
+    secret exists, so it reads 1 for every account in the system, and the page
+    was confidently reporting "Two-factor: Set up" for accounts with no
+    authenticator at all.
+
+    GET /api/auth/me returns two_factor_secret IS NOT NULL AS has_2fa_secret,
+    and never selects the secret itself. The panel says "Not set up" for every
+    account until item 47 is done — which is the truth, and more useful on
+    screen than hidden behind a flag that lies. When 47 is finished this is
+    already the right place to show it.
+
+    NOT DONE HERE: there is no way for anyone to SET UP two-factor from this
+    page, and an alert() still greets a tester on sign-in in
+    frontend/src/auth.js while every other role is redirected silently. Both are
+    small and neither was asked for.
+
+
+50) THE SUPERUSER'S POWERS — inventory. Removed from the website 2026-10-06.
+    NOTHING IS SILENTLY DROPPED: every capability that existed has an entry
+    here, with where it is going and whether that is done yet.
+
+    WHY IT WAS REMOVED. `/api/superuser` held seven endpoints, and three
+    different problems were mixed together in them. Two took a long-lived API
+    token from a BROWSER FORM and put it into `process.env` at runtime — the
+    ability to take over the edge or the repository, one stolen session away, in
+    a request that cannot be audited after the fact. One triggered a production
+    DEPLOY from a cookie. The rest were operations that belong on the machine.
+    None of it needed to be reachable from the internet, and the page that
+    hosted it was the only reason any of it was.
+
+    AND A SUPERUSER LOST NOTHING BY THIS. They pass requireAdmin, so every admin
+    page was already theirs.
+
+    --- THE INVENTORY ---
+
+    | was | where it goes | done? |
+    |-----|---------------|-------|
+    | POST /github/keys    | `.env` on the host. A secret is configuration, and this app already refuses to start without JWT_SECRET — these should match. | NOT DONE |
+    | POST /cloudflare/keys| `.env` on the host, same reasoning. | NOT DONE |
+    | POST /github/deploy  | `scripts/`, run on the machine. A release must not answer to a cookie. | NOT DONE |
+    | POST /github/sync    | `scripts/`, same place as deploy. | NOT DONE |
+    | POST /cloudflare/purge        | `scripts/`, or the Cloudflare dashboard. See note below. | NOT DONE |
+    | POST /cloudflare/toggle-devmode | Same. | NOT DONE |
+    | POST /developer/diagnostics   | THE HEALTH TAB (item 28), for admins. See note below. | NOT DONE |
+    | "Sign in as another user" (loginModal) | Nowhere. Deleted. Real impersonation is item 5, still deferred. | DONE — deleted |
+    | requireSuperuser middleware   | Nowhere. Redundant with requireRole('superuser'). | DONE — deleted |
+    | The superuser dashboard, /app/superuser | Nowhere. A superuser uses the admin dashboard. | DONE — deleted |
+
+    SO THE HONEST STATUS IS: the powers are withdrawn, not relocated. Right now
+    a deploy, a cache purge or a token change has no home in this system at all —
+    they would be done by hand on the machine or in the Cloudflare dashboard.
+    That is not a gap in the plan, it is the state of it, and it is written here
+    rather than assumed.
+
+    --- NOTES ON TWO OF THEM ---
+
+    DIAGNOSTICS IS NOT REALLY A SUPERUSER POWER, and it is the one worth keeping
+    most. It reports memory, uptime, node version and BOOLEANS for whether
+    tokens are configured — deliberately no secrets, which is why it is good. It
+    is exactly the readout item 28's Health panel needs, alongside the disk
+    figures that already exist. Recommend it lands there, for admins, rather than
+    in a script.
+
+    PURGE AND DEVMODE ARE A GENUINE CHOICE. Purging the cache affects everyone
+    who uses the site; devmode bypasses the cache. Both are one `curl` against
+    the Cloudflare API from the machine, so a script is cheap and keeps the rule
+    simple — nothing that changes the live site answers to a cookie. The
+    argument the other way is that they are operational rather than
+    provisioning, and that being able to purge from a phone during an incident
+    has real value. NOT DECIDED. If they do stay web-reachable, they belong on
+    the ADMIN page (a superuser passes it), never behind a superuser-only door.
+
+    --- AND THE TWO THAT WERE NEVER REACHABLE AT ALL ---
+
+    Worth recording, because it was only found while removing them: the
+    diagnostics endpoint and the "sign in as another user" dialog were both
+    unreachable. Their buttons — runDiagnosticsBtn and signInAsBtn — were bound
+    in superuser.js and declared in NO component, so nothing could open them.
+    The id checker had been listing both as known gaps, which is what that
+    mechanism is for. The superuser page shipped with two features no user could
+    reach.
+
+
+51) THE ROLE MODEL — SETTLED AND BUILT 2026-10-06. Four roles, and superuser is
+    gone from the website AND the schema.
+
+    THE LADDER IS user < developer < admin.
+
+        user       a tester. No extra privileges.
+        developer  works in a private workspace.
+        prod       PRODUCTION — a craft role, not a seniority. Decides creative
+                   approvals, comments, manages categories and boards.
+        admin      administers the system. TOP OF THE LADDER; nothing above it.
+
+    'SUPERUSER' WAS REMOVED ENTIRELY — not just from the website. It had 0
+    accounts, no routes and no page, and the one property it provided (a peer
+    cannot act on a peer, so the last administrator cannot be locked out) already
+    holds at admin level because isStrictlyBelow is strictly below. Keeping a
+    role nobody holds and nothing requires is the definition of the bloat this
+    project keeps cutting.
+
+    CONSEQUENCE, WORTH KNOWING: nobody can deactivate an administrator from the
+    web — including another administrator. A rogue admin is dealt with on the
+    machine. That is consistent with every other privileged act here, and it is a
+    deliberate decision rather than an oversight.
+
+    --- AUTHORITY IS NOW SEPARATE FROM ORDERING ---
+
+    prod sits between developer and admin in ROLE_RANK, and that rank confers
+    NOTHING. It is there for ordering lists. A rank comparison alone gave prod
+    the ability to invite developers and deactivate them — it is numerically
+    above a developer — and it did, until this was separated out.
+
+    So backend/lib/roles.js has AUTHORITY_ROLES = ['user','developer','admin'] and
+    hasAuthorityOver(a, b), which refuses any role not on that list before it
+    compares ranks. Invitations and deactivation both go through it. A craft role
+    added later is OUT of that list by default.
+
+    THE GENERAL LESSON, since it will come up again: a ladder is a good model for
+    "how senior is this person" and a poor one for "what is this person's job".
+    prod is the second kind, and forcing it into the first produced two wrong
+    permissions in one commit.
+
+    --- WHAT IT TOOK ---
+
+      * TWO TABLE REBUILDS, because SQLite cannot alter a CHECK. users.role
+        (nine foreign keys point at it) and invitations.assigned_role. The users
+        rebuild runs with foreign_keys OFF *outside* the transaction — a pragma
+        inside one is a no-op — and is followed by a foreign_key_check. Both
+        migrations now compare the WHOLE role list rather than looking for one
+        value, so the next change needs no new migration written.
+      * The users rebuild was DRY-RUN ON A COPY first, and the copy was used to
+        prove the new CHECK accepts the four roles and rejects 'superuser' and
+        'wizard'. The first attempt at this, earlier the same day, went straight
+        at the live database; that was the wrong order and this one was not.
+      * requireRole lists lost 'superuser' (23 sites); requireAdmin accepts admin
+        only; the mailer's role labels, the tester page's labels, the header's
+        role prefixes and the notification wording all follow.
+      * scripts/create-superuser.js became scripts/accounts.js — a file named
+        after a role it can no longer create. CREATABLE_ROLES is now
+        ['admin','prod'].
+      * The `superuser-module` CSS class became `panel-module` across 16 sites in
+        9 files plus the stylesheet. It carried real rules, so a missed rename
+        would have silently un-styled a card.
+
+    VERIFIED: the four roles accepted and everything else rejected at the schema
+    level; a prod account gets 403 from every /api/admin route and from
+    generate-invite, while still signing in and reading its own account; the
+    admin login flow works end to end; all five checks pass; and a
+    comment-stripping sweep of all 65 website files finds no live reference to
+    superuser anywhere — every remaining mention is a comment explaining that it
+    is gone.
+
+    THE OLD ITEM 51 TEXT BEGINS BELOW, because the reasoning about creative
+    approval still applies to prod.
+
+51b) WHO MAY DECIDE CREATIVE APPROVALS — decided 2026-10-06.
+
+    TODAY IT IS AN ADMIN POWER, AND IT SHOULD NOT BE. The approve and reject
+    routes are:
+
+        POST /creative-approvals/:approvalId/approve   requireRole('admin','superuser')
+        POST /creative-approvals/:approvalId/reject    requireRole('admin','superuser')
+
+    So the only person who can say an asset is good enough for the game is
+    somebody who can also deactivate accounts, change the invite window, read
+    the audit log and change every setting. Approving work is a judgement about
+    the WORK. Administering the system is a different job, and this conflates
+    them: it means an art lead cannot review models without being made a full
+    administrator.
+
+    THE DATA MODEL ALREADY DISAGREES WITH THE PERMISSION MODEL. creative_approvals
+    has requested_by and decided_by as separate columns, and the request route is
+    separate from the decide route — the developer submits, somebody else judges.
+    That separation is right and it is already built. What is missing is a
+    permission that says "may judge creative work" without saying "may run the
+    system".
+
+    DECIDED: creative approval moves to a role or attribute called **prod**,
+    which may also add comments. NOT admin, NOT superuser. (Superuser keeps its
+    role in the schema but no longer exists on the website — item 50.)
+
+    --- SETTLED: A ROLE. ONE ROLE PER ACCOUNT, ALWAYS. ---
+
+    Decided 2026-10-06: an account holds exactly ONE role and never more than
+    one. So 'prod' is a role in the ladder, not an orthogonal attribute. The
+    schema already enforces the constraint:
+
+        role TEXT CHECK(role IN ('user','developer','admin','superuser')) NOT NULL
+
+    --- WHAT THAT DECISION EXPOSES, AND IT NEEDS SETTLING FIRST ---
+
+    A LADDER AND "NOT ADMIN" CANNOT BOTH BE TRUE, and this is the whole of it.
+
+    A role ladder means a higher rung passes every check a lower one passes: an
+    admin is also a developer. That is exactly WHY "an admin may not decide
+    creative approvals" is not expressible as a rung — if prod sits below admin,
+    admins inherit prod's powers by definition, and if prod sits ABOVE admin then
+    prod inherits account deactivation and every settings power, which is worse.
+
+    SETTLED 2026-10-06, in four parts:
+
+      * AN ADMINISTRATOR MAY NOT APPROVE CREATIVE WORK. Prod only. Superuser
+        neither — that role has no website presence at all (item 50).
+      * PROD HAS NO ADMIN POWERS.
+      * PROD CANNOT DEACTIVATE ANYONE.
+      * PROD HAS NO WORKSPACE. It does not upload, version or hold anything.
+
+    THAT LAST ONE UNDOES THE ARGUMENT FOR PUTTING PROD ABOVE DEVELOPER, which
+    was mine and it was wrong. I had argued a creative director is usually also
+    a maker, so prod must sit above developer to keep their workspace. If prod
+    has no workspace, it needs nothing from the rung below it — and putting it
+    above developer would GIVE it a workspace through every route that says
+    "at least a developer".
+
+    SO PROD INHERITS NOTHING, and that is the cleanest statement of what it is:
+    a CRAFT ROLE, not a seniority. It reviews and comments. Everything it may do
+    comes from named capabilities, not from a rung, and the developer routes
+    simply do not name it.
+
+    SO THE LADDER IS NO LONGER ENOUGH FOR THIS ONE THING, BY CONSTRUCTION. A
+    rung cannot express it: admin is above prod, so an admin would inherit
+    prod's powers if prod were merely a rung, and prod above admin would inherit
+    deactivation and every settings power instead. Creative approval therefore
+    becomes a NAMED CAPABILITY — a role is a bundle of permissions, and 'admin'
+    simply does not contain "decide creative approvals".
+
+    THIS DOES NOT MEAN RE-EXPRESSING ALL 23 requireRole() CALLS. Only the
+    genuinely NON-HIERARCHICAL things need capabilities. Everything else — may
+    you upload, may you see the admin pages, may you deactivate this account —
+    is a real seniority question and stays a rank comparison. Two mechanisms,
+    each where it fits, rather than one stretched over both.
+
+    --- AND THE QUESTION THAT DECIDES WHETHER THE ROLE IS USEFUL AT ALL ---
+
+    HOW DOES PROD SEE THE WORK IT IS JUDGING?
+
+    It cannot today, and not by accident. A developer's workspace is PRIVATE —
+    the rule is deliberate and is stated in the manual: "There is no read path
+    into a developer's workspace. Not for administrators, not for superusers."
+    The only mechanism that answers it is IMPERSONATION, which is marked,
+    time-bounded and audit-logged — and is item 5, decided but not built.
+
+    So a creative director asked to approve a model currently cannot open the
+    model. The approval route takes an approvalId and decides on it; the files
+    live in a workspace nobody may read.
+
+    THIS IS THE REAL BLOCKER, not the permission plumbing. Three ways out, and
+    they are genuinely different decisions:
+
+      * BUILD IMPERSONATION (item 5 as designed) and let a reviewer act as the
+        developer, marked and logged. Honours the existing rule exactly, and is
+        the largest piece of work.
+
+      * A REVIEW VIEW: when a version is submitted for approval, expose that
+        version's files to the reviewer and nobody else. A deliberate, narrow
+        exception to workspace privacy — the submission is the developer
+        offering the work for judgement, so showing it to the judge is arguably
+        the point rather than a leak. Needs deciding whether that is a real
+        exception or a hole in the rule.
+
+      * NOTHING FOR NOW: build the permission model, leave the review workflow
+        unusable, and record that honestly.
+
+    NOT DECIDED, and it should be decided before building any of the rest —
+    a role that can approve things it cannot see is not a role.
+
+    --- WHAT BUILDING IT ACTUALLY TAKES ---
+
+      1. ROLE_RANK gains 'prod'. WHERE IS NOT OBVIOUS NOW. It inherits nothing
+         either way, so its number matters only for the questions rank still
+         answers: who may invite whom, who may deactivate whom, and how people
+         sort in a list. Placing it between developer and admin is the least
+         surprising for the last of those; deactivation is moving to
+         admin-and-above regardless (see below), and invitation authority wants
+         the same treatment — prod should not be inviting people, for the same
+         reason it should not be deactivating them.
+
+      2. THE USERS TABLE HAS TO BE REBUILT, and this is the part to be careful
+         with. The role column is:
+
+             role TEXT CHECK(role IN ('user','developer','admin','superuser'))
+
+         SQLite cannot ALTER a CHECK, so adding 'prod' means create-copy-drop-
+         rename — the same procedure db.js already uses for invitations. On
+         users, though, NINE foreign keys point at it, so the rebuild has to
+         run with foreign_keys OFF outside a transaction, then a
+         foreign_key_check afterwards. It is the most important table in the
+         system and the change is not reversible by editing a line back.
+
+      3. A capability layer: a role-to-capabilities map and a requireCapability
+         helper, alongside requireRole rather than replacing it. First (and for
+         now only) capability: creative.approve. prod has it; admin does not.
+
+      4. The two approval routes change from requireRole('admin','superuser') to
+         the capability check.
+
+      5. ROLE CHECKS BECOME RANK COMPARISONS where they are lists. With a fifth
+         role, "name every role that qualifies" is a trap — middleware/auth.js
+         already documents the failure mode ("a route that lists 'admin' and
+         forgets 'superuser' does not error, it just refuses the most privileged
+         account"). requireAtLeast('developer') makes a new rung safe to add.
+         This is the change that stops prod being silently locked out of the
+         developer routes.
+
+      6. FRONTEND: ROLE_LABELS, the role badge map, the header prefix, and the
+         invite dropdown — prod must not be invitable from the web, for the same
+         reason admin and superuser are not (item 43).
+
+      SETTLED: prod may not deactivate anyone, and may not invite anyone.
+      Deactivation and invitation authority both become admin-and-above rather
+      than "strictly below me", because they are administrative acts and prod is
+      not an administrative role.
+
+    --- AND TWO SMALLER CONSEQUENCES OF A NEW RUNG ---
+
+    WHATEVER IS DECIDED, A NEW RUNG BREAKS THE "NAME EVERY ROLE" CONVENTION.
+    middleware/auth.js already documents the problem: "a route that lists 'admin'
+    and forgets 'superuser' does not error, it just refuses the most privileged
+    account in the system." That convention was survivable with four roles and a
+    note; with a fifth it is a trap. If prod is a rung, the role checks want to
+    become rank comparisons — requireAtLeast('developer') rather than a list of
+    names — so that inserting a rung needs no changes anywhere. That is the
+    change that makes the ladder safe to extend, and it is worth doing at the
+    same time as adding the rung rather than after.
+
+    AND A CREATIVE DIRECTOR MUST KEEP THEIR WORKSPACE. Somebody who judges models
+    is usually also modelling, so prod must sit ABOVE developer — otherwise
+    making them prod takes away their uploads, versions and history, because
+    every developer-facing route is an allow-list that would no longer name their
+    role. This is an argument for the rung, not against it: in a ladder, prod
+    above developer inherits the workspace automatically.
+
+    THE DEACTIVATION QUESTION COMES WITH IT, AND IS NOT DECIDED. Rank currently
+    decides who may deactivate whom (isStrictlyBelow). A prod above developer
+    would be able to deactivate developers — which a creative director almost
+    certainly should not be able to do. Two answers:
+
+      * deactivation becomes admin-and-above regardless of rung, or
+      * deactivation becomes a capability too, alongside creative.approve.
+
+    The first is simpler and probably right: deactivating somebody is an
+    administrative act, like every other thing admins do, and prod is not an
+    administrative role. It would also be the second thing the ladder gets
+    wrong, which is worth noticing: the ladder is a decent model for "how senior
+    is this person" and a poor one for "what is this person's job".
+
+    --- AND COMMENTS, WHICH ARE NOT BUILT AT ALL ---
+
+    asset_comments IS AN UNUSED TABLE. Nothing reads it and nothing writes it —
+    no route exists. Meanwhile the manual promises testers can "download,
+    comment, report", and two of those three work. So there is a promise with
+    nothing behind it.
+
+    Decided here: prod may comment. STILL OPEN: whether testers and everyone else
+    may as well. The recommendation on 2026-10-06 was YES — a tester's entire
+    purpose is to give feedback, author_id already records who said it, and
+    gating comments at developer-and-up would let a tester report a bug but not
+    say "this jump feels wrong", which is the more useful half.
+
+    WHERE THE OUTPUT GOES IS ALSO UNBUILT. Nothing renders comments, so building
+    the ability to write them without somewhere to read them makes no sense.
+    Both belong with whatever page shows a version's review state — the history
+    view already reports the latest approval and the latest technical check.
+
+    --- WHAT IS NOT IN QUESTION ---
+
+    technical_check_runs.started_by — the developer runs it on their own version,
+    and only their own. The routes resolve a version with
+    `WHERE wv.id = ? AND dw.developer_id = ?`, so one developer cannot act on
+    another's workspace, and an admin has no workspace to act through. That is
+    correct and stays.
+
+    app_settings.updated_by — admin and superuser, chosen on 2026-10-06 when the
+    settings mechanism was built. Not part of this item.
+
+
+52) WHAT PROD CAN DO — added 2026-10-06, on top of item 51.
+
+    PROD IS A CREATIVE/COMMUNITY ROLE. It is not a seniority and it inherits
+    nothing from the rung below it. Its powers, so far:
+
+      * decide creative approvals            (item 51 — NOT admin, NOT superuser)
+      * add comments                         (item 51)
+      * CREATE ASSET CATEGORIES              (new)
+      * CREATE DISCUSSION BOARDS/CHANNELS    (new)
+
+    And it definitely does NOT have:
+
+      * a workspace — it does not upload, version or hold anything
+      * any admin power — accounts, settings, audit log
+      * the ability to deactivate anyone
+      * the ability to invite anyone
+
+    --- AND THE REASON IS THE RULE, NOT THE LIST ---
+
+    Stated 2026-10-06: PROD HAS NO BACKEND TECHNICAL EXPERTISE. Accounts and
+    settings are not withheld from prod because somebody decided they should
+    not have them — they are withheld because prod is a CREATIVE role and those
+    are ENGINEERING surfaces.
+
+    THAT GIVES A TEST FOR ANY FUTURE PROD CAPABILITY, which is worth more than
+    the list it replaces:
+
+        IS THIS A DECISION ABOUT THE WORK, OR ABOUT THE SYSTEM?
+
+      Categories are the work — what kind of thing is this asset, and what kinds
+      do we recognise. Boards are the work — how the team talks about it.
+      Approving and commenting are the work. All prod.
+
+      Accounts, settings, the audit log, retention windows, disk thresholds,
+      tokens, deployments — the system. None of it prod, however convenient it
+      would be to let the person who cares most about the taxonomy also fix a
+      setting.
+
+    The rule also settles the shape of the capability names: everything prod
+    holds is content-shaped (creative.approve, comment, category.manage,
+    board.manage), and nothing prod holds is system-shaped. If a proposed
+    capability needs backend knowledge to use safely, it is not prod's.
+
+    --- ONE ADJACENT QUESTION, NOT DECIDED ---
+
+    BUG REPORTS. Reading and resolving feedback is admin-gated today
+    (requireAdmin on the list and resolve routes). Is that systems work or
+    community work?
+
+    Arguably a prod should be able to READ reports — "this jump feels wrong" is
+    feedback about the work, and the person closest to the work is the useful
+    one to see it. Resolving them is more administrative. NOT DECIDED, and it is
+    the next place the content/system line has to be drawn.
+
+    --- CREATING CATEGORIES CHANGES WHERE THE LIST LIVES ---
+
+    Asset categories are currently a CONSTANT, not data:
+
+        shared/assetRules.mjs → ASSET_CATEGORIES
+        ['Character','Environment','Prop','Vehicle','Weapon','FX','Audio','UI','Other']
+
+    in the one shared file both halves of the app use, with normaliseCategory()
+    beside it. That was a deliberate decision on 2026-10-02 and it is why the
+    client and the server cannot disagree about what a category is.
+
+    IF PROD CAN CREATE THEM, THE LIST BECOMES DATA, and that has consequences
+    worth knowing before it is built:
+
+      * the client can no longer import the list — it has to FETCH it, so the
+        category dropdown depends on a request that can fail, and needs a
+        sensible state when it does;
+      * the hint-versus-check distinction has to survive: a category is a HINT,
+        so an unknown value is KEPT rather than rejected (unlike feedback kinds).
+        A dynamic list must not quietly turn that into a strict check;
+      * renaming or removing a category that assets already carry needs deciding
+        — the column is free text on purpose, so old values keep working, but the
+        dropdown would stop offering them;
+      * and where the list lives moves from shared/ to the database, which is the
+        same move the settings made (item 37) and for the same reason.
+
+    NOT BUILT. Recorded so the constant is not quietly converted into a table
+    without these decisions being taken.
+
+    --- CREATING BOARDS IS FOR A FEATURE THAT DOES NOT EXIST ---
+
+    "BB" is the discussion board, item 27: self-hosted Matrix/Element, decided
+    but NOT BUILT. There is a discussion.html stub and nothing behind it.
+
+    So "prod can create boards" is a capability for an unbuilt feature, and it
+    cannot be built before the board is. Recorded here so the role's shape is
+    complete — when the board arrives, creating channels on it is prod's job,
+    not an admin's.
+
+    WORTH NOTING: the board is the THIRD thing now waiting on item 27, after
+    "Talk to the team" on the tester page and the Discussion link in the utility
+    bar. The role model is running ahead of the feature.
+
+    --- WHERE THIS LEAVES THE ROLE MODEL ---
+
+    prod is turning into the CREATIVE/COMMUNITY role: it judges work, says
+    things about it, and organises it — categories and boards. That is a
+    coherent job, and it is NOT any part of administering the system, which is
+    exactly the separation item 51 is about.
+
+    It also means the capability list is growing past one entry, which is worth
+    noticing: creative.approve, comment, category.manage, board.manage. Still
+    small enough for a map in code, and worth watching — if it reaches a dozen,
+    that is the point to reconsider roles-as-capability-sets properly rather
+    than bolting another name onto the map.

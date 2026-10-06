@@ -1,6 +1,6 @@
 // frontend/src/sharedInvites.js
 //
-// The invitation panel, shared by the admin and superuser dashboards.
+// The invitation panel on the admin dashboard.
 //
 // Everything here talks to backend/routes/inviteDevs.js. An earlier version
 // called two endpoints that had never existed — a reissue by id, and a copy
@@ -64,7 +64,7 @@ export function getInviteStatus(value) {
 // ---------------------------------------------------------------------------
 
 /**
- * Reissue by id. Admin/superuser only, enforced server-side.
+ * Reissue by id. Admin only, enforced server-side.
  *
  * The list deliberately does not return tokens — putting every invitation's
  * token on the page would make the panel itself a liability — so an admin
@@ -243,6 +243,17 @@ async function refreshInvitationsList() {
             // framework's problem rather than something to get right by eye.
             // The same shape as the status badges beside it, which already read
             // correctly on this table.
+            // WHERE IT CAME FROM. A privileged invitation cannot have been
+            // created from this page — the server refuses those roles — so if
+            // one appears here it was issued on the studio machine by somebody
+            // with access to it. Saying so stops an administrator wondering who
+            // created a row they did not.
+            const fromConsole = invite.source === 'console'
+                ? `<div class="small text-secondary">` +
+                  `<i class="bi bi-terminal me-1" aria-hidden="true"></i>` +
+                  `issued on the studio machine</div>`
+                : '';
+
             const clash = stale
                 ? `<span class="badge text-bg-warning mt-1">` +
                   `<i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>` +
@@ -252,7 +263,8 @@ async function refreshInvitationsList() {
 
             return `
                 <tr>
-                  <td>${escapeHtml(invite.email)}${clash ? '<div>' + clash + '</div>' : ''}</td>
+                  <td>${escapeHtml(invite.email)}${fromConsole}${
+                      clash ? '<div>' + clash + '</div>' : ''}</td>
                   <td><span class="badge bg-dark border border-secondary text-light">${escapeHtml(invite.role)}</span></td>
                   <td><span class="badge ${badge.cls}">${escapeHtml(badge.label)}</span></td>
                   <td>${escapeHtml(expiry)}</td>

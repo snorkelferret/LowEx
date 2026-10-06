@@ -40,22 +40,16 @@ const CHECKS = [
         pages: ['register.html'],
     },
     {
-        client: 'frontend/src/superuser.js',
-        pages: ['superuserDashboard.html'],
-    },
-    {
         client: 'frontend/src/admin.js',
         pages: ['adminDashboard.html'],
     },
     {
-        // Built into BOTH dashboards, so its ids have to exist in both.
         client: 'frontend/src/sharedInvites.js',
-        pages: ['adminDashboard.html', 'superuserDashboard.html'],
+        pages: ['adminDashboard.html'],
     },
     {
-        // Built into BOTH dashboards, like sharedInvites.
         client: 'frontend/src/adminUsers.js',
-        pages: ['adminDashboard.html', 'superuserDashboard.html'],
+        pages: ['adminDashboard.html'],
     },
     {
         // The sign-in form. Its ids live in the hand-written shopfront page,
@@ -83,15 +77,23 @@ const CHECKS = [
 //
 // Remove an entry when the control is added or the code is deleted. TODO item
 // 24 tracks them.
-const KNOWN_MISSING = {
-    'runDiagnosticsBtn':
-        'superuser.js binds it, but the button lived in a component that was '
-        + 'only ever built into the DEVELOPER dashboard. The endpoint works; '
-        + 'the button needs adding to the superuser panel.',
-    'signInAsBtn':
-        'the entry point for impersonation, which is deferred by decision. '
-        + 'Impersonation is how an admin reaches inside a workspace.',
-};
+// EMPTY AS OF 2026-10-06, and that is worth a note rather than a deletion.
+//
+// Both entries were about the superuser dashboard, and both described a button
+// that DID NOT EXIST IN ANY COMPONENT:
+//
+//   * runDiagnosticsBtn — bound by superuser.js, declared nowhere. The
+//     diagnostics endpoint worked and no control ever called it.
+//   * signInAsBtn — the entry point to the "sign in as another user" dialog,
+//     also declared nowhere, so the dialog could not be opened either.
+//
+// So two of the superuser page's features were unreachable by construction, and
+// this list is what said so. The page is gone now and both the script and the
+// components with them, so there is nothing left to exempt.
+//
+// Kept as an empty object rather than deleted: the mechanism is what caught
+// this, and the next gap belongs here.
+const KNOWN_MISSING = {};
 
 let failures = 0;
 let skipped = 0;

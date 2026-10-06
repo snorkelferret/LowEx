@@ -16,9 +16,8 @@ Opening it asks you to choose a username and password. Your **role is fixed by
 the invitation** — you cannot choose it, and if it is wrong, the person who
 invited you has to issue a new one.
 
-**Only developers and testers arrive this way.** Administrator and superuser
-accounts are not invited by anyone: they are created on the machine the portal
-runs on. If you are expecting one of those, it does not come as a link.
+**Only developers and testers arrive this way.** Administrator accounts are not
+invited by anyone: they are created on the machine the portal runs on. If you are expecting one of those, it does not come as a link.
 
 ## The invitation link
 

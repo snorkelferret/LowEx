@@ -1,6 +1,7 @@
 // backend/routes/admin.js
 //
-// Admin operations. Everything here requires admin or superuser.
+// Admin operations. Everything here requires an administrator, and admin
+// is the top of the ladder — there is nothing above it (2026-10-06).
 //
 // ACCOUNT LIFECYCLE. Deactivation is how access is revoked — there is no
 // delete, and there should not be: a user id is referenced by every asset,
@@ -18,7 +19,7 @@ const router = express.Router();
 
 const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const { isStrictlyBelow, isAdminOrAbove } = require('../lib/roles');
+const { hasAuthorityOver, isAdminOrAbove } = require('../lib/roles');
 const audit = require('../lib/audit');
 // The two storage questions. Kept as libraries because each is asked on more
 // than one screen and the answers must not diverge — see each file for why they
@@ -36,11 +37,14 @@ const notify = require('../lib/notify');
 router.use(authenticateToken, requireAdmin);
 
 // Ordered most senior first, so the top of the list is who can do the most.
+// 'prod' sorts below admin and above developer: it is a craft role, not a
+// seniority, but this is a reading order and that is where a reader will look
+// for it. See backend/lib/roles.js.
 const BY_RANK = `
     ORDER BY
         CASE role
-            WHEN 'superuser' THEN 0
-            WHEN 'admin'     THEN 1
+            WHEN 'admin'     THEN 0
+            WHEN 'prod'      THEN 1
             WHEN 'developer' THEN 2
             ELSE 3
         END,
@@ -406,7 +410,7 @@ router.get('/notifications', (req, res) => {
 /**
  * POST /api/admin/notifications/test
  *
- * Send a test alert to every admin and superuser.
+ * Send a test alert to every administrator.
  *
  * REPORTS WHAT ACTUALLY HAPPENED. "Sent" and "email is not configured on this
  * server" are both ordinary outcomes, and a button that says it worked when
@@ -441,7 +445,7 @@ router.post('/notifications/test', async (req, res) => {
         // The refusals, said plainly, with what to do about each.
         const explanations = {
             no_recipients:
-                'Nobody to send to. Alerts go to every admin and superuser, and ' +
+                'Nobody to send to. Alerts go to administrators, and ' +
                 'none of those accounts has an email address.',
             not_configured:
                 'Email is not configured on this server, so nothing was sent. ' +
@@ -503,8 +507,8 @@ router.get('/users', (req, res) => {
         //      created_via means nothing in this application created it —
         //      somebody inserted the row directly.
         //
-        //   2. IS ITS ORIGIN ALLOWED FOR ITS ROLE? Admin and superuser cannot
-        //      be created through the web interface by anyone (see
+        //   2. IS ITS ORIGIN ALLOWED FOR ITS ROLE? Admin accounts cannot be
+        //      created through the web interface by anyone (see
         //      backend/lib/roles.js). So a privileged account whose origin is a
         //      web path is a violation even though its origin is recorded —
         //      which is exactly the case (1) cannot catch, because the row
@@ -567,11 +571,11 @@ router.get('/users', (req, res) => {
                 can_deactivate:
                     user.id !== req.user.id &&
                     user.is_active === 1 &&
-                    isStrictlyBelow(req.user.role, user.role),
+                    hasAuthorityOver(req.user.role, user.role),
                 can_reactivate:
                     user.id !== req.user.id &&
                     user.is_active === 0 &&
-                    isStrictlyBelow(req.user.role, user.role),
+                    hasAuthorityOver(req.user.role, user.role),
             })),
         });
 
@@ -618,10 +622,11 @@ function setUserActive(req, res, nextActive, action) {
         });
     }
 
-    // Strictly below. An admin cannot deactivate another admin, and a superuser
-    // cannot deactivate another superuser — so a peer cannot be removed, and
-    // the last superuser cannot be locked out by a rival.
-    if (!isStrictlyBelow(req.user.role, target.role)) {
+    // Strictly below. An admin cannot deactivate another admin, so a peer
+    // cannot be removed and the last one standing cannot be locked out by a
+    // rival. This is the property the removed 'superuser' role used to provide,
+    // and admin already had it.
+    if (!hasAuthorityOver(req.user.role, target.role)) {
         return res.status(403).json({
             error:
                 `You cannot ${action} "${target.username}": they are a ` +

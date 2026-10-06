@@ -52,7 +52,6 @@ export default defineConfig(({ mode }) => {
         input: {
           main: path.resolve(rootDir, 'frontend/index.html'),
           shopfront: path.resolve(rootDir, 'frontend/shopfront.html'),
-          superuser: path.resolve(rootDir, 'frontend/superuserDashboard.html'),
           admin: path.resolve(rootDir, 'frontend/adminDashboard.html'),
           developer: path.resolve(rootDir, 'frontend/devDashboard.html'),
           user: path.resolve(rootDir, 'frontend/user.html'),

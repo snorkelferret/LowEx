@@ -4,6 +4,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs'); // Or 'bcrypt'
 const db = require('../db');
+const { authenticateToken } = require('../middleware/auth');
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -43,7 +44,7 @@ router.post('/login', async (req, res) => {
     const payload = {
       sub: user.id,
       username: user.username,
-      role: user.role // Only store 'superuser', 'admin', 'developer' or 'user'
+      role: user.role // One of the four in backend/lib/roles.js
     };
 
     const token = jwt.sign(
@@ -99,6 +100,58 @@ router.post('/logout', (req, res) => {
   });
 
   return res.json({ success: true });
+});
+
+// GET /api/auth/me
+//
+// Who the server thinks you are, read from the database on this request.
+//
+// WHY THIS EXISTS RATHER THAN READING localStorage. The browser already holds a
+// profile, and it is what the pages use to greet people — but it was written at
+// sign-in and NEVER EXPIRES, while the session cookie behind it does. So a page
+// that trusts it draws a full, confident "Your account" panel for somebody
+// whose session ended hours ago. That is the failure frontend/src/api.js was
+// written to catch, and this is the endpoint that lets a page catch it too.
+//
+// It is also the only way a page can show account details it did not get from
+// the browser, which is the difference between displaying a fact and displaying
+// something the client happens to remember.
+//
+// authenticateToken re-reads the row, so a deactivated account is refused here
+// immediately rather than at token expiry — the same property that makes
+// deactivation real everywhere else.
+router.get('/me', authenticateToken, (req, res) => {
+  try {
+    // has_2fa_secret IS NOT is_2fa_enabled, and the difference matters.
+    //
+    // The flag is set automatically on first sign-in while no secret exists, so
+    // it currently reads 1 for every account in the system that has no
+    // authenticator at all — see TODO 47. Anything displaying "two-factor: on"
+    // from that flag is displaying a falsehood.
+    //
+    // Whether a SECRET EXISTS is the honest question, and it is the one this
+    // answers. The secret itself is never selected.
+    const user = db.prepare(`
+      SELECT
+        id, username, email, role, created_at,
+        is_2fa_enabled,
+        two_factor_secret IS NOT NULL AS has_2fa_secret
+      FROM users
+      WHERE id = ?
+    `).get(req.user.id);
+
+    if (!user) {
+      // The token verified but the row is gone, which authenticateToken cannot
+      // distinguish from a valid session. Say so rather than 500.
+      return res.status(401).json({ error: 'Account no longer exists' });
+    }
+
+    return res.json({ user });
+
+  } catch (err) {
+    console.error('Failed to read the current account:', err);
+    return res.status(500).json({ error: 'Failed to read the account' });
+  }
 });
 
 module.exports = router;

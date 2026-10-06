@@ -180,7 +180,7 @@ const shaHeldByWorkspace = db.prepare(`
 router.get(
     '/assets',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
     async (req, res) => {
         try {
             const developerId = req.user?.id;
@@ -356,7 +356,7 @@ router.get(
 router.get(
     '/assets/history',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -506,7 +506,7 @@ router.get(
 router.post(
     '/assets/:assetId/category',
     authenticateToken,
-    requireRole('admin', 'superuser'),
+    requireRole('admin'),
 
     async (req, res) => {
         const actor = req.user;
@@ -638,7 +638,7 @@ function pendingApprovalForVersion(versionId) {
 router.delete(
     '/assets/:assetId',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -712,7 +712,7 @@ router.delete(
 router.delete(
     '/assets/:assetId/versions/:versionId',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -828,7 +828,7 @@ router.delete(
 router.post(
     '/assets/:assetId/versions/:versionId/purge',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -972,7 +972,7 @@ function binVersion(version) {
 router.get(
     '/assets/bin',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -1118,7 +1118,7 @@ function restoreVersions(versionIds) {
 router.post(
     '/assets/:assetId/restore',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -1206,7 +1206,7 @@ router.post(
 router.post(
     '/assets/:assetId/versions/:versionId/restore',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -1308,7 +1308,7 @@ router.post(
 router.get(
     '/assets/:assetId/versions/:versionId/checks',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -1416,7 +1416,7 @@ const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
 router.get(
     '/creative-approvals',
     authenticateToken,
-    requireRole('admin', 'superuser'),
+    requireRole('admin'),
 
     async (req, res) => {
         const status = req.query?.status === undefined
@@ -1655,7 +1655,7 @@ function filesForVersion(assetId, versionId, user) {
 router.get(
     '/assets/:assetId/versions/:versionId/manifest',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const caller = req.user;
@@ -1758,7 +1758,7 @@ router.get(
 router.get(
     '/assets/:assetId/versions/:versionId/files/:fileId/content',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const caller = req.user;
@@ -1929,7 +1929,7 @@ const assetUpload = multer({
 router.post(
     '/assets/check-name',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
         const developerId = req.user?.id;
@@ -2041,7 +2041,7 @@ router.post(
 router.post(
     '/upload',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     assetUpload.fields([
         { name: 'files', maxCount: 1000 }
@@ -3158,7 +3158,7 @@ router.post(
 router.post(
     '/assets/:assetId/versions/:versionId/technical-check',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
 
@@ -3775,7 +3775,7 @@ router.post(
 router.post(
     '/assets/:assetId/versions/:versionId/creative-approval',
     authenticateToken,
-    requireRole('developer', 'admin', 'superuser'),
+    requireRole('developer', 'admin'),
 
     async (req, res) => {
 
@@ -4002,7 +4002,7 @@ router.post(
 router.post(
     '/creative-approvals/:approvalId/reject',
     authenticateToken,
-    requireRole('admin', 'superuser'),
+    requireRole('admin'),
 
     async (req, res) => {
 
@@ -4145,7 +4145,7 @@ router.post(
 router.post(
     '/creative-approvals/:approvalId/approve',
     authenticateToken,
-    requireRole('admin', 'superuser'),
+    requireRole('admin'),
 
     async (req, res) => {
 

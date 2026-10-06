@@ -91,10 +91,11 @@ function optionalAuth(req, res, next) {
 // forgets 'superuser' does not error, it just refuses the most privileged
 // account in the system.
 //
-// SO WHEN A ROUTE NAMES 'admin' IT MUST NAME 'superuser' TOO. Verified
-// 2026-10-02: no requireRole call anywhere allows admin without superuser.
-// Keep it that way — requireAdmin() below enforces the same rule for the
-// boolean form, and admin/superuser pass together everywhere else.
+// THAT RULE IS NOW MOOT: 'superuser' was removed on 2026-10-06, so admin is the
+// top of the ladder and there is no longer a role that a list can forget. It is
+// left here because the failure mode it describes is the reason requireRole
+// takes roles at all, and because it would return the moment a rung is added
+// above admin.
 //
 // The one thing NOT covered here: ADMIN CAN DELETE. Deleting from the game
 // store is an admin capability, not a superuser one, so a delete route naming
@@ -116,17 +117,10 @@ function requireRole(...allowedRoles) {
     });
   };
 }
-function requireSuperuser(req, res, next) {
-  // Check the single-source role
-  if (req.user?.role === 'superuser') {
-    return next();
-  }
-  return res.status(403).json({ error: 'Unauthorized: Superuser access required.' });
-}
 
 function requireAdmin(req, res, next) {
   // Superusers automatically pass admin checks
-  if (req.user?.role === 'admin' || req.user?.role === 'superuser') {
+  if (req.user?.role === 'admin') {
     return next();
   }
   return res.status(403).json({ error: 'Unauthorized: Admin access required.' });
@@ -135,7 +129,6 @@ function requireAdmin(req, res, next) {
 module.exports = {
     authenticateToken,
     optionalAuth,
-    requireSuperuser,
     requireAdmin,
     requireRole
 };

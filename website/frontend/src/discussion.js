@@ -51,7 +51,6 @@ function pointNav() {
     if (!user || !user.role) return;
 
     const destination = {
-        superuser: '/superuserDashboard.html',
         admin: '/adminDashboard.html',
         developer: '/devDashboard.html',
         user: '/user.html',

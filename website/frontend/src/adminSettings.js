@@ -1,20 +1,8 @@
 // frontend/src/adminSettings.js
-//
-// The Settings panel, on both the admin and superuser dashboards — for the same
-// reason adminUsers.js, adminReports.js, adminAudit.js and adminStorage.js are:
-// the panel is built into both, and logic living in admin.js would leave it
-// stuck on "Loading…" on the superuser dashboard.
-//
-// IT KNOWS NOTHING ABOUT ANY PARTICULAR SETTING. The server sends each one with
-// its label, its bounds, its unit, its default and the note to show beside it,
-// and this renders whatever arrives. So adding a setting is a line in
-// backend/lib/settings.js and nothing here — there is no second list of keys to
-// keep in step, which is the thing that would go stale first.
-//
-// THE SERVER VALIDATES, AND ITS MESSAGE IS SHOWN. Bounds are checked on the
-// server because that is where they are declared; the client does not
-// re-implement them, so the two cannot disagree about what is allowed. A
-// refusal comes back as the sentence to display, exactly as an acceptance does.
+// The Settings panel, on the admin dashboard — its own file for the same reason
+// adminUsers.js, adminReports.js, adminAudit.js and adminStorage.js are: the
+// panel is a COMPONENT, and a component's logic has to be loaded by the page
+// that carries it.
 
 import { $ } from './utils.js';
 import { apiFetch } from './api.js';
@@ -277,7 +265,7 @@ function renderNotificationStatus(data) {
     const who = document.createElement('div');
     who.className = 'mt-1';
     who.textContent = recipients.length === 0
-        ? 'Nobody would be told: no admin or superuser account has an email address.'
+        ? 'Nobody would be told: no administrator account has an email address.'
         : `Would go to ${recipients.length} ` +
           `${recipients.length === 1 ? 'account' : 'accounts'}: ` +
           recipients.map(r => `${r.username} <${r.email}>`).join(', ');
@@ -355,7 +343,7 @@ async function sendTestAlert(button) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Only present on the admin and superuser dashboards.
+    // Only present on the admin dashboard.
     const list = $('settingsList');
     if (!list) return;
 

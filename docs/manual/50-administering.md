@@ -1,39 +1,86 @@
 # Administering
 
-For administrators and superusers.
+For administrators.
 
-## The rule that matters most
+## The four roles
 
-**Superuser can do everything an administrator can do, plus more.**
+| Role | What it is |
+|---|---|
+| **user** | A tester. No extra privileges; the tester features are available to anyone signed in. |
+| **developer** | Works in their own private workspace. Uploads, versions, submits for review. |
+| **prod** | Production — a craft role, not a seniority. Decides creative approvals, comments, and manages asset categories and discussion boards. **No workspace, no admin powers, cannot deactivate or invite anybody.** |
+| **admin** | Administers the system. Accounts, invitations, reports, settings, audit log, deactivation. **The top of the ladder — there is nothing above it.** |
 
-The "plus more" is superuser-only — deploying the game, creating branches. The
-"everything an administrator can do" half is the one that gets broken by
-accident, because a failure there is silent: a page that allows administrators
-and forgets superusers does not error, it just refuses the most privileged
-account in the system.
+**The ladder is `user < developer < admin`.** `prod` sits between developer and
+admin for ordering, and that rank confers *nothing*: it is not above anybody and
+has authority over nobody. See "Admin accounts are made on this machine" below.
 
-If you are ever refused something you expect to be able to do, that is what to
-suspect first.
+**If you are refused something you expect to be able to do**, suspect a role
+list that does not name your role. That failure is silent by nature — the route
+does not error, it simply refuses.
 
-## Admin and superuser accounts are made on this machine
+## Admin accounts are made on this machine
 
-**Nobody can create an administrator or a superuser through the website.** Not
-even a superuser. The role is not offered in the invitations menu, and the
-server refuses it if the request is sent anyway — hiding an option is not the
-same as preventing it.
+**Nobody can create an administrator through the website.** The role is not
+offered in the invitations menu, and the server refuses it if the request is
+sent anyway — hiding an option is not the same as preventing it.
+
+**There is no superuser.** The role was removed on 2026-10-06: it had no
+accounts, no routes and no page, and the one thing it provided — that nobody can
+act on a peer, so the last administrator cannot be locked out by a rival —
+already holds at the administrator level. **Administrator is the top of the
+ladder.** A rogue administrator is therefore dealt with on the machine rather
+than from the website, which is consistent with every other privileged act
+here.
 
 They are created on the machine the portal runs on, by somebody with access to
-it:
+it.
+
+### The usual way: invite them
 
 ```bash
-node scripts/create-superuser.js                  # a superuser
-node scripts/create-superuser.js --role admin     # an administrator
-node scripts/create-superuser.js --list           # who is on the system
-node scripts/create-superuser.js --reset <name>   # set a new password
+node scripts/accounts.js --invite --email them@example.com
+node scripts/accounts.js --invite --role prod --email them@example.com
 ```
 
+This issues an invitation that carries the privileged role. It arrives exactly
+like any other invitation, and **the person chooses their own username and
+password** when they open the link. Nobody has to pick a password on somebody
+else's behalf and then find a way to pass it on — which is the whole reason this
+is the preferred route.
+
+The invitation is marked **"issued on the studio machine"** in the invitations
+list, so nobody has to wonder who created a privileged row.
+
+### Someone who already has a login
+
+```bash
+node scripts/accounts.js --promote <username> --role admin
+```
+
+An invitation cannot do this. Redeeming one *creates* an account, and both
+invitations and accounts are unique per email address — so a developer you want
+to promote cannot be invited again. This changes the role and **leaves their
+password alone**. It takes effect on their next request.
+
+### The first account, and emergencies
+
+```bash
+node scripts/accounts.js                  # create an administrator
+node scripts/accounts.js --role prod      # create a production reviewer
+node scripts/accounts.js --reset <name>   # set a new password
+node scripts/accounts.js --list           # who is on the system
+```
+
+Creating an account directly means typing a password at the machine for somebody
+else. That is why it is not the usual way — it exists for the first account on a
+new installation, where there is nobody to send an invitation, and for the day
+the mail path is broken and somebody needs in now.
+
+`--reset` is also the only way to change an existing password.
+
 **WHY, because it is not obvious and it is worth knowing before somebody asks
-you to relax it.** It limits *persistence*, not impact. If a superuser's session
+you to relax it.** It limits *persistence*, not impact. If an administrator's session
 is stolen, whoever has it can still change settings, read the audit log and
 deactivate people. What they cannot do is plant a lasting privileged account —
 and an account that can change system-wide settings outlives the incident it was
@@ -48,14 +95,20 @@ invitation system is for.
 
 ### Passwords
 
-A password created this way is **typed at the machine and never shown** — not on
-screen, not in a log, not in the database except as a one-way hash. It cannot be
-passed as a command-line argument or an environment variable, because both are
-readable by other processes on the machine, and the script refuses to run
-without a terminal rather than accept one.
+**A password is never shown, anywhere** — not on screen, not in a log, not in an
+audit record, not in the database except as a one-way hash.
 
-If you forget it, use `--reset`. There is no "forgot my password" link, and no
-way to change a password from the website at all.
+Where the script asks you to type one, it is not echoed as you type and it
+cannot be passed as a command-line argument or an environment variable: both are
+readable by other processes on the machine, so the script refuses to run without
+a terminal rather than accept one.
+
+**Where possible, nobody types a password but its owner.** That is what
+`--invite` is for — the person sets their own, through the same page every other
+account is created with.
+
+There is no "forgot my password" link and no way to change a password from the
+website at all. `--reset` at the machine is the only route.
 
 ## Accounts
 
@@ -89,7 +142,7 @@ into the database directly, by something that bypassed the application. It is
 not necessarily hostile — somebody may have run a command they did not write
 down — but it is always worth finding out about.
 
-The same warning appears if an administrator or superuser account was created
+The same warning appears if an administrator account was created
 *through the website*, which is not supposed to be possible. That one is a
 stronger signal: an account that bypassed a rule deliberately put in place.
 
@@ -100,7 +153,7 @@ lock. They catch the ordinary case, which is what actually happens.
 ## Invitations
 
 **Invites** creates an invitation for an email address as a **developer or a
-tester**. Administrator and superuser are not offered — see above.
+tester**. Administrator is not offered — see above.
 
 - Links are valid for **28 days** by default. That is a setting, changeable in
   **Settings** (see below), and it applies to invitations sent from then on:
@@ -155,7 +208,7 @@ ever warned about in time.
 Below the settings is a **test button** for the alerts that go out when
 something urgent happens.
 
-Alerts are sent to **every active administrator and superuser, on one message,
+Alerts are sent to **every active administrator, on one message,
 so you can all see who else received it.** That is deliberate: several people
 receiving the same alarm need to be able to talk to each other about it, and
 they cannot do that without knowing who else has it.
@@ -175,7 +228,7 @@ something outside the portal watching it, which is not built.
 ## What administrators cannot see
 
 **There is no read path into a developer's workspace.** Not for administrators,
-not for superusers. If one is needed, it is done by **impersonation**, which is
+not for anyone. If one is needed, it is done by **impersonation**, which is
 marked, time-bounded and audit-logged — and impersonation is not built yet.
 
 The workspace is private because developers need to be able to make a mess while
@@ -211,8 +264,8 @@ skipped rather than resolved.
   cannot be answered at all yet. (TODO 10)
 - **Deleting from the game asset store** — no route, no page. (TODO 31)
 - **Impersonation** — decided, not built. (TODO 5)
-- **Deploying the game, creating branches** — superuser-only capabilities that
-  do not exist yet.
+- **Deploying the game, creating branches** — privileged capabilities that do
+  not exist yet, and that will not live on the website when they do (TODO 50).
 - **Storage by game version** — shown as an empty section on the Storage tab,
   because nothing records which content belongs to which version yet. Provision
   only, on purpose. (TODO 38)

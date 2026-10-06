@@ -1,19 +1,10 @@
 // frontend/src/adminReports.js
+// The Reports panel on the admin dashboard.
 //
-// The Reports panel on the admin and superuser dashboards.
-//
-// Loaded on BOTH, for the same reason adminUsers.js is: adminReports.html is
-// built into each of them, and logic that lived in admin.js would leave the
-// panel stuck on "Loading reports..." on the superuser dashboard. That has
-// already happened once to the invite table.
-//
-// THE ROUTES ALREADY EXISTED. GET /api/feedback and POST /api/feedback/:id/
-// resolve were built and tested with the report button, and nothing called
-// either — so every report anyone has sent since has gone somewhere nobody
-// looked. This is the half that was missing.
-//
-// THE SERVER DECIDES WHO MAY RESOLVE. These routes are admin/superuser only
-// and the panel does not re-derive that; it shows what it is given.
+// Its own file for the same reason adminUsers.js is: adminReports.html is a
+// COMPONENT, so the logic has to be loaded by the page that builds it in. Logic
+// that lived in admin.js would leave the panel stuck on "Loading reports..."
+// anywhere else — which has already happened once to the invite table.
 
 import { $, escapeHtml } from './utils.js';
 import { apiFetch } from './api.js';
@@ -293,7 +284,7 @@ async function resolveReport(report, note, button) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Only present on the admin and superuser dashboards.
+    // Only present on the admin dashboard.
     if (!$('reportList')) return;
 
     $('reportStatusFilter')?.addEventListener('change', loadReports);

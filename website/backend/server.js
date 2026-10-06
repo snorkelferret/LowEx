@@ -12,13 +12,11 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
-const superuserRoutes = require('./routes/superuser');
 const inviteDevRoutes = require('./routes/inviteDevs');
 const developerWorkspaceRoutes = require('./routes/developerWorkspace');
 
 const {
   authenticateToken,
-  requireSuperuser,
   requireAdmin
 } = require('./middleware/auth');
 
@@ -31,9 +29,6 @@ const audit = require('./lib/audit');
 // Shared invitation rules, so registration and creation cannot disagree about
 // what "still valid" means.
 const { isAcceptable } = require('./lib/invites');
-
-
-//const superuserRoutes = require('./routes/superuser');
 
 
 const app = express();
@@ -72,15 +67,22 @@ app.use(express.static(path.join(__dirname, '../frontend/public')));
 // 2. Authentication endpoints (/api/auth/login, etc.)
 app.use('/api/auth', require('./routes/auth'));
 
-// 3. Admin & Superuser API routes
+// 3. Admin API routes
 //
-// /api/superuser is mounted ONCE, here, with authenticateToken applied at the
-// mount so the protection is visible at the point of definition.
-// routes/superuser.js:6 additionally does
-// `router.use(authenticateToken, requireSuperuser)` internally, so the routes
-// stay protected even if this outer guard is ever dropped.
+// /api/superuser WAS MOUNTED HERE until 2026-10-06, and is gone. Its seven
+// endpoints were the website's superuser-only powers — GitHub and Cloudflare
+// credentials entered through web forms, a deployment trigger, cache purge,
+// devmode and diagnostics.
+//
+// THEY ARE NOT SIMPLY DELETED; each one needs a home, and the inventory is in
+// TODO 50. Two of them were wrong wherever they lived (a long-lived API token
+// typed into a browser and put into process.env), one is a release trigger that
+// should not answer to a cookie, and the rest are operations that belong on the
+// machine.
+//
+// What remains web-reachable is the ADMIN set, which a superuser also passes —
+// requireAdmin accepts admin and superuser alike.
 app.use('/api/admin', require('./routes/admin'));
-app.use('/api/superuser', authenticateToken, superuserRoutes);
 app.use('/api/inviteDevs', inviteDevRoutes);
 app.use('/api/developer/workspace', developerWorkspaceRoutes);
 
@@ -109,11 +111,18 @@ const queries = {
   markInviteUsed: db.prepare("UPDATE invitations SET status = 'used' WHERE id = ?"),
   // created_via is set EXPLICITLY by both of these. It has no default, so a
   // row inserted without it lands as NULL — which is how the admin's check
-  // spots an account that nothing in this application created. Adding a
-  // DEFAULT here would make every insert look explained and the check useless.
+  // spots an account that nothing in this application created. A DEFAULT here
+  // would make every insert look explained and the check useless.
+  //
+  // AND IT IS BOUND RATHER THAN FIXED, because the answer depends on where the
+  // invitation was issued: a console-issued admin invitation produces an
+  // account whose privilege was granted on the machine, and that is what the
+  // origin has to say. Hardcoding 'invitation' would make the accounts check
+  // flag every legitimately-granted administrator as "created through the
+  // website" — the exact alarm it exists to raise, fired at the wrong people.
   createUser: db.prepare(`
     INSERT INTO users (username, email, password_hash, role, created_via)
-    VALUES (@username, @email, @password_hash, @role, 'invitation')
+    VALUES (@username, @email, @password_hash, @role, @created_via)
   `),
   createGoogleUser: db.prepare(`
     INSERT INTO users (username, email, google_id, role, created_via)
@@ -254,7 +263,12 @@ app.post('/api/auth/register-invited', async (req, res) => {
         username,
         email: invite.email,
         password_hash,
-        role: invite.assigned_role
+        role: invite.assigned_role,
+        // 'console' when the invitation was issued on the studio machine, so
+        // an administrator made that way reads as having been granted on the
+        // machine rather than through the web. See the `source` column in
+        // db.js and the check in routes/admin.js.
+        created_via: invite.source === 'console' ? 'console' : 'invitation',
       });
 
       queries.markInviteUsed.run(invite.id);
@@ -262,7 +276,7 @@ app.post('/api/auth/register-invited', async (req, res) => {
       audit.record(null, 'user.create', username, {
         email: invite.email,
         role: invite.assigned_role,
-        via: 'invitation',
+        via: invite.source === 'console' ? 'console' : 'invitation',
         invitation_id: invite.id,
         // Who issued the invitation that was redeemed. The actor on this
         // record is null because nobody with a session did anything — the

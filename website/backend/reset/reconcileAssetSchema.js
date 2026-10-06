@@ -178,7 +178,7 @@ if (!invitationsSql) {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
             assigned_role TEXT
-              CHECK (assigned_role IN ('user','developer','admin','superuser'))
+              CHECK (assigned_role IN ('user','developer','prod','admin'))
               NOT NULL,
             token TEXT UNIQUE NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending'

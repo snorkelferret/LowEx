@@ -180,7 +180,7 @@ const FEEDBACK_STATUSES = ['open', 'resolved', 'all'];
 router.get(
     '/',
     authenticateToken,
-    requireRole('admin', 'superuser'),
+    requireRole('admin'),
 
     (req, res) => {
         const status = String(req.query.status || 'open').toLowerCase();
@@ -258,7 +258,7 @@ router.get(
 router.post(
     '/:id/resolve',
     authenticateToken,
-    requireRole('admin', 'superuser'),
+    requireRole('admin'),
 
     (req, res) => {
         const id = Number(req.params.id);

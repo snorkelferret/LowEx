@@ -4,7 +4,7 @@
      A SEPARATE COMPONENT rather than another block inside adminPanel.html,
      because it is a view in its own right and adminPanel is already carrying
      the stats and the accounts table. It is listed in build.js for BOTH the
-     admin and the superuser dashboard, like the other shared panels.
+     admin dashboard, like the other shared panels.
 
      NOTHING HERE IS NEW DATA. GET /api/feedback and the resolve route have
      existed and been tested since the report button was built, and nothing
@@ -12,14 +12,14 @@
      than not collecting them, because the person who sent one believes they
      have been heard.
 
-     THE WRAPPING MATCHES adminPanel.html — "card superuser-module" with an h3
+     THE WRAPPING MATCHES adminPanel.html — "card panel-module" with an h3
      and a module-body — so the two sit together as the same kind of thing.
      (devInvites.html wraps itself differently, which is a real inconsistency
      on this page and worth tidying; noted rather than fixed here, because
-     changing it touches the superuser dashboard too.)
+     changing it touches every panel that carries it.)
      ============================================================ -->
 
-<section class="card superuser-module mb-4" id="admin-reports-module">
+<section class="card panel-module mb-4" id="admin-reports-module">
 
   <div class="card-header">
     <h2 class="h5 mb-0">📨 Reports</h2>

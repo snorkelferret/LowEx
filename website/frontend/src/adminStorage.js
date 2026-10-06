@@ -1,21 +1,8 @@
 // frontend/src/adminStorage.js
-//
-// The Storage panel, on both the admin and superuser dashboards — for the same
-// reason adminUsers.js, adminReports.js and adminAudit.js are: the panel is
-// built into both, and logic living in admin.js would leave it stuck on
-// "Loading…" on the superuser dashboard.
-//
-// TWO FIGURES, DELIBERATELY NOT RECONCILED ON THE CLIENT. The server sends the
-// disk reading and the per-developer charges; this renders both and prints the
-// note explaining why they differ. It does NOT compute either one, and it does
-// not subtract one from the other to show a "remaining" that would be
-// meaningless — see backend/lib/hostStorage.js for why the two do not
-// reconcile.
-//
-// NOTHING HERE DERIVES A NUMBER THE SERVER ALREADY DECIDED. Percentages, the
-// status band and the remaining bytes all arrive ready to display. A client
-// that recomputed them could disagree with the developer's own screen, which is
-// the one thing this tab exists to prevent.
+// The Storage panel, on the admin dashboard — its own file for the same reason
+// adminUsers.js, adminReports.js and adminAudit.js are: the panel is a
+// COMPONENT, and a component's logic has to be loaded by the page that carries
+// it.
 
 import { $ } from './utils.js';
 import { formatBytes } from '../../shared/formatBytes.mjs';
@@ -496,7 +483,7 @@ async function loadStorage() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Only present on the admin and superuser dashboards.
+    // Only present on the admin dashboard.
     if (!$('storageDevelopers')) return;
 
     loadStorage();

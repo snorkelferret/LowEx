@@ -16,13 +16,11 @@ import { executeGlobalLogout } from './authUtils.js';
   try {
     const user = JSON.parse(rawUser || '{}');
     
-    // Guard Superuser views
-    if (path.includes('superuserDashboard.html') && user.role !== 'superuser') {
-      alert('Access Denied: Superuser clearance required.');
-      window.location.href = '/index.html';
-    }
+    // There was a guard for superuserDashboard.html here. The page is gone
+    // (2026-10-06) — a superuser uses the admin dashboard, which the guard
+    // below already covers for both roles.
     // Guard Admin views
-    if (path.includes('adminDashboard.html') && user.role !== 'admin' && user.role !== 'superuser') {
+    if (path.includes('adminDashboard.html') && user.role !== 'admin') {
       alert('Access Denied: Admin clearance required.');
       window.location.href = '/index.html';
     }
@@ -60,10 +58,16 @@ export function updateNavbarState() {
       const roleLower = user.role.toLowerCase().trim();
       const formattedRole = roleLower.charAt(0).toUpperCase() + roleLower.slice(1);
       
-      let prefix = '🖥️';
-      if (roleLower === 'superuser') prefix = '⚡';
-      else if (roleLower === 'admin') prefix = '🛡️';
-      else if (roleLower === 'developer') prefix = '💻';
+      // One prefix per role, and every role has one — a missing one would
+      // silently print the default beside a name that deserves its own.
+      const PREFIXES = {
+        admin: '🛡️',
+        prod: '🎬',
+        developer: '💻',
+        user: '🖥️',
+      };
+
+      const prefix = PREFIXES[roleLower] || '🖥️';
 
       titleEl.textContent = `${prefix} ${formattedRole} Dashboard`;
     }

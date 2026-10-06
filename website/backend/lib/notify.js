@@ -17,7 +17,7 @@
 // accounts-not-accounted-for finding, and others as they come up.
 //
 // ============================================================
-// WHO GETS IT — every active admin and superuser
+// WHO GETS IT — every active administrator
 // ============================================================
 //
 // ALL OF THEM, not one. An alert that reaches one person reaches nobody when
@@ -62,7 +62,7 @@ const LEVELS = {
 };
 
 /**
- * Every active admin and superuser, most senior first.
+ * Every active administrator, most senior first.
  *
  * INACTIVE ACCOUNTS ARE SKIPPED. A deactivated account cannot sign in, so
  * mailing it about an incident is mailing an address nobody is watching —
@@ -89,7 +89,7 @@ function staffRecipients() {
 }
 
 /**
- * Send one message to every admin and superuser.
+ * Send one message to every administrator.
  *
  * RETURNS WHAT ACTUALLY HAPPENED rather than throwing, because the caller has
  * to be able to say so. "Sent" and "the mail transport is not configured on
@@ -103,8 +103,9 @@ async function notifyStaff({ level = 'urgent', subject, text, html }) {
 
     if (recipients.length === 0) {
         // Not a failure of the transport — there is simply nobody to tell. An
-        // administrator with no email address and no superuser is a real state
-        // a new installation can be in.
+        // installation whose only administrator has no email address is a real
+        // state to be in, and worth saying rather than reporting a send that
+        // had no destination.
         return { sent: false, reason: 'no_recipients', to: [], cc: [] };
     }
 

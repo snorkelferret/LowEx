@@ -1,16 +1,10 @@
 // frontend/src/adminUsers.js
-//
 // The Accounts table on the admin panel.
 //
-// Loaded on BOTH the admin and the superuser dashboard, because
-// adminPanel.html is built into both. Putting this in admin.js would leave the
-// table on the superuser dashboard permanently showing "Loading accounts...",
-// which is exactly what happened to the invite table.
-//
-// WHO MAY ACT ON WHOM IS NOT DECIDED HERE. The server sends can_deactivate and
-// can_reactivate per row. The buttons mirror those flags; they never re-derive
-// the rule, because a client-side copy of a permission rule is a permission
-// rule that can disagree with the server.
+// Loaded by the page that builds adminPanel.html in, not in admin.js: the table
+// is part of a COMPONENT, and putting its logic in one page's script leaves it
+// permanently showing "Loading accounts..." on any other. That is exactly what
+// happened to the invite table.
 
 import { $, escapeHtml } from './utils.js';
 import { apiFetch } from './api.js';
@@ -18,7 +12,6 @@ import { apiFetch } from './api.js';
 const API = '/api';
 
 const ROLE_BADGES = {
-    superuser: 'bg-danger',
     admin: 'bg-warning text-dark',
     developer: 'bg-info text-dark',
     user: 'bg-secondary',
@@ -67,7 +60,7 @@ function renderOriginCheck(unaccounted) {
         },
         privileged_from_web: {
             title: 'privileged, created through the website',
-            detail: 'Admin and superuser accounts can only be created on the ' +
+            detail: 'Admin accounts can only be created on the ' +
                 'studio machine, by someone with access to it. These were ' +
                 'created through the web interface, which is not supposed to be ' +
                 'possible.',
@@ -279,7 +272,7 @@ function bindActions(body) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // The panel is only present on the admin and superuser dashboards, so this
+    // The panel is only present on the admin dashboard, so this
     // is a no-op everywhere else.
     if (!$('user-list-body')) return;
 

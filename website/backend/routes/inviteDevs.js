@@ -74,6 +74,7 @@ router.get('/list', authenticateToken, requireAdmin, (req, res) => {
                 i.last_reissued_at       AS lastReissuedAt,
                 i.created_at             AS createdAt,
                 i.created_by             AS createdBy,
+                i.source                 AS source,
                 issuer.username          AS issuedBy,
                 account.id               AS accountId,
                 account.username         AS accountUsername,
@@ -210,7 +211,7 @@ router.post('/generate-invite', authenticateToken, requireAdmin, async (req, res
     if (!webAssignable(role)) {
         return res.status(403).json({
             error:
-                `Admin and superuser accounts cannot be created from this page, ` +
+                `Admin accounts cannot be created from this page, ` +
                 `by anyone. They are created on the studio machine, by somebody ` +
                 `with access to it. Developers and testers are invited here.`,
             reason: 'not_web_assignable',

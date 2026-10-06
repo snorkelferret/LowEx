@@ -9,6 +9,9 @@
  * exactly how login-step1, login-step2, the Google OAuth routes, create-invite,
  * register-invited, setup-2fa and the authenticated /api/superuser mount all
  * became unreachable, with login failing and returning a "Not found" body.
+ * (The superuser mount has since been removed with the rest of the superuser
+ * dashboard — 2026-10-06 — but the incident it caused is why this check
+ * exists, so it stays named.)
  *
  * Add new routes above the fallback block, then run this.
  *

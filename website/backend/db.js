@@ -43,7 +43,7 @@ const applySchemaPatches = () => {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           email TEXT UNIQUE NOT NULL,
           assigned_role TEXT
-            CHECK(assigned_role IN ('user','developer','admin','superuser'))
+            CHECK(assigned_role IN ('user','developer','prod','admin'))
             NOT NULL,
           token TEXT UNIQUE NOT NULL,
           status TEXT NOT NULL DEFAULT 'pending'
@@ -137,6 +137,84 @@ const applySchemaPatches = () => {
       ALTER TABLE invitations
       ADD COLUMN created_by INTEGER REFERENCES users(id);
     `);
+  }
+
+  // Where an invitation was issued. Existing rows are 'web', which is the
+  // truth: every invitation that exists today was created from the admin page,
+  // because the console path did not exist until it did.
+  //
+  // NOT NULL with a DEFAULT, unlike users.created_via. That column's whole
+  // mechanism is its lack of a default — an insert that forgets it is
+  // detectable. Here the distinction is between two legitimate origins, and an
+  // invitation that somehow arrived without one is a web invitation with a
+  // missing field rather than a signal worth raising.
+  if (!columns.includes('source')) {
+    db.exec(`
+      ALTER TABLE invitations
+      ADD COLUMN source TEXT NOT NULL DEFAULT 'web';
+    `);
+  }
+
+  /*
+   * assigned_role loses 'superuser' and gains 'prod'.
+   *
+   * SAME CONSTRAINT AS users.role, SAME PROBLEM: no ALTER for a CHECK, so it is
+   * create-copy-drop-rename. This one is far simpler than the users rebuild —
+   * invitations holds one row, and NOTHING REFERENCES THIS TABLE, so there are
+   * no foreign keys to stand down and no children to follow the rename. It
+   * references users (created_by) and that is the direction that does not
+   * matter here.
+   *
+   * Runs here, at the END of the patches, rather than beside the declaration,
+   * because the copy has to list every column and the later migrations are what
+   * create created_by and source.
+   */
+  const invitesDdl = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'invitations'")
+    .get()?.sql || '';
+
+  const inviteRoles = invitesDdl.replace(/\s+/g, ' ').match(/assigned_role IN \(([^)]*)\)/);
+  const assigned = inviteRoles
+    ? inviteRoles[1].split(',').map(v => v.trim().replace(/^'|'$/g, ''))
+    : [];
+
+  if (!(assigned.length === 4
+        && ['user', 'developer', 'prod', 'admin'].every(r => assigned.includes(r)))) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE invitations_rebuilt (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          assigned_role TEXT
+            CHECK(assigned_role IN ('user','developer','prod','admin'))
+            NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','used','revoked')),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          expires_at DATETIME DEFAULT (datetime('now', '+28 days')),
+          reissue_count INTEGER DEFAULT 0 CHECK(reissue_count <= 6),
+          last_reissued_at DATETIME,
+          created_by INTEGER REFERENCES users(id),
+          source TEXT NOT NULL DEFAULT 'web'
+        );
+      `);
+
+      db.exec(`
+        INSERT INTO invitations_rebuilt
+          (id, email, assigned_role, token, status, created_at, expires_at,
+           reissue_count, last_reissued_at, created_by, source)
+        SELECT
+           id, email, assigned_role, token, status, created_at, expires_at,
+           reissue_count, last_reissued_at, created_by, source
+        FROM invitations;
+      `);
+
+      db.exec('DROP TABLE invitations;');
+      db.exec('ALTER TABLE invitations_rebuilt RENAME TO invitations;');
+    })();
+
+    console.log('🔁 invitations rebuilt: role list is now user, developer, prod, admin');
   }
 };
 
@@ -848,8 +926,8 @@ const initDb = () => {
           assigned_role IN (
             'user',
             'developer',
-            'admin',
-            'superuser'
+            'prod',
+            'admin'
           )
         )
         NOT NULL,
@@ -875,7 +953,20 @@ const initDb = () => {
 
       -- Who issued it. NULL only for invitations that predate the column —
       -- see the migration in applySchemaPatches.
-      created_by INTEGER REFERENCES users(id)
+      created_by INTEGER REFERENCES users(id),
+
+      -- WHERE THE INVITATION WAS ISSUED: 'web' or 'console'.
+      --
+      -- The web interface can only invite developers and testers. Admin and
+      -- privileged invitations can ONLY be created on the studio machine, by
+      -- scripts/accounts.js, because backend/lib/roles.js refuses
+      -- those roles to every web request.
+      --
+      -- RECORDED RATHER THAN INFERRED. The role alone would tell you the same
+      -- thing today, and that inference would silently become wrong the day
+      -- the role rule changes. It also decides what an account records as its
+      -- origin when the invitation is redeemed — see server.js.
+      source TEXT NOT NULL DEFAULT 'web'
     );
   `);
 
@@ -904,13 +995,23 @@ const initDb = () => {
 
       google_id TEXT UNIQUE,
 
+      -- FOUR ROLES. 'superuser' was removed on 2026-10-06 — it had no
+      -- accounts, no routes and no page, and the one property it provided (a
+      -- peer cannot act on a peer) already holds at admin level.
+      --
+      -- 'prod' IS NOT A SENIORITY. It is a CRAFT role: somebody who decides
+      -- whether work is good enough for the game, who comments, and who
+      -- organises categories and boards. It has NO workspace, NO admin powers,
+      -- and cannot deactivate or invite anyone. Everything it may do comes from
+      -- named capabilities rather than from a rung — see TODO 51 and 52, and
+      -- the map in backend/lib/roles.js.
       role TEXT
         CHECK(
           role IN (
             'user',
             'developer',
-            'admin',
-            'superuser'
+            'prod',
+            'admin'
           )
         )
         NOT NULL
@@ -971,7 +1072,7 @@ const initDb = () => {
    * then deals with the rows that were already here.
    *
    * THE BACKFILL IS A JUDGEMENT, RECORDED RATHER THAN ASSUMED. The three
-   * accounts that existed when this column was added (admin, superuser, val)
+   * accounts that existed when this column was added (admin, val)
    * were all made by hand: db.js's own seed inserts 'admin' with the address
    * admin@lowexpectations.com, and the live row has
    * admin@lowexpectations.zone, so the seed did not create it. They are
@@ -997,6 +1098,114 @@ const initDb = () => {
 
     console.log(
       '🔎 users.created_via added; existing accounts recorded as created by hand'
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * users.role — A TABLE REBUILD, AND IT HAS TO BE
+   * ----------------------------------------------------------
+   *
+   * SQLite cannot ALTER a CHECK constraint, so widening the role list means
+   * create-copy-drop-rename. That is the same procedure this file already uses
+   * for invitations, and on `users` it needs more care: NINE foreign keys point
+   * at this table, so dropping it with foreign_keys ON would either fail or
+   * cascade.
+   *
+   * THE FOREIGN KEYS ARE TURNED OFF OUTSIDE THE TRANSACTION, which is not
+   * decoration — PRAGMA foreign_keys is a no-op inside one, so setting it within
+   * the transaction would silently leave enforcement on and the DROP would
+   * fail. They are turned back on afterwards and followed by a
+   * foreign_key_check, because "we put it back" is not the same as "nothing
+   * dangled".
+   *
+   * The children reference this table BY NAME, so they follow the rename: after
+   * DROP and RENAME, `users` exists again and every key that pointed at it
+   * points at the new one.
+   *
+   * WHY DETECT IT FROM THE DDL. There is no pragma for CHECK constraints —
+   * table_info lists columns and nothing else — so the only place the role list
+   * is visible is the CREATE statement itself.
+   *
+   * THE GUARD COMPARES THE WHOLE LIST, not the presence of one value. An
+   * earlier version of this checked only whether 'prod' was allowed, which
+   * would have been satisfied by a table that had gained prod and still carried
+   * a role that was being removed. Comparing the list means the table is
+   * rebuilt whenever it disagrees with the declaration above, in either
+   * direction, and the next role change needs no new migration written.
+   */
+  const ROLES = ['user', 'developer', 'prod', 'admin'];
+
+  const usersDdl = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'")
+    .get()?.sql || '';
+
+  const declared = usersDdl.replace(/\s+/g, ' ').match(/role IN \(([^)]*)\)/);
+  const actual = declared
+    ? declared[1].split(',').map(v => v.trim().replace(/^'|'$/g, ''))
+    : [];
+
+  const sameRoles =
+    actual.length === ROLES.length && ROLES.every(r => actual.includes(r));
+
+  if (!sameRoles) {
+    db.pragma('foreign_keys = OFF');
+
+    try {
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE users_rebuilt (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT,
+            github_id TEXT UNIQUE,
+            github_username TEXT,
+            google_id TEXT UNIQUE,
+            role TEXT
+              CHECK(role IN ('user','developer','prod','admin'))
+              NOT NULL
+              DEFAULT 'user',
+            two_factor_secret TEXT,
+            is_2fa_enabled INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_via TEXT,
+            CHECK (
+              password_hash IS NOT NULL
+              OR github_id IS NOT NULL
+              OR google_id IS NOT NULL
+            )
+          );
+        `);
+
+        db.exec(`
+          INSERT INTO users_rebuilt
+            (id, username, email, password_hash, github_id, github_username,
+             google_id, role, two_factor_secret, is_2fa_enabled, is_active,
+             created_at, created_via)
+          SELECT
+             id, username, email, password_hash, github_id, github_username,
+             google_id, role, two_factor_secret, is_2fa_enabled, is_active,
+             created_at, created_via
+          FROM users;
+        `);
+
+        db.exec('DROP TABLE users;');
+        db.exec('ALTER TABLE users_rebuilt RENAME TO users;');
+      })();
+    } finally {
+      // Restored whether the rebuild succeeded or threw, so a failure does not
+      // leave the connection with enforcement off for the rest of its life.
+      db.pragma('foreign_keys = ON');
+    }
+
+    const dangling = db.pragma('foreign_key_check');
+
+    console.log(
+      dangling.length === 0
+        ? `🔁 users rebuilt: roles are now ${ROLES.join(', ')} — no dangling references`
+        : `⚠️  users rebuilt but ${dangling.length} dangling reference(s) — DO NOT ignore this`
     );
   }
 
@@ -1219,12 +1428,11 @@ const initDb = () => {
    * SO A FRESH DATABASE NOW HAS NO ACCOUNTS AND NO WAY IN, and that is the
    * intended property rather than an oversight:
    *
-   *     node scripts/create-superuser.js
+   *     node scripts/accounts.js
    *
-   * Admin and superuser accounts are created on the studio machine, by
-   * somebody with shell access to it, and never through the web interface. The
-   * fact that it needs a shell IS the control. See scripts/create-superuser.js
-   * and TODO 43.
+   * Admin accounts are created on the studio machine, by somebody with shell
+   * access to it, and never through the web interface. The fact that it needs a
+   * shell IS the control. See scripts/accounts.js and TODO 43.
    *
    * If you are looking at a database with no accounts and wondering why you
    * cannot sign in: that is why, and the command above is the way back in.

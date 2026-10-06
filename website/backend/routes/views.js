@@ -1,11 +1,17 @@
 const express = require('express');
 const path = require('path');
 const router = express.Router();
-const { authenticateToken, requireAdmin, requireSuperuser } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, requireRole } = require('../middleware/auth');
 
-// Protected User View
+// The tester's landing page. Any signed-in role may see it — it is where a
+// `user` account lands after signing in, and the page says so itself.
+//
+// THIS SERVED shopfront.html UNTIL 2026-10-06. The protected route for a
+// signed-in tester sent them to the sign-in page. Nothing linked to it, so
+// nobody hit it, and login redirects straight to /user.html instead — which is
+// exactly how a route stays wrong for months.
 router.get('/user', authenticateToken, (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/shopfront.html'));
+  res.sendFile(path.join(__dirname, '../../frontend/dist/user.html'));
 });
 
 // Protected Admin View
@@ -13,17 +19,33 @@ router.get('/admin', authenticateToken, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, '../../frontend/dist/adminDashboard.html'));
 });
 
-// Protected Superuser / Developer View
-router.get('/superuser', authenticateToken, requireSuperuser, (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/superuserDashboard.html'));
-});
+// THERE IS NO /superuser ROUTE, and no superuser dashboard, as of 2026-10-06.
+//
+// The superuser's extra powers were the only reason for a separate page, and
+// those powers are leaving the website: two of them were secrets typed into a
+// web form, one was a deployment trigger, and the rest are operations that
+// belong on the machine. See TODO 50 for where each is going.
+//
+// A superuser is not locked out of anything by this. They pass requireAdmin, so
+// every page below is theirs already — which is the point: there is no longer a
+// superuser page to attack, and no capability that only it could reach.
 
 // Developer View
 // NB: the page is devDashboard.html. Vite emits it from frontend/devDashboard.html
-// (vite.config.js `input.developer`); there is no developerPanel.html page.
-router.get('/developer', authenticateToken, requireSuperuser, (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/devDashboard.html'));
-});
+// (vite.config.mjs `input.developer`); there is no developerPanel.html page.
+//
+// requireSuperuser UNTIL 2026-10-06, which meant a developer asking for the
+// developer dashboard was refused. Nothing linked here either, so it sat wrong
+// rather than breaking anything — but it was one link away from locking people
+// out of their own page.
+router.get(
+  '/developer',
+  authenticateToken,
+  requireRole('developer', 'admin'),
+  (req, res) => {
+    res.sendFile(path.join(__dirname, '../../frontend/dist/devDashboard.html'));
+  }
+);
 
 // The manual. Any signed-in member, any role.
 //

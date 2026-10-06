@@ -3,41 +3,6 @@ const path = require('path');
 
 // Page compilation configurations
 const pageConfigurations = [
-  {
-    output: 'frontend/superuserDashboard.html',
-      title: 'Superuser Command Center',
-      scripts: [
-      './src/header.js',          // Fill in login details	  
-      './src/superuser.js',       // Superuser Core Panel logic
-      './src/sharedInvites.js',   // Single-instance shared developer invite code
-      './src/adminUsers.js',      // Accounts table - shared with the admin dashboard
-      './src/adminReports.js',    // Reports - shared the same way
-      './src/adminAudit.js',      // Audit log - shared the same way
-      './src/adminSettings.js',   // Settings - shared the same way
-      './src/adminStorage.js',    // Storage - shared the same way
-      './src/feedback.js',        // Report-a-problem button. Builds its own markup.
-      './src/utilityBar.js',      // The utility bar: manual, and whatever else a page adds
-      './src/adminTabs.js',       // The admin sections, switched by id
-      './src/notBuilt.js'         // Menu stubs for features that are not built yet
-    ],
-    styles: '/styles/styles.css',
-    modules: [
-      'frontend/src/components/header.html',
-      'frontend/src/components/adminPanel.html',
-      'frontend/src/components/devInvites.html',
-      'frontend/src/components/adminReports.html',
-      'frontend/src/components/adminAudit.html',
-      'frontend/src/components/adminSettings.html',
-      'frontend/src/components/adminStorage.html',
-      // developerPanel is NOT here. It renders the DEVELOPER page's heading and
-      // utility bar, and on this dashboard it printed a stray "Developer Panel"
-      // heading that had nothing to do with anything on it. The admin panel
-      // supplies this page's heading and utility bar itself.
-      'frontend/src/components/repoControl.html',
-      'frontend/src/components/cloudflareControl.html',
-      'frontend/src/components/loginModal.html',
-    ],
-  },
  {
     output: 'frontend/adminDashboard.html',
     title: 'Admin Management',
@@ -45,7 +10,7 @@ const pageConfigurations = [
       './src/header.js',          // Fill in login details
       './src/admin.js',    // Admin Core logic
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
-      './src/adminUsers.js',      // Accounts table - shared with the superuser dashboard
+      './src/adminUsers.js',      // Accounts table
       './src/adminReports.js',    // Reports - shared the same way
       './src/adminAudit.js',      // Audit log - shared the same way
       './src/adminSettings.js',   // Settings - shared the same way
@@ -64,7 +29,6 @@ const pageConfigurations = [
       'frontend/src/components/adminAudit.html',
       'frontend/src/components/adminSettings.html',
       'frontend/src/components/adminStorage.html',
-      'frontend/src/components/loginModal.html',
     ],
  },
     
@@ -84,7 +48,35 @@ const pageConfigurations = [
 	'frontend/src/components/header.html',
 	'frontend/src/components/developerPanel.html',
 	'frontend/src/components/developerAssets.html',
-	'frontend/src/components/loginModal.html',
+    ],
+},
+
+{
+    // The tester's home — where a `user` account lands after signing in.
+    //
+    // ASSEMBLED LIKE EVERY OTHER SIGNED-IN PAGE, which it was not until
+    // 2026-10-06. It was the only hand-written page behind the sign-in, and
+    // that is exactly why it had drifted: its own navbar instead of the shared
+    // header, a Discussion button duplicating the one in the utility bar beside
+    // it, and a card still badged "Not built yet" for a report-a-problem form
+    // that had worked for weeks. Nothing generated it, so nothing updated it.
+    //
+    // No loginModal: that dialog is the superuser's "sign in as another user"
+    // and is opened by superuser.js, which is not loaded here.
+    // No tabs either — there is one section, and a single tab is not a tab
+    // strip, it is a heading with extra steps.
+    output: 'frontend/user.html',
+    title: 'Low Expectations - Your Account',
+    scripts: [
+      './src/header.js',          // Fills in who is signed in, and signs them out
+      './src/userLanding.js',     // Asks the server who this is, and fills the panel
+      './src/feedback.js',        // Report-a-problem button
+      './src/utilityBar.js',      // The utility bar: manual, discussion, report
+    ],
+    styles: '/styles/styles.css',
+    modules: [
+      'frontend/src/components/header.html',
+      'frontend/src/components/userLanding.html',
     ],
 },
 

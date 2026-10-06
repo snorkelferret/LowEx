@@ -119,11 +119,12 @@ function saveSessionAndFinish(user) {
     
   console.log("auth.js got role ", user?.role);
   
-  // 3. Immediate Superuser Dashboard Load OR Page Refresh   
+  // 3. Immediate Dashboard Load OR Page Refresh
+  //
+  // THE LADDER IS user < developer < prod < admin. There is no superuser — the
+  // role was removed on 2026-10-06 along with its dashboard, and admin is the
+  // top.
   switch (user?.role) {
-    case 'superuser':
-      window.location.href = '/superuserDashboard.html';
-      break;
     case 'admin':
       window.location.href = '/adminDashboard.html';
       break;

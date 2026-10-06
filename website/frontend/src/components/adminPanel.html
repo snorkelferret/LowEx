@@ -2,10 +2,12 @@
      Admin operations
      ============================================================
 
-     This panel is built into BOTH the admin and the superuser dashboard, so
-     the logic behind it lives in frontend/src/adminUsers.js, which is loaded
-     on both. Putting it in admin.js would leave the table empty on the
-     superuser dashboard, which is the same mistake the invite table made.
+     THE ONLY DASHBOARD IT IS ON IS THE ADMIN ONE. Until 2026-10-06 there was
+     also a superuser dashboard carrying it, which is why the logic behind it
+     lives in frontend/src/adminUsers.js rather than admin.js: a table written
+     in one page's script is empty on every other page that carries the panel.
+     That is still the reason it lives where it does — the panel is a component
+     and the scripts are per page.
 
      Who may act on whom is decided by the SERVER and arrives as
      can_deactivate / can_reactivate per row. The buttons mirror that; they do
@@ -30,19 +32,17 @@
          when clicked (see frontend/src/notBuilt.js). No empty panes, no
          controls that look live and are not.
 
-     Living in adminPanel.html means BOTH the admin and the superuser dashboard
-     get it, which is the same reason the accounts logic lives in a shared file.
+     Living in adminPanel.html rather than in admin.js is what let it be shared,
+     and is the same reason the accounts logic lives in a file of its own.
      ============================================================ -->
 
 <!-- The page heading, with the utility bar beside it — the same shape as the
      developer page, which is what these pages are being brought into line
      with.
 
-     THIS PANEL IS ON BOTH DASHBOARDS, and it owns the heading, the utility bar
-     and the tabs for each. The superuser dashboard adds three panels of its own
-     below, and they appear as tabs without this file naming them: the nav lists
-     every section and frontend/src/adminTabs.js removes the entries whose
-     section is not on the page.
+     It owns the heading, the utility bar and the tab strip. The nav lists every
+     section and frontend/src/adminTabs.js removes the entries whose section is
+     not on the page, so a page carrying fewer panels simply shows fewer tabs.
 
      The utility bar is EMPTY here on purpose — see frontend/src/utilityBar.js
      for why its contents are built rather than written out. -->
@@ -54,10 +54,7 @@
 
 <!-- TABS, NOT ANCHORS. These were scrolled-to links on one long page; the tabs
      are the same navigation the developer page uses. See adminTabs.js for why
-     the switching is done by id rather than by Bootstrap's tab markup.
-
-     Repository and Cloudflare are superuser-only, so their entries disappear on
-     the admin dashboard along with the sections they point at. -->
+     the switching is done by id rather than by Bootstrap's tab markup. -->
 <nav class="mb-4" aria-label="Admin sections">
   <ul class="nav nav-tabs flex-wrap" id="adminTabs" role="tablist">
 
@@ -79,17 +76,17 @@
       </button>
     </li>
 
-    <li class="nav-item" role="presentation">
-      <button type="button" class="nav-link" data-section="repo-control-module" role="tab">
-        Repository
-      </button>
-    </li>
+    <!-- Repository and Cloudflare were here, and pointed at components only the
+         superuser dashboard carried. Both are gone as of 2026-10-06: the
+         superuser page was removed from the website entirely, because its extra
+         powers were secrets entered through web forms and a deployment trigger.
+         See TODO 50 for where each of those powers is going.
 
-    <li class="nav-item" role="presentation">
-      <button type="button" class="nav-link" data-section="cloudflare-control-module" role="tab">
-        Cloudflare
-      </button>
-    </li>
+         They were never listed conditionally — adminTabs.js removes an entry
+         whose section is not on the page, which is how they used to appear on
+         one dashboard and not the other. With the components gone they would
+         have vanished on both, so they are removed here rather than left as
+         markup that is silently stripped. -->
 
     <!-- NOT BUILT. No data-section, so the tab switcher leaves them alone and
          notBuilt.js reports them as missing when clicked. A tab that switched
@@ -128,7 +125,7 @@
 </nav>
 
 
-<section class="card superuser-module mb-4" id="admin-panel-module">
+<section class="card panel-module mb-4" id="admin-panel-module">
 
   <div class="card-header">
     <h2 class="h5 mb-0">🛡️ Admin Operations</h2>

@@ -90,11 +90,14 @@ async function sendMail({ to, cc, subject, text, html }) {
     }
 }
 
+// The four roles, as a sentence reads. 'prod' is "production" rather than
+// "a production" — it is a job, not a person, in the same way nobody is
+// "a marketing".
 const ROLE_LABELS = {
     user: 'a tester',
     developer: 'a developer',
+    prod: 'production',
     admin: 'an administrator',
-    superuser: 'a superuser',
 };
 
 /**

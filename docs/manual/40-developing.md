@@ -80,8 +80,10 @@ passed. This locks the version *and the asset*, so what a reviewer looks at
 cannot change underneath them. While it is pending you cannot change or delete
 the asset, and you cannot re-run the check.
 
-**3. Review.** An admin or superuser approves or rejects it. A rejection carries
-a reason. If it is rejected the lock is released and you can work on it again.
+**3. Review.** **Production** — the `prod` role — approves or rejects it. Not an
+administrator: approving work is a judgement about the work, and administration
+is a different job. A rejection carries a reason. If it is rejected the lock is
+released and you can work on it again.
 
 **4. Approved.** Your version is moved into the game's asset store. The store
 holds the content; your workspace version keeps a pointer to it and is marked as

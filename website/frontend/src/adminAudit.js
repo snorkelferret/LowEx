@@ -1,16 +1,13 @@
 // frontend/src/adminAudit.js
-//
-// The Audit log panel, on both the admin and superuser dashboards — for the
-// same reason adminUsers.js and adminReports.js are: the panel is built into
-// both, and logic living in admin.js would leave it stuck on "Loading…" on the
-// superuser dashboard. That has happened twice already to other panels.
+// The Audit log panel, on the admin dashboard — its own file for the same reason
+// adminUsers.js and adminReports.js are: the panel is a COMPONENT, and a
+// component's logic has to be loaded by the page that carries it. Logic living
+// in admin.js would leave the panel blank on any other page that built the
+// component in.
 //
 // THE SERVER DECIDES WHO MAY READ IT, and nothing here re-derives that. An
-// audit trail names who did what to whom; it is admin and superuser only, and
-// the client shows what it is given.
-//
-// IT IS READ-ONLY, and there is no route that would let it be otherwise. A
-// trail an administrator can edit is not a trail.
+// audit trail names who did what to whom; it is admin only, and the client
+// shows what it is given.
 
 import { $, escapeHtml } from './utils.js';
 import { apiFetch } from './api.js';
@@ -200,7 +197,7 @@ async function loadAudit() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Only present on the admin and superuser dashboards.
+    // Only present on the admin dashboard.
     if (!$('auditList')) return;
 
     $('auditActionFilter')?.addEventListener('change', loadAudit);

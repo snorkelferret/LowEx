@@ -5,15 +5,21 @@
 // WHY A SCRIPT RATHER THAN BOOTSTRAP'S TABS. Bootstrap's tab markup needs every
 // pane to be a sibling inside one .tab-content. These panels are separate
 // COMPONENTS that build.js concatenates — adminPanel, devInvites, adminReports,
-// repoControl, cloudflareControl — and no one of them can wrap the others, so
-// the panes cannot be nested by markup.
+// adminStorage, adminSettings — and no one of them can wrap the others, so the
+// panes cannot be nested by markup.
+//
+// IT ALSO MEANS A PAGE SHOWS ONLY WHAT IT HAS. The nav names every section,
+// including ones only some pages carry, and an entry whose section is absent is
+// removed here. That is how Repository and Cloudflare used to appear on the
+// dashboard alone — and it is why deleting those components and their
+// page needed no change to this file.
 //
 // What it does instead is show one section and hide the rest, by id. Same look,
 // and no assumption about where the components sit relative to each other.
 //
 // ONE MENU FOR BOTH PAGES. The nav lists every section INCLUDING the
-// superuser-only ones, and an entry whose section is not on the page is
-// REMOVED. So the admin dashboard shows three tabs and the superuser dashboard
+// ones a page may not have, and an entry whose section is not on the page is
+// REMOVED. So a page shows exactly the tabs it has panels for, from one nav
 // shows five, from the same markup, without either having to know what the
 // other has — and adding a panel later is one line in the nav, in one file.
 //

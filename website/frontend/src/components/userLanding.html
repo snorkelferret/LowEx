@@ -1,0 +1,109 @@
+<!-- ============================================================
+     The tester's home.
+
+     WHERE A `user` ACCOUNT LANDS AFTER SIGNING IN — which, by definition, is
+     what a tester is: a login with no extra privileges. Any signed-in role can
+     open it, and it says which one you are.
+
+     THIS REPLACED A HAND-WRITTEN user.html, which is why it now looks like the
+     other pages. It was the only signed-in page not assembled by build.js, and
+     that is exactly why it had drifted: its own navbar where every other page
+     has the shared header, a Discussion button duplicating the one in the
+     utility bar beside it, and a card still badged "Not built yet" for a
+     report-a-problem form that had been working for weeks. Nothing generated
+     it, so every change to the rest of the app left it behind.
+
+     HONEST ABOUT WHAT EXISTS. Almost none of the tester features are built, and
+     a page implying otherwise sends people hunting for downloads that are not
+     there. Each card says plainly whether it works, and the account panel shows
+     what the SERVER says — see userLanding.js for why that is not the same as
+     what the browser remembers.
+     ============================================================ -->
+
+<!-- The page heading, with the utility bar beside it — the same shape as the
+     developer and admin pages. The bar is empty here on purpose: its contents
+     are built by frontend/src/utilityBar.js, once, rather than written out in
+     every file that hosts a bar. -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="mb-0">Welcome<span id="user-greeting"></span></h1>
+    <p class="text-secondary mb-0 small">
+      You are signed in as <span id="user-role-line">…</span>.
+    </p>
+  </div>
+
+  <div class="utility-bar" data-utility-bar></div>
+</div>
+
+<section class="card panel-module mb-4">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">🧪 What you can do</h2>
+  </div>
+
+  <div class="card-body">
+
+    <div class="row g-3">
+
+      <div class="col-md-4">
+        <div class="card bg-dark border-secondary h-100">
+          <div class="card-body">
+            <i class="bi bi-download text-secondary fs-4" aria-hidden="true"></i>
+            <h3 class="h6 fw-bold mt-2 mb-2">Play a build</h3>
+            <p class="text-secondary small mb-2">
+              Download a build of the game and see where it is up to.
+            </p>
+            <span class="badge text-bg-secondary">Not built yet</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card bg-dark border-secondary h-100">
+          <div class="card-body">
+            <i class="bi bi-bug text-secondary fs-4" aria-hidden="true"></i>
+            <h3 class="h6 fw-bold mt-2 mb-2">Report a problem</h3>
+            <p class="text-secondary small mb-2">
+              Say what broke, from any page. Who you are and when it happened
+              are filled in for you.
+            </p>
+            <!-- This one IS built. It was badged "Not built yet" until the page
+                 was rebuilt, which is what happens to a page nothing generates. -->
+            <span class="badge text-bg-success">Ready</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card bg-dark border-secondary h-100">
+          <div class="card-body">
+            <i class="bi bi-chat-square-text text-secondary fs-4" aria-hidden="true"></i>
+            <h3 class="h6 fw-bold mt-2 mb-2">Talk to the team</h3>
+            <p class="text-secondary small mb-2">
+              Channels, direct messages and mentions, on the discussion board.
+            </p>
+            <span class="badge text-bg-secondary">Not built yet</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+<section class="card panel-module">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">👤 Your account</h2>
+  </div>
+
+  <div class="card-body">
+
+    <!-- Filled by userLanding.js FROM THE SERVER, not from the browser's
+         memory of signing in. If the session has ended, this says so instead of
+         drawing a confident panel about an account nobody is signed in as. -->
+    <div id="accountPanel" class="text-secondary">Checking your session...</div>
+
+  </div>
+</section>

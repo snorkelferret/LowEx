@@ -4,18 +4,31 @@ For whoever runs the box. Read-only unless stated otherwise.
 
 ## Creating a privileged account
 
-Administrators and superusers cannot be created through the website. This is the
+Administrators cannot be created through the website. This is the
 only way:
 
 ```bash
-node scripts/create-superuser.js                  # create a superuser
-node scripts/create-superuser.js --role admin     # create an administrator
-node scripts/create-superuser.js --list           # who is on the system
-node scripts/create-superuser.js --reset <name>   # set a new password
+# the usual way — they choose their own password
+node scripts/accounts.js --invite --email them@example.com
+node scripts/accounts.js --invite --role prod --email them@example.com
+
+# someone who already has a login
+node scripts/accounts.js --promote <username> --role admin
+
+# the first account, or an emergency
+node scripts/accounts.js                  # create an administrator
+node scripts/accounts.js --role prod      # create a production reviewer
+node scripts/accounts.js --list           # who is on the system
+node scripts/accounts.js --reset <name>   # set a new password
 ```
 
 **Run it on the machine the portal runs on.** Needing access to the machine is
 the control, not the obscurity of the command.
+
+**`--invite` is the usual way round**: the person receives an invitation, chooses
+their own password, and is an administrator from the moment they accept. The
+direct-creation mode is for the first account on a new installation and for when
+mail is broken — see *Administering*.
 
 **The password is typed, never passed in.** There is no flag for it and no
 environment variable: an argument appears in `ps` output and in the shell's

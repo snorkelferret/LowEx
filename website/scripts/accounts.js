@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 //
-// Create a privileged account, or set a password for an existing one.
-// Runs on the studio machine only. Not reachable from the web.
+// Make somebody a privileged account: invite them, promote them, create them,
+// or reset a password. Runs on the studio machine only, and the web interface
+// can do none of it.
 //
 // ============================================================
 // WHY THIS EXISTS RATHER THAN A FORM ON A PAGE
 // ============================================================
 //
-// Admin and superuser accounts cannot be created through the web interface at
+// Privileged accounts cannot be created through the web interface at
 // all. They are created here, by somebody with shell access to the host. That
-// limits PERSISTENCE rather than impact: a stolen superuser session can still
+// limits PERSISTENCE rather than impact: a stolen admin session can still
 // change settings and read everything, but it cannot plant a lasting privileged
 // account — which is the difference between an incident you clean up and one you
 // keep finding again.
@@ -39,8 +40,8 @@
 // WHAT IT REPLACES
 // ============================================================
 //
-// db.js used to seed a superuser called "admin" with a fixed, known password
-// on first run, and print that password to the console.
+// db.js used to seed an account called "admin" with a fixed, known password on
+// first run, and print that password to the console.
 // The credential was in the repository, on the most privileged account in the
 // system, and printed where anybody watching the terminal could read it.
 //
@@ -52,27 +53,67 @@
 // USAGE
 // ============================================================
 //
-//   node scripts/create-superuser.js                  create a superuser
-//   node scripts/create-superuser.js --role admin     create an admin instead
-//   node scripts/create-superuser.js --reset <name>   set a new password
-//   node scripts/create-superuser.js --list           who is on the system
+//   --invite --email them@example.com            invite them, THEY choose the
+//                                                password. The usual way.
+//
+//   --promote <username> --role admin            give an existing account the
+//                                                role, keeping their password
+//
+//   --role admin                                 create the account here,
+//                                                typing the password. For the
+//                                                first account on a new
+//                                                installation, and for when
+//                                                the mail path is broken.
+//
+//   --reset <name>                               set a new password
+//   --list                                       who is on the system
 //
 // --reset exists because nothing else can change a password: there is no
 // in-app password change, so without this a forgotten password means editing
 // the database by hand.
+//
+// --invite IS PREFERRED, and the direct mode is the exception. Inviting means
+// nobody chooses a password on somebody else's behalf and then has to pass it
+// on — the person sets their own, through the same page every other account is
+// created with.
 
 const path = require('path');
 const os = require('os');
+
+const crypto = require('crypto');
 
 const db = require(path.join(__dirname, '../backend/db'));
 const audit = require(path.join(__dirname, '../backend/lib/audit'));
 const bcrypt = require('bcryptjs');
 
+// The invitation rules and the mailer, the SAME ones the web flow uses. An
+// invitation issued here has to behave exactly like one issued from the panel —
+// same window, same wording, same link shape — or the two paths would drift on
+// what "still valid" means. See backend/lib/invites.js.
+const {
+    inviteValidDays,
+    normaliseEmail,
+    inviteable,
+    inviteRefusal,
+    inviteLinkFor,
+} = require(path.join(__dirname, '../backend/lib/invites'));
+
+const { sendInvitation, isConfigured: mailConfigured } =
+    require(path.join(__dirname, '../backend/lib/mailer'));
+
+const CLIENT_URL = process.env.CLIENT_URL;
+
 // Roles this script will create. Developers and testers are NOT here: they come
 // through invitations, which is what the invitation system is for. This is the
 // privileged provisioning path only, and the rule it enforces is why it can be
 // trusted that an admin account was made deliberately.
-const CREATABLE_ROLES = ['admin', 'superuser'];
+// 'superuser' was removed on 2026-10-06 — admin is the top of the ladder.
+//
+// 'prod' IS HERE and not in the invitation dropdown, because it is a capability
+// grant rather than a seniority: it decides creative approvals, comments, and
+// manages categories and boards, and it has no workspace and no admin powers.
+// See TODO 51 and 52, and backend/lib/roles.js.
+const CREATABLE_ROLES = ['admin', 'prod'];
 
 // Long enough to be worth the trouble on an account that can do everything.
 // Length is not the whole story, but it is the part that can be checked without
@@ -244,8 +285,8 @@ function listAccounts() {
         FROM users
         ORDER BY
             CASE role
-                WHEN 'superuser' THEN 0
-                WHEN 'admin' THEN 1
+                WHEN 'admin' THEN 0
+                WHEN 'prod' THEN 1
                 WHEN 'developer' THEN 2
                 ELSE 3
             END,
@@ -254,7 +295,7 @@ function listAccounts() {
 
     if (users.length === 0) {
         console.log('\n  No accounts exist yet.');
-        console.log('  Create the first one:  node scripts/create-superuser.js\n');
+        console.log('  Create the first one:  node scripts/accounts.js\n');
         return;
     }
 
@@ -272,7 +313,7 @@ function listAccounts() {
 }
 
 async function createAccount() {
-    const role = option('--role') || 'superuser';
+    const role = option('--role') || 'admin';
 
     if (!CREATABLE_ROLES.includes(role)) {
         fail(
@@ -355,6 +396,178 @@ function askLine(prompt) {
     });
 }
 
+/**
+ * Invite somebody to a privileged role, rather than creating the account here.
+ *
+ * THIS IS THE NORMAL WAY TO MAKE AN ADMINISTRATOR. The account is created the
+ * ordinary way — the person opens the link and chooses their own username and
+ * password — and the privilege comes from the fact that the invitation was
+ * issued ON THIS MACHINE. The web interface cannot issue a privileged
+ * invitation at all; see WEB_ASSIGNABLE_ROLES in backend/lib/roles.js.
+ *
+ * WHY THIS RATHER THAN TYPING A PASSWORD HERE, which is what createAccount()
+ * below does: nobody has to choose a password on somebody else's behalf and
+ * then find a way to pass it on. The person sets their own, through the same
+ * page every other account is created with.
+ *
+ * The direct-creation mode is kept for bootstrap and for the day the mail path
+ * is broken and somebody needs in now.
+ */
+async function inviteAccount() {
+    const role = option('--role') || 'admin';
+
+    if (!CREATABLE_ROLES.includes(role)) {
+        fail(
+            `This script invites ${CREATABLE_ROLES.join(' and ')} only.\n` +
+            `  Developers and testers are invited from the admin page.`
+        );
+    }
+
+    const email = normaliseEmail(
+        option('--email') || await askLine('  Email address: ')
+    );
+
+    if (!email) fail('An email address is required.');
+
+    // The same rule the admin page applies, from the same function: an
+    // invitation for an address that already has an account is a dead link.
+    const eligible = inviteable(db, email);
+
+    if (!eligible.ok) {
+        fail(
+            inviteRefusal(email, eligible.account) +
+            '\n\n  An invitation cannot change an existing account. To give an\n' +
+            '  existing account a privileged role, use --promote instead.'
+        );
+    }
+
+    // One invitation per address is a constraint on the table, so say so
+    // plainly rather than surfacing a UNIQUE failure.
+    const existing = db.prepare('SELECT id, status FROM invitations WHERE email = ?').get(email);
+
+    if (existing) {
+        fail(
+            `${email} has already been invited (invitation #${existing.id}, ${existing.status}).\n` +
+            '  Only one invitation exists per address, ever. Revoke it from the\n' +
+            '  admin page if it is stale, or use --promote if they already have\n' +
+            '  an account.'
+        );
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const days = inviteValidDays();
+    const identity = osIdentity();
+
+    const issued = db.transaction(() => {
+        const result = db.prepare(`
+            INSERT INTO invitations (
+                email, assigned_role, token, status,
+                reissue_count, expires_at, created_at, created_by, source
+            )
+            VALUES (?, ?, ?, 'pending', 0, datetime('now', ?), datetime('now'), NULL, 'console')
+        `).run(email, role, token, `+${days} days`);
+
+        audit.record(null, 'invitation.create', email, {
+            role,
+            invitation_id: result.lastInsertRowid,
+            expires_in_days: days,
+            via: 'console',
+            ...identity,
+        });
+
+        return result;
+    });
+
+    issued();
+
+    const invite = db.prepare(
+        'SELECT expires_at FROM invitations WHERE email = ?'
+    ).get(email);
+
+    const link = inviteLinkFor(CLIENT_URL, token);
+
+    console.log(`\n  Invited ${email} as ${role}.`);
+    console.log(`  Expires ${invite.expires_at} UTC (${days} days).`);
+
+    // Emailed when the machine can send, printed when it cannot — the same
+    // degrade the admin page does, for the same reason: a misconfigured mail
+    // server must never be the reason nobody can get in.
+    const mail = await sendInvitation(email, {
+        role,
+        link,
+        expiresAt: invite.expires_at,
+        validDays: days,
+    });
+
+    if (mail.sent) {
+        console.log('  Emailed to them.');
+    } else {
+        console.log(
+            mailConfigured()
+                ? '  The mail server refused it. Pass this link on yourself:'
+                : '  Email is not configured here. Pass this link on yourself:'
+        );
+        console.log(`\n    ${link}\n`);
+    }
+
+    console.log('  There is no password to pass on — they choose their own.');
+    console.log('  The account is created as admin when the link is used.\n');
+}
+
+/**
+ * Give an EXISTING account a privileged role.
+ *
+ * AN INVITATION CANNOT DO THIS. Redeeming one creates an account, and both the
+ * invitation and the account are unique per address — so somebody who already
+ * has a login, which includes every developer, cannot be promoted by being
+ * invited again. Without this, the only way to promote an existing person would
+ * be editing the database by hand.
+ *
+ * THE PASSWORD IS NOT TOUCHED. They keep the one they chose.
+ */
+async function promoteAccount(usernameArg) {
+    const username = usernameArg || await askLine('  Username to promote: ');
+    const role = option('--role');
+
+    if (!username) fail('A username is required.');
+
+    if (!role || !CREATABLE_ROLES.includes(role)) {
+        fail(
+            `--promote needs a role: ${CREATABLE_ROLES.join(' or ')}.\n` +
+            '  e.g. --promote someone --role admin'
+        );
+    }
+
+    const user = db.prepare(
+        'SELECT id, username, email, role FROM users WHERE username = ?'
+    ).get(username);
+
+    if (!user) {
+        fail(`No account called "${username}".  Run --list to see them.`);
+    }
+
+    if (user.role === role) {
+        fail(`"${username}" is already ${role}. Nothing to do.`);
+    }
+
+    const identity = osIdentity();
+
+    db.transaction(() => {
+        db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, user.id);
+
+        audit.record(null, 'user.role_change', user.username, {
+            email: user.email,
+            from: user.role,
+            to: role,
+            via: 'console',
+            ...identity,
+        });
+    })();
+
+    console.log(`\n  "${username}" is now ${role} (was ${user.role}).`);
+    console.log('  Their password is unchanged, and takes effect on their next request.\n');
+}
+
 async function resetPassword(username) {
     const user = db.prepare(
         'SELECT id, username, email, role FROM users WHERE username = ?'
@@ -393,27 +606,56 @@ async function resetPassword(username) {
 async function main() {
     if (has('--help') || has('-h')) {
         console.log(`
-  Create a privileged account, or set a password for an existing one.
-  Runs on the studio machine. Not reachable from the web.
+  Make somebody a privileged account. Runs on the studio machine only, and the
+  web interface cannot do any of it. See docs/manual, "Administering".
 
-    node scripts/create-superuser.js                  create a superuser
-    node scripts/create-superuser.js --role admin     create an admin
-    node scripts/create-superuser.js --reset <name>   set a new password
-    node scripts/create-superuser.js --list           who is on the system
+  THE USUAL WAY — invite them, and they choose their own password:
 
-  Only ${CREATABLE_ROLES.join(' and ')} can be created here. Developers and
-  testers are created by invitation from the admin page.
+    node scripts/accounts.js --invite --email them@example.com
+    node scripts/accounts.js --invite --role prod --email them@example.com
 
-  The password is typed, never passed in, and never shown:
-    --username / --email are accepted for scripting, but a password on a
-    command line or in an environment variable would be readable by other
-    processes and would land in the shell's history.
+  SOMEONE WHO ALREADY HAS A LOGIN — give them the role, keep their password:
+
+    node scripts/accounts.js --promote <username> --role admin
+
+  BOOTSTRAP AND EMERGENCIES — create the account here, typing the password:
+
+    node scripts/accounts.js                  create an admin
+    node scripts/accounts.js --role admin     create an admin
+    node scripts/accounts.js --reset <name>   set a new password
+    node scripts/accounts.js --list           who is on the system
+
+  Only ${CREATABLE_ROLES.join(' and ')} can be made here. Developers and testers
+  are invited from the admin page.
+
+  WHY --invite IS PREFERRED over creating the account here: nobody has to choose
+  a password on somebody else's behalf and then find a way to pass it on. The
+  direct mode exists for the first account on a new installation and for the day
+  the mail path is broken.
+
+  The password, where one is typed here, is never passed in and never shown.
+    --username / --email are accepted for scripting, but a password on a command
+    line or in an environment variable would be readable by other processes and
+    would land in the shell's history.
 `);
         return;
     }
 
     if (has('--list')) {
         listAccounts();
+        return;
+    }
+
+    if (has('--invite')) {
+        await inviteAccount();
+        return;
+    }
+
+    const promote = option('--promote');
+
+    if (args.includes('--promote')) {
+        if (!promote) fail('--promote needs a username.  e.g. --promote someone --role admin');
+        await promoteAccount(promote);
         return;
     }
 
