@@ -4018,3 +4018,106 @@ G) THE DISCUSSION BOARD (item 27) is not game-dependent, and is NOT in this
    section for that reason — but note it is now the third thing waiting on
    itself, after the tester page's "Talk to the team" card and the utility bar's
    Discussion link. Prod creating boards (item 52) is a capability for it.
+
+
+===========================================================================
+
+THE GAME PROJECT — structure created 2026-10-06. Separate from the website, and
+kept in this file for now because there is one TODO rather than two.
+
+===========================================================================
+
+The game lives in `game/` at the repository root. UNREAL IS ALREADY INSTALLED
+and is not to be installed, configured or otherwise touched — see the note at
+the end of this entry.
+
+--- WHAT THE PROJECT IS CALLED ---
+
+    game/LowExpectations.uproject
+
+RENAMED from MyOpenWorld.uproject on 2026-10-06. The game is Low Expectations,
+and the project name is not decoration: it becomes the C++ module name, so it
+appears in every .Build.cs, every target file and every include path once any
+code exists. It was free to change on the day it was done and gets more
+expensive from here.
+
+An Unreal project takes its name from the FILENAME — there is no name field
+inside the .uproject — so the rename was the whole change.
+
+--- THE STRUCTURE, AND WHY MOST OF IT WAS NOT IN THE REPOSITORY ---
+
+    game/
+      LowExpectations.uproject
+      Config/
+      Content/
+        _Core/            shared: master materials, base classes
+        Art/              source art the other folders build from
+        Environment/      the world's own art: landscapes, biomes, kits
+        Features/         gameplay features, one folder each
+        World/            the levels and their World Partition data
+        Developers/       per-developer scratch, never shipped
+      Plugins/
+      Source/
+
+EVERY FOLDER WAS EMPTY, AND GIT CANNOT TRACK AN EMPTY DIRECTORY. So the studio's
+structure existed on this machine and nowhere else — the only thing in version
+control was the .uproject. A .gitkeep now sits in each, which is what puts the
+structure into the repository. Each carries one line saying what belongs in it,
+so the taxonomy is documented where somebody will actually see it rather than
+only here.
+
+`Plugins/` did not exist at all and was created. It is where content that OTHER
+projects should be able to reuse belongs, as opposed to Content/ which is this
+game's.
+
+--- THE CONTENT TAXONOMY, AND WHAT IS MISSING FROM IT ---
+
+The six folders above were already there and are a considered structure: `_Core`
+with the underscore so it sorts first, `Developers` for per-artist scratch, and
+a split between the world's art, gameplay features, and shared art. NONE OF THAT
+WAS INVENTED HERE — it was on disk, unversioned, and is now recorded.
+
+WHAT THE CANONICAL SET WOULD ALSO HAVE, AND THIS DOES NOT: `Maps/`, `Audio/`,
+`UI/`, `FX/`. The reading is that `Features/` absorbs the gameplay ones and
+`World/` holds the levels — but IF `World/` IS NOT WHERE THE .umap FILES GO,
+that needs deciding now rather than after somebody puts a level somewhere
+arbitrary. Undecided.
+
+--- TWO THINGS LEFT DELIBERATELY UNDONE ---
+
+SOURCE/ HAS ONLY ITS KEEP-FILE. The C++ scaffolding is
+LowExpectations.Target.cs, LowExpectationsEditor.Target.cs and
+LowExpectations/LowExpectations.Build.cs — and two of those pin engine settings:
+
+    DefaultBuildSettings = BuildSettingsVersion.V5;
+    IncludeOrderVersion  = EngineIncludeOrderVersion.Unreal5_5;
+
+Those must match the engine actually installed, and they are NOT to be guessed:
+a wrong value fails the build with an error that reads like something else.
+Unreal writes them correctly when the first C++ class is added, using whatever
+version is there. Let the editor do it.
+
+EngineAssociation IS EMPTY in the .uproject:
+
+    { "FileVersion": 3, "EngineAssociation": "", "Category": "", "Description": "" }
+
+That is what pins which engine opens the project, and nothing currently pins it.
+It is filled the first time the project is opened with an engine chosen — a job
+for the editor, not for a script.
+
+--- AND ONE THING THE GITIGNORE GETS WRONG ---
+
+`.gitignore` ignores `game/Build/`. `Build/` is where Unreal keeps AUTHORED
+packaging assets — the project icon, and the FileOpenOrder lists that stop the
+cooker reordering packages between builds. It is not a generated folder like
+`Intermediate/` or `Saved/`, it is small, and it is worth keeping.
+
+Untouched so far because nothing is in it yet. It should be un-ignored BEFORE
+somebody puts an icon there and loses it to a clean.
+
+--- AND THE STANDING RULE, WRITTEN DOWN BECAUSE IT WAS ASKED FOR TWICE ---
+
+UNREAL, BLENDER, MAYA AND NUKE ARE NOT TO BE INSTALLED, LAUNCHED, CONFIGURED OR
+FIDDLED WITH. They are installed and working. Nothing about the work in this
+repository requires touching them, and an agent investigating them is risk with
+no upside. If something seems to need one of them, ask.

@@ -1,0 +1,2 @@
+Project-local plugins. Content that other projects should be able to reuse
+belongs here rather than in Content/.

@@ -1,0 +1,4 @@
+Gameplay features, one folder each, self-contained — the unit that can be built,
+handed over or deleted on its own. Align these with chunk boundaries: Epic's
+packing workflow puts one PrimaryAssetLabel per folder, which is how more than
+one person can work on packaging at a time.
