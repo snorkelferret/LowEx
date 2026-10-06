@@ -185,7 +185,7 @@ async function refreshInvitationsList() {
 
         if (invites.length === 0) {
             listBody.innerHTML =
-                '<tr><td colspan="6" class="text-center text-muted py-3">No invitations found.</td></tr>';
+                '<tr><td colspan="7" class="text-center text-muted py-3">No invitations found.</td></tr>';
             return;
         }
 
@@ -243,16 +243,31 @@ async function refreshInvitationsList() {
             // framework's problem rather than something to get right by eye.
             // The same shape as the status badges beside it, which already read
             // correctly on this table.
-            // WHERE IT CAME FROM. A privileged invitation cannot have been
-            // created from this page — the server refuses those roles — so if
-            // one appears here it was issued on the studio machine by somebody
-            // with access to it. Saying so stops an administrator wondering who
-            // created a row they did not.
-            const fromConsole = invite.source === 'console'
-                ? `<div class="small text-secondary">` +
-                  `<i class="bi bi-terminal me-1" aria-hidden="true"></i>` +
-                  `issued on the studio machine</div>`
-                : '';
+            // WHO INVITED THEM. invitations.created_by has recorded this since
+            // 2026-10-05 and the endpoint has returned it all along — the table
+            // simply never showed it, so "who let this person in?" was
+            // answerable only by reading the database.
+            //
+            // THREE ANSWERS, AND THE DIFFERENCE MATTERS:
+            //
+            //   * a username — issued from this page by that administrator.
+            //   * "studio machine" — a console invitation. created_by is NULL by
+            //     design there; the person who ran the script is in the audit
+            //     log, not on this row.
+            //   * "not recorded" — issued before created_by existed. Saying so is
+            //     the truth; a blank cell would read as a rendering fault.
+            let invitedBy;
+
+            if (invite.issuedBy) {
+                invitedBy = `<span class="text-secondary small">` +
+                    `${escapeHtml(invite.issuedBy)}</span>`;
+            } else if (invite.source === 'console') {
+                invitedBy = '<span class="text-secondary small">' +
+                    '<i class="bi bi-terminal me-1" aria-hidden="true"></i>' +
+                    'studio machine</span>';
+            } else {
+                invitedBy = '<span class="text-secondary small">not recorded</span>';
+            }
 
             const clash = stale
                 ? `<span class="badge text-bg-warning mt-1">` +
@@ -263,8 +278,9 @@ async function refreshInvitationsList() {
 
             return `
                 <tr>
-                  <td>${escapeHtml(invite.email)}${fromConsole}${
+                  <td>${escapeHtml(invite.email)}${
                       clash ? '<div>' + clash + '</div>' : ''}</td>
+                  <td>${invitedBy}</td>
                   <td><span class="badge bg-dark border border-secondary text-light">${escapeHtml(invite.role)}</span></td>
                   <td><span class="badge ${badge.cls}">${escapeHtml(badge.label)}</span></td>
                   <td>${escapeHtml(expiry)}</td>
