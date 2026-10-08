@@ -4240,3 +4240,359 @@ no upside. If something seems to need one of them, ask.
     exists the model is waiting rather than being re-derived — which is what
     happened on 2026-10-08, when a discussion about where candidate images live
     arrived at a decision the schema had already made.
+
+
+54) THE IMAGE PIPELINE — a run-through against the code, 2026-10-08. What exists,
+    what does not, and the two places the CODE CONTRADICTS WHAT WAS ASKED FOR.
+
+    The run-through was ten steps of a developer working with a directory of
+    images. They resolve to three answers: built, absent, or built in a shape
+    that disagrees with the request.
+
+    --- THE TABLE ---
+
+      1  upload a directory of images            EXISTS — WRONG IDENTITY MODEL (A)
+      2  submit the directory to a tech check    EXISTS
+      3  pass some files, fail others, with
+         reasons shown in the UI                 HALF — the reasons exist, the
+                                                 per-file verdict does not (B)
+      4  submit the passed images for approval   EXISTS, but approval is per
+                                                 VERSION, not per file (B)
+      5  approved images reach the asset store   EXISTS — driven end to end
+      6  labelling what the images depict        MISSING
+      7  thumbnails                              MISSING — no image library at all
+      8  search by content                       MISSING, depends on 6
+      9  pull images into a workspace, download  HALF — download exists, IMPORT
+                                                 does not (C)
+     10  the image inside magicTree_v01 with no
+         second copy in the store                THE GUARANTEE EXISTS, THE PATH
+                                                 DOES NOT (C)
+
+    --- (A) THE FOLDER NAMES THE ASSET — RESOLVED 2026-10-08 ---
+
+    SETTLED, and it settles by separating THREE THINGS that were being
+    conflated. The user's words: *"the dev should be asked if there is a
+    name(s) that go with the images — which would be a step on the content
+    labelling — so that they could be retrieved as a batch — and could appear in
+    the source asset display listings."*
+
+        THE CONTAINER NAME   the folder or zip the files arrived in.
+                             TRANSPORT. It names nothing, and it is never
+                             retained in the workspace, the store or a listing.
+
+        THE ASSET NAME       what a thing is called in the game store. For
+                             images that go on to BECOME game assets, decided at
+                             the point they are submitted, as now.
+
+        THE NAME(S)          a COLLECTION LABEL over a set of images, asked for
+                             at the LABELLING step — where a human is already
+                             going through them deciding what they depict. Its
+                             two purposes are retrieval as a batch and appearing
+                             in the source-asset listings.
+
+    SO THE DEVELOPER IS NOT ASKED TO NAME ANYTHING AT UPLOAD. The folder or zip
+    is how their files got here and nothing more, which is what "the directory is
+    just convenient" meant.
+
+    AND THE NAME IS NOT IN COMPETITION WITH TAGS. They answer different
+    questions and both are wanted:
+
+        TAGS    what is IN this image      trees, river, boat       → search
+        NAME    what this BATCH is          "wales trip 2025"        → retrieval
+
+    WHAT ALREADY EXISTS, AND IT IS MOSTLY THE MECHANISM: POST
+    /assets/check-name is a preflight that derives a name, returns it, and the
+    client SHOWS IT TO A PERSON — it renders "From the folder X" — before
+    anything is stored. The human can already override it with upload_name or
+    confirmed_asset_name, and the server honours both.
+
+    WHAT IS WRONG WITH IT IS THE DEFAULT, NOT THE MECHANISM: the container name
+    is PRE-FILLED, so a meaningless photos_from_wales is what the human is
+    invited to accept. A pre-filled field is a strong suggestion even when the
+    label above it says "from the folder".
+
+    --- AND THE OLD TEXT, KEPT BECAUSE IT IS WHAT THIS REPLACED ---
+
+    The folder names the asset, and that was just said to be wrong ---
+
+    deriveUploadRoot() and classifyFolderName() take the uploaded DIRECTORY's name
+    as the asset name and read a version marker out of it: bigTree_v04/ becomes
+    asset "bigTree". Deliberate, and documented in docs/uploadmodel01.
+
+    So dropping a directory of loose images in today creates ONE ASSET NAMED AFTER
+    THE DIRECTORY, holding every image — the opposite of what is wanted. The
+    directory is transport; it should not become an identity.
+
+    THIS IS A CHANGE TO THE DOCUMENTED UPLOAD MODEL, NOT A FIX. And it is the same
+    "what counts as one asset" question that was left open in the discussion of
+    2026-10-08 — for loose images the answer is clearly one image per asset, but
+    a PBR set (basecolour + normal + roughness) is one asset with three files,
+    and both have to be expressible.
+
+    --- (B) APPROVAL IS PER VERSION, SO "PASS SOME, FAIL OTHERS" HAS NOWHERE TO LAND ---
+
+    THE INFORMATION IS ALREADY THERE. The technical check knows which files
+    failed: files_not_empty lists the empty ones BY NAME, and the content check
+    collects blocked, contradicted and unverifiable file lists. Seven checks, all
+    stored per run in technical_check_results with a message and details.
+
+    WHAT IS MISSING IS THE VERDICT. There is no per-file status anywhere, and
+    DELETE FROM workspace_version_files appears NOWHERE IN THE ROUTES — a file
+    cannot be removed from a version once uploaded. So "resubmit the whole
+    directory, or continue with the ones that passed" cannot be expressed: to
+    continue with a subset you would need a NEW VERSION containing only those
+    files, or a per-file model that does not exist.
+
+    AND creative_approvals POINTS AT workspace_version_id. Approval is of a whole
+    version. Per-file rejection is not a UI problem; it is a data-model problem,
+    and it is the larger of the two here.
+
+    --- (C) STEPS 9 AND 10 — THE IMPORT PATH HAS NEVER BEEN WRITTEN ---
+
+    DOWNLOADING FROM A WORKSPACE WORKS. Driven and verified: the bytes served
+    hash to the blob's own name.
+
+    IMPORTING DOES NOT EXIST. workspace_assets.repository_asset_id and
+    repository_base_version_id are in the schema and HAVE NEVER BEEN WRITTEN by
+    anything — they are only ever SELECTed, in the approval queue. So a developer
+    cannot pick an image out of the store and pull it into a workspace, which is
+    the whole of steps 9 and 10 and the missing half of "pick up your own approved
+    work and continue". See the note around line 1236 in this file, which records
+    the same gap from the other direction.
+
+    WHAT DOES ALREADY HOLD is the part that matters most: if magicTree_v01
+    contains a file whose bytes are already in the store, NO SECOND COPY IS MADE.
+    UNIQUE(sha256) and one blob per SHA is the heart of the store. The content is
+    referenced, never duplicated. The path to BUILD such an asset is what is
+    missing, not the guarantee.
+
+    --- AND THE OWNERSHIP QUESTION, ANSWERED FROM THE MANUAL RATHER THAN MEMORY ---
+
+    ASKED: at step 4, when the passed images are submitted for approval, is that
+    where the developer ceases to own them?
+
+    NO. TWO DIFFERENT MOMENTS, AND THE DIFFERENCE MATTERS:
+
+      * AT SUBMISSION the version AND THE ASSET are LOCKED — "so what a reviewer
+        looks at cannot change underneath them. While it is pending you cannot
+        change or delete the asset, and you cannot re-run the check." Locked, but
+        still the developer's.
+
+      * AT APPROVAL ownership passes — "Your version is moved into the game's
+        asset store… OWNERSHIP PASSES TO THE GAME AT THIS POINT — but you can
+        always download a copy."
+
+    Which matches what was said when the model was set: "if the version is
+    accepted the developer ceases to own the directory/files but can download a
+    copy to work on if they want."
+
+    AND NOTHING REACHES THE STORE BEFORE APPROVAL. The approve route is what does
+    INSERT INTO assets / asset_versions / asset_version_files and links the
+    workspace version back with repository_version_id. Before that the store holds
+    nothing of the developer's.
+
+    --- WHAT THIS ADDS UP TO ---
+
+    THE PIPELINE EXISTS FROM UPLOAD THROUGH TO THE STORE. What does not exist is
+    everything that treats an image as an INDIVIDUAL THING: per-file verdicts,
+    per-file approval, tags, thumbnails, content search, and pulling store content
+    back into a workspace.
+
+    OF THOSE, TWO ARE DECISIONS AND THE REST IS WORK:
+
+      * (A) needs the asset-identity question settled — one image per asset, a
+        folder per asset, or both. Raised 2026-10-08 and still open.
+      * (B) needs a decision about whether approval can be partial at all. If a
+        file cannot be approved on its own, the answer to step 3 is "resubmit a
+        corrected version", which is simpler and may be right — but it should be
+        chosen rather than assumed.
+
+    AND NONE OF IT IS GAME-DEPENDENT, which is why this is not in the AFTER THE
+    GAME EXISTS section. Thumbnails, tags, per-file verdicts and the import path
+    can all be built before there is a game to put anything in.
+
+
+55) ARCHIVES — UNZIP ON UPLOAD. Decided 2026-10-08, NOT BUILT.
+
+    So a developer does not have to push gigabytes through a browser. The case is
+    real and already on this machine: source_assets holds a 3.3G zip beside two
+    loose photographs.
+
+    --- THE TWO DECISIONS TAKEN ---
+
+      * NOTHING IS KEPT. The archive is inflated and then DELETED. No zip is
+        stored in the workspace, the store, or anywhere else — it is transport,
+        exactly like the directory name in item 54, and keeping it would double
+        the bytes on disk for content already stored.
+
+        THE HISTORY TRAIL STILL RECORDS IT. "Submitted as wales_photos.zip, 412
+        files" is what documents what was presented, which is what the history is
+        for. The bytes go; the record stays.
+
+      * THE ARCHIVE'S NAME NAMES NOTHING, same as a folder name. See item 54,
+        finding (A): what a batch is called is asked for at the LABELLING step,
+        not at upload, and it is a collection label rather than an identity.
+
+    --- UNZIP IS A FEEDER, NOT A SECOND UPLOAD PATH ---
+
+    THE PIPELINE CAN BE REUSED RATHER THAN DUPLICATED. The upload handler works
+    from a list of file paths plus their names (tempPaths.map(f => f.path), with
+    originalname driving naming). So extraction writes into the existing temp
+    directory and then hands the files to THE SAME upload logic — and every
+    existing check applies unchanged: content-versus-extension, zero bytes,
+    executables, backup files, the store write, deduplication, the history entry.
+
+    BUILDING A SECOND PATH INSTEAD is how two upload pipelines end up
+    disagreeing about what is acceptable, which is the thing shared/ exists to
+    prevent for the checks themselves.
+
+    --- AND THIS IS THE RISKIEST CODE IN THE UPLOAD AREA, SO SAY WHY ---
+
+    Extraction WRITES FILES WHOSE NAMES CAME FROM OUTSIDE. Everything else in the
+    upload path works on files a browser already put somewhere with a name the
+    server chose to accept. This takes a name from inside an attacker-controlled
+    archive and turns it into a path. The classic failure is called ZIP SLIP and
+    it has a name because it is common:
+
+      * PATH TRAVERSAL. An entry named ../../../etc/passwd, or an absolute path,
+        or ..\..\ with Windows separators. Join it onto a directory and write,
+        and the write lands outside it.
+      * SYMLINKS. An entry that IS a symlink, followed by a second entry that
+        writes THROUGH it — which defeats the naive "is the joined path inside
+        the target directory?" check, because it is.
+      * ZIP BOMBS. A few kilobytes that expand to terabytes, whether nested
+        archives or one hugely compressed file. Also thousands of tiny entries,
+        which exhaust the INODE TABLE — and this store's inode headroom is
+        already something the Storage tab watches (item 38/48).
+      * NAMES THAT BREAK THE EXISTING RULES. classifyFolderName, isBackupFile and
+        the structural-character rules were written for names a browser sends. An
+        archive can contain anything, including names that break the asset
+        naming rules or collide with each other.
+
+    READ THE CENTRAL DIRECTORY FIRST, BEFORE WRITING A SINGLE BYTE. A zip
+    declares the uncompressed size of every entry up front, which buys three
+    things at once:
+
+      1. CHECK THE WORKSPACE QUOTA FIRST, from the declared sizes, and refuse
+         before extracting — rather than extracting 2 GB and then discovering it
+         does not fit. (Against a 5 GiB quota this matters; see item 51 for the
+         allowance.)
+      2. REFUSE ON COMPRESSION RATIO. The bomb defence.
+      3. REFUSE ON ENTRY COUNT. The inode defence.
+
+    THEN: extract into the temp directory, and REBUILD EVERY PATH RATHER THAN
+    TRUSTING IT — reject absolute paths, reject any segment that is '..', reject
+    symlinks outright rather than following them, normalise separators. Then hand
+    the results to the existing upload logic.
+
+    DECLARED SIZES CAN LIE, which is why the quota check cannot rest on them
+    alone. Recommended: check the declared total (cheap, catches accidents) AND
+    stop the extraction when the bytes actually written exceed the limit (cannot
+    be lied to). Both, not either.
+
+    --- NOT DECIDED ---
+
+      * WHICH FORMATS? Zip only, or tar.gz and others? Zip is the one a person
+        produces by right-clicking a folder, which is the case here. Others widen
+        the attack surface for no obvious gain.
+      * THE TRANSIENT DISK SPIKE. A 3.3 GB zip plus its inflated contents is
+        roughly 7 GB at peak. Fine on the volume this runs on, but it is the
+        number that decides whether the quota check must also require free space
+        before it starts.
+      * ANYTHING AN ARCHIVE CONTAINS MUST NOT BE ABLE TO RUN — the standing rule
+        in item 35. Extraction is the one new place where an untrusted name
+        decides a path, so it is the place to be most careful about it, not the
+        place to relax.
+
+    --- AND IT DEPENDS ON ITEM 54 ---
+
+    Extraction only makes sense once it is settled what an uploaded set of files
+    BECOMES. Item 54's finding (A) settled the naming half on 2026-10-08; the
+    other half — whether loose images are one asset each, or a set is one asset —
+    is still open, and it decides whether an archive inflates to one asset or
+    many.
+
+
+56) WHAT KIND OF UPLOAD IS THIS? — the type decides TWO things. 2026-10-08,
+    NOT BUILT.
+
+    Raised while working through the "uselessName containing 50 images, 10 in a
+    subdirectory called meansNothing" case. The user's words: *"for other
+    directory structure like a maya blender or nuke project the directory
+    structure must be preserved otherwise the app will not be able to find the
+    assets they need — so maybe selecting the correct type is very important —
+    and should be made very clear."*
+
+    --- IT DECIDES STRUCTURE, AND IT ALSO DECIDES GRANULARITY ---
+
+        AN APPLICATION PROJECT   Nuke, Blender, Maya, Unreal, Houdini…
+                                 THE TREE IS LOAD-BEARING. The app resolves its
+                                 assets by path, so flattening breaks it. ONE
+                                 asset — the project — with its structure intact.
+
+        AN ARBITRARY COLLECTION  files, possibly in directories that may or may
+                                 not mean anything. Structure is convenience, so
+                                 it collapses to LABELS. MANY files, each its own
+                                 thing, individually checkable and approvable.
+
+    So the type is not only "do we keep the tree" — it is the answer to what one
+    asset IS, which is the half of item 54 that has been open since the image
+    pipeline run-through.
+
+    AND WITHIN A COLLECTION THERE IS A SECOND QUESTION: do the directory names
+    mean anything? Keep them as labels, rename them, or leave blank. From the
+    same conversation: the images then sit in ONE FLAT SPACE, grouped by labels
+    that were the directory names — or by nothing.
+
+    --- THE CONSEQUENCE HAS TO BE SAID OUT LOUD, BECAUSE GETTING IT WRONG IS INVISIBLE ---
+
+    Flatten a Nuke project and EVERY FILE IS STILL THERE. Nothing errors at
+    upload. The project simply cannot find its assets later, and by then the tree
+    is gone. So the prompt has to say what happens, not just offer a choice — a
+    dev who does not know what a Nuke script does with paths has no way to choose
+    well.
+
+    --- THE SUGGESTION IS ALREADY FREE ---
+
+    ASSET_TYPE_EXTENSIONS in shared/assetRules.mjs maps APPLICATION to
+    extensions — Unreal, Unity, Blender, Maya, 3ds Max, Cinema 4D, Houdini,
+    ZBrush, Substance, NUKE, Modo, LightWave — and assetTypeOf() ALREADY RUNS PER
+    FILE AT UPLOAD. The asset_types_recognised check reports what it found:
+    "N file(s) recognised: Nuke, image."
+
+    So "this contains 3 .nk files — is this a Nuke project?" is answerable today
+    with no new machinery. THE SUGGESTION IS FREE; ONLY THE ASK AND THE
+    CONSEQUENCE NEED BUILDING. Which is the pattern this project prefers anyway:
+    suggest from what the machine can read, let a human confirm, and never make
+    them restate something the file already says.
+
+    --- AND THIS IS NOT THE REMOVED asset_type FIELD, WHICH MATTERS ---
+
+    The old asset_type asked the developer to choose between Concept, Texture,
+    Model, Animation, Audio — and also Maya, Blender, Nuke, Unreal. It was REMOVED
+    deliberately: see the note in this file, "asking a human to restate something
+    the machine can read is how a field becomes wrong". A .blend IS Blender.
+
+    THIS ASKS A DIFFERENT QUESTION AT A DIFFERENT LEVEL:
+
+        old asset_type   which tool made THIS FILE     answerable from the
+                                                       extension
+        this             what is THIS UPLOAD           NOT answerable — 50 JPGs
+                                                       are 50 JPGs
+        old consequence  a wrong label                 this consequence  A PROJECT
+                                                       THAT NO LONGER OPENS
+
+    RECORDED EXPLICITLY so that somebody finding the removal note does not
+    "restore" it. They are not the same field and the second is not a reversal of
+    the first.
+
+    --- WHAT IT TOUCHES ---
+
+      * relative_path IS LOAD-BEARING TODAY. The upload stores it, the download
+        manifest rebuilds `${relative_path}/${filename}`, and logical_paths_unique
+        stops two files claiming the same path. So a project upload needs all of
+        that; a collection upload discards it once the labels are taken.
+      * THE ASSET COUNT DIFFERS BETWEEN THE TWO, which reaches the technical
+        check, the approval step, and the store write.
+      * AND IT IS WHY THE UNZIP QUESTION (item 55) cannot be answered until this
+        is: an inflated archive becomes ONE asset or MANY depending on the answer.
