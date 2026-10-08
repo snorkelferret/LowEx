@@ -8,10 +8,42 @@ the game.
 A **staging area** for game assets. You upload work, it is checked and reviewed,
 and approved work goes into the game's asset store.
 
+**Not everything you upload is a game asset.** Images and other source material
+belong in the library rather than the game — see the next section, which is worth
+reading before the first upload.
+
 It is not a file store you can lean on. Your workspace is meant to hold what you
 are working on now, not an archive of everything you have ever made. It has a
 size limit for that reason, and the panel says so rather than leaving you to
 discover it.
+
+## An image is not a game asset
+
+**An image never goes into the game on its own.** It goes into the **image
+library**, with the rest of the studio's source material, and it is in the game
+only by being *part of* something you build.
+
+An **asset** is the thing that ships — a unit of game content you assemble in
+your workspace, which may use images from the library, and which is checked,
+reviewed and approved into the game's asset store.
+
+Two destinations, and they are not interchangeable:
+
+| | goes to | ships? |
+|---|---|---|
+| **an image** | the image library — shared with the studio | **no** |
+| **an asset** | the game's asset store | **yes** |
+
+It matters because it decides what you are doing when you upload. **A folder of
+reference photographs is not an asset and is not approved into anything** — it is
+material the studio can draw on, and it stays available to everyone. An asset is
+what you build *around* that material.
+
+AND THE WORD IS OVERLOADED, so it is worth being careful: an **asset** here means
+a unit of game content that a developer assembles and submits, which is not quite
+what an engine means by the word. A texture file can be an asset inside Unreal
+and still be a *library component* here, until it is part of something that
+ships.
 
 ## Your workspace is private
 

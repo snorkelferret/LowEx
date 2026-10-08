@@ -4249,6 +4249,12 @@ no upside. If something seems to need one of them, ask.
     images. They resolve to three answers: built, absent, or built in a shape
     that disagrees with the request.
 
+    CORRECTED LATER THE SAME DAY — see item 57. The run-through sent images
+    through approval and into the game store, and an image NEVER GOES THERE. An
+    image lives in the IMAGE LIBRARY; only an ASSET reaches the store, and an
+    image is in the game by being PART of one. Steps 4-5 below are the ASSET
+    pipeline, which is the one that was verified — not the image one.
+
     --- THE TABLE ---
 
       1  upload a directory of images            EXISTS — WRONG IDENTITY MODEL (A)
@@ -4258,7 +4264,9 @@ no upside. If something seems to need one of them, ask.
                                                  per-file verdict does not (B)
       4  submit the passed images for approval   EXISTS, but approval is per
                                                  VERSION, not per file (B)
-      5  approved images reach the asset store   EXISTS — driven end to end
+      5  approved images reach the asset store   WRONG — see item 57. What
+                                                 reaches the store is an ASSET.
+                                                 An image reaches the LIBRARY.
       6  labelling what the images depict        MISSING
       7  thumbnails                              MISSING — no image library at all
       8  search by content                       MISSING, depends on 6
@@ -4280,9 +4288,10 @@ no upside. If something seems to need one of them, ask.
                              TRANSPORT. It names nothing, and it is never
                              retained in the workspace, the store or a listing.
 
-        THE ASSET NAME       what a thing is called in the game store. For
-                             images that go on to BECOME game assets, decided at
-                             the point they are submitted, as now.
+        THE ASSET NAME       what a thing is called in the game store. AN
+                             IMAGE NEVER BECOMES A GAME ASSET — it becomes PART
+                             OF one (item 57), so this question belongs to the
+                             asset the developer builds, not to the images.
 
         THE NAME(S)          a COLLECTION LABEL over a set of images, asked for
                              at the LABELLING step — where a human is already
@@ -4533,7 +4542,9 @@ no upside. If something seems to need one of them, ask.
         AN ARBITRARY COLLECTION  files, possibly in directories that may or may
                                  not mean anything. Structure is convenience, so
                                  it collapses to LABELS. MANY files, each its own
-                                 thing, individually checkable and approvable.
+                                 thing and individually checkable — AND THEY LAND
+                                 IN THE IMAGE LIBRARY, NOT THE STORE (item 57).
+                                 Creative approval is not their gate.
 
     So the type is not only "do we keep the tree" — it is the answer to what one
     asset IS, which is the half of item 54 that has been open since the image
@@ -4596,3 +4607,175 @@ no upside. If something seems to need one of them, ask.
         check, the approval step, and the store write.
       * AND IT IS WHY THE UNZIP QUESTION (item 55) cannot be answered until this
         is: an inflated archive becomes ONE asset or MANY depending on the answer.
+
+
+57) THE IMAGE LIBRARY — a THIRD SPACE, and it does not exist. 2026-10-08.
+
+    ADDS TO 54 AND 56, and CORRECTS BOTH. The user's words: *"Images cannot go
+    into the game without being part of an asset but they can go into the image
+    library in the source assets."*
+
+    --- WHAT THAT CHANGES ---
+
+        image   →   THE IMAGE LIBRARY (in source assets)      the studio
+        asset   →   THE GAME STORE                            the game
+
+    AN IMAGE IS GAME CONTENT ONLY AS PART OF AN ASSET. It is not approved INTO
+    the game on its own — it is USED BY something that is. A texture, a
+    reference, a photograph: none of them belong in the store standing alone.
+
+    So item 54's run-through described the wrong pipeline for images. What it
+    verified — upload, check, approve, store — is the ASSET pipeline, and it was
+    driven end to end and works. The IMAGE pipeline is different and shorter:
+    upload, check, LIBRARY. Creative approval is not its gate, because nothing
+    about an image in a library "ships".
+
+    AND IT SIMPLIFIES WHAT WAS OPEN. Item 56 asked whether loose images are one
+    asset each or a set is one asset. NEITHER: they are not assets at all. They
+    are library items, and the asset is something a developer BUILDS, possibly
+    containing them.
+
+    --- AND THE LIBRARY DOES NOT EXIST ---
+
+    CHECKED, not assumed: the word "library" appears in the portal only in
+    comments about modules being libraries. THERE IS NO LIBRARY SPACE, no table,
+    no route, no page. The portal models exactly two spaces — the private
+    workspace and the game store — and this is the third one, which has been
+    noticed twice now (once while working out where candidate images live, again
+    here) without being named.
+
+    SO THE THIRD SPACE IS NAMED: THE IMAGE LIBRARY, holding source material in
+    source_assets/, visible to the studio, from which developers draw.
+
+    --- WHAT IT NEEDS, AND WHAT OF IT IS ALREADY DECIDED ---
+
+      * STORAGE. Content-addressed like everything else, so an image that later
+        becomes part of an asset is THE SAME BLOB — nothing is copied when it is
+        used, and using it twice costs nothing. The one-copy rule already covers
+        this; only the bookkeeping is new.
+
+      * A GATE, AND PROBABLY A LIGHT ONE. A library image should still be a real
+        file of the type it claims — the tech check already does that and is not
+        creative. WHETHER ANYTHING ELSE IS REQUIRED TO ENTER THE LIBRARY IS NOT
+        DECIDED.
+
+      * LABELLING (item 54, step 6), THUMBNAILS (step 7) AND CONTENT SEARCH
+        (step 8) are all LIBRARY concerns, not store concerns. That is what they
+        were always for: you search a library for material, you do not search a
+        finished build.
+
+      * THE COLLECTION NAME from item 54's finding (A) is a LIBRARY concept too —
+        retrieval as a batch is a library job.
+
+      * AND PULLING AN IMAGE INTO A WORKSPACE IS NOW AN IMPORT FROM THE LIBRARY,
+        which is NOT the same as the import already in the schema.
+        workspace_assets.repository_asset_id references assets — THE GAME STORE —
+        so the schema's one import path is store→workspace. Library→workspace has
+        NO schema support at all, and it is the path steps 9 and 10 need.
+
+    --- OPEN ---
+
+      * IS THE LIBRARY SHARED, OR PER-DEVELOPER? It is described as "the image
+        library in the source assets", and source_assets is studio material — so
+        SHARED is the reading. But a developer's own reference cull might want to
+        be private first, and that would make it two libraries rather than one.
+        NOT DECIDED.
+      * WHAT MAY LIVE IN IT? Images are the case in hand. Does video? Audio? A
+        PDF of a book that inspired the art? The name says images; the need may
+        not be.
+      * HOW DOES AN IMAGE GET INTO AN ASSET? The developer pulls it into their
+        workspace and builds with it, and the asset carries a REFERENCE — so the
+        asset's file set includes a blob that also lives in the library. That is
+        what content addressing is for, and it means an asset can contain
+        library content without owning a copy. Worth confirming when built.
+      * AND THE QUESTION THE WHOLE THING TURNS ON: DOES AN ASSET THAT CONTAINS A
+        LIBRARY IMAGE OWE ANYTHING TO THE LIBRARY? By the one-copy rule, no —
+        the blob is shared and neither owns it. But that does mean deleting from
+        the library cannot remove a blob an asset depends on, which is the same
+        guarantee that protects the game store. Worth stating so nobody
+        "tidies up" the library and breaks a build.
+
+
+58) IMAGES ARE NOT GAME ASSETS — A STANDING RULE, not a task. 2026-10-08.
+
+    AN IMAGE NEVER GOES INTO THE GAME ON ITS OWN. It goes into the IMAGE LIBRARY,
+    and it is in the game only by being PART OF something that ships.
+
+    Stated by the user as the thing to make unmistakable: *"images are not game
+    assets — they are components in a library"*.
+
+        image   →   the image library (in source assets)    shared    does not ship
+        asset   →   the game store                          the game  ships
+
+    THIS IS NOT A STEP IN A PIPELINE, IT IS A RULE ABOUT WHAT THINGS ARE. An
+    image is a component. An asset is a unit of game content a developer
+    assembles, which may USE components, and which is checked, reviewed and
+    approved into the store. Neither is a stage of the other.
+
+    --- AND THE WORD "ASSET" IS OVERLOADED, WHICH IS HOW THIS GOT MUDDLED ---
+
+    An "asset" in this portal means a unit of game content a developer assembles
+    and submits. That is close to, and not the same as, what an engine means by
+    it. A texture file can be a UTexture inside Unreal and still be a LIBRARY
+    COMPONENT here until it is part of something that ships.
+
+    The run-through in item 54 walked straight into this: it sent images through
+    approval and into the store, and described the ASSET pipeline while calling
+    it the image one. The pipeline it verified is real and it works — it is just
+    not the pipeline images travel.
+
+    --- WHAT FOLLOWS FROM IT ---
+
+      * CREATIVE APPROVAL IS NOT AN IMAGE'S GATE. Nothing about an image in a
+        library "ships", so there is nothing for creative approval to be about.
+        Images are checked — a real file of the type it claims — and filed.
+
+      * LABELLING, THUMBNAILS AND CONTENT SEARCH ARE LIBRARY CONCERNS. You
+        search a library for material; you do not search a finished build. Those
+        three steps of the item 54 run-through relocate, and so does the
+        COLLECTION NAME from finding (A) — retrieval as a batch is a library job.
+
+      * AND THE ONE-COPY RULE MAKES THIS ALMOST FREE. An asset that uses a
+        library image REFERENCES the same blob rather than copying it, so using
+        an image costs nothing on disk and using it twice costs nothing twice.
+        Which also means: DELETING FROM THE LIBRARY CANNOT REMOVE A BLOB AN ASSET
+        DEPENDS ON. The same protection the game store already has. Recorded
+        because the failure is a tidying-up that breaks a build.
+
+        CONFIRMED BY THE USER, 2026-10-08: *"an asset using a library image
+        references the same blob — NO DUPLICATION ANYWHERE"*.
+
+        AND IT IS STRUCTURAL RATHER THAN A CONVENTION, checked rather than
+        assumed:
+
+          * stored_files HAS sha256 UNIQUE AND storage_key UNIQUE. One row per
+            SHA, and the blob on disk is named for that key. THERE IS NO SECOND
+            PLACE A COPY COULD GO.
+
+          * EXACTLY TWO THINGS REFERENCE A BLOB TODAY —
+            workspace_version_files.stored_file_id and
+            asset_version_files.stored_file_id, both foreign keys into
+            stored_files. A library is a THIRD REFERENCER OF THE SAME TABLE, the
+            same shape as the other two.
+
+          * THE UPLOAD LOOKS CONTENT UP BY SHA FIRST and writes only when it
+            finds nothing, so re-submitting known content adds a reference and
+            no bytes.
+
+        So the library cannot introduce duplication without changing
+        stored_files, and that is the single place the rule lives. Which is why
+        adding a library is additive: it is another row pointing at content that
+        already has exactly one row.
+
+    --- WRITTEN DOWN IN THREE PLACES, BECAUSE IT KEEPS BEING ASSUMED WRONG ---
+
+      * THIS RULE — the decision, and why the word is overloaded.
+      * ITEM 57 — the library itself: a third space, which does not exist yet.
+      * THE MANUAL, docs/manual/40-developing.md — "An image is not a game
+        asset", the second section on the page, because a developer needs it
+        BEFORE their first upload rather than afterwards.
+
+    The manual section exists because the older wording — "a staging area for
+    game assets… approved work goes into the game's asset store" — implied that
+    everything uploaded becomes a game asset, which is exactly the thing that is
+    not true.
