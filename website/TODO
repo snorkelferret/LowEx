@@ -228,7 +228,9 @@ never been read back. No schema change, so check:schema stayed green throughout.
   * GET /assets/:assetId/versions/:versionId/checks — full technical-check
     history, newest first, each run with its individual results.
 
-  * GET /creative-approvals?status=pending — admin/superuser review queue,
+  * GET /creative-approvals?status=pending — the review queue. PROD ONLY as of
+    2026-10-06: it was admin-gated, which meant the queue for a job admin may not
+    do was unreadable by the role whose job it is. See item 51.
     defaulting to pending, ?status=all for everything. Returns the requesting
     developer and the submitted files. Until this existed there was no way to
     discover a pending approval — approve/reject take an id and nothing listed
@@ -509,7 +511,9 @@ class alongside the two that exist:
     workspace content   the owning developer only (no admin bypass —
                         impersonation is the only way in)
     game content        readable by any authenticated developer
-    release management  admin/superuser (not yet built)
+    release management  NOT DECIDED (not yet built) — see item 53. It said
+                        admin/superuser, and superuser no longer exists; whether
+                        managing releases is an admin act or a prod one is open.
 
 Getting that split right is the main design work, and it is why the admin read
 path was removed from the workspace endpoints first — the rules had to be clean
@@ -1052,6 +1056,12 @@ They MUST be dealt with before any real user data exists.
    backend/db.js but never written or read. audit_logs is the notable gap for an
    approval workflow that should record who approved what.
 
+   NOT THE SAME QUESTION AS RELEASES. "recommended" means WHICH VERSION TO BUILD
+   FROM NOW, and release membership means WHAT SHIPPED WHEN — the PRE-EXISTING
+   note near the top of this file argues the original reasoning confused the two
+   and removed this column by mistake. Item 53 is the other half; do not settle
+   one by reference to the other.
+
 [SECURITY / HARDENING]
 
 8) Stored XSS in the invite table.
@@ -1233,7 +1243,7 @@ They MUST be dealt with before any real user data exists.
 
       * a /api/game router, and the THIRD access class: workspace content is
         the owning developer only, game-store content is readable by any
-        authenticated developer, release management is admin/superuser.
+        authenticated developer, release management NOT DECIDED — see item 53.
       * import into a workspace, writing workspace_assets.repository_asset_id
         and repository_base_version_id — both exist in the schema and neither
         has ever been written. That is what would finally make "pick up your
@@ -2496,8 +2506,13 @@ They MUST be dealt with before any real user data exists.
     actor for changes the admin never made.
 
 
-38) STORAGE PANEL — REVIEWED AND REWORKED 2026-05-31. Four things, one of them
+38) STORAGE PANEL — REVIEWED AND REWORKED 2026-05-31. Three things, one of them
     a correction to how the whole feature was described.
+
+    THERE WERE FOUR. The fourth — storage by game version — MOVED TO ITEM 53 on
+    2026-10-08, because it is a question about the GAME that happens to be
+    displayed on this tab, and this item is the panel's record. The PROVISION it
+    left on the tab is still described in item 53.
 
     --- 1. NOBODY IS "CHARGED" FOR ANYTHING ---
 
@@ -2552,30 +2567,11 @@ They MUST be dealt with before any real user data exists.
     sort ascending out of nowhere. The heading now carries the arrow from the
     start, so a click visibly reverses what is already in effect.
 
-    --- 4. STORAGE BY GAME VERSION — PROVISION ONLY, AND THAT IS THE DECISION ---
+    --- AND THE DISK FIGURE, WHICH STAYS ---
 
-    What was asked for: how many bytes each game version takes, so the storage
-    needed to host a build elsewhere can be read off rather than estimated, and
-    so a version growing out of proportion is visible. Later, tools to break
-    that down and find what is worth optimising.
-
-    NONE OF IT IS BUILDABLE YET. No game version exists, and nothing in the
-    schema records which content belongs to one. `releases` is mentioned in
-    db.js as a future phase and has never been written.
-
-    So the Storage tab carries a marked "not built" section stating what it will
-    show, why it cannot yet, and one thing that will be true when it can:
-    content is stored once and referenced by everything that needs it, so a file
-    counted under two versions is one file on disk and the per-version figures
-    will not sum to the total. That belongs in the UI rather than only in this
-    file, because it is the first thing somebody will report as a bug.
-
-    The decision was explicitly to make provision in the UI and write the
-    backend once a real game version exists. Recorded here so the next person
-    does not build a releases model to fill a placeholder.
-
-    The total disk figure on this tab is unchanged and still wanted: it is this
-    machine, the studio server, and it stays.
+    Not one of the three above, and recorded so it is not lost with them: the
+    total disk figure on this tab is unchanged and still wanted. It is this
+    machine, the studio server.
 
 
 39) INVITATIONS FOR PEOPLE WHO ALREADY HAVE ACCOUNTS — 2026-10-05, found by
@@ -3992,7 +3988,8 @@ B) DEPLOYING THE GAME. The powerful half of what the removed superuser page
 C) STORAGE BY GAME VERSION. The Storage tab has a marked "not built" section for
    it. It needs a game version to measure, and nothing in the schema records
    which content belongs to one — db.js anticipates a `releases` table that was
-   never built. When versions exist: the bytes per version, so hosting elsewhere
+   never built. THE MODEL IS DECIDED: item 53 — named releases, membership by
+   query. When versions exist: the bytes per version, so hosting elsewhere
    can be bought rather than estimated, and so a version quietly growing out of
    proportion is visible before it is a problem.
 
@@ -4121,3 +4118,125 @@ UNREAL, BLENDER, MAYA AND NUKE ARE NOT TO BE INSTALLED, LAUNCHED, CONFIGURED OR
 FIDDLED WITH. They are installed and working. Nothing about the work in this
 repository requires touching them, and an agent investigating them is risk with
 no upside. If something seems to need one of them, ask.
+
+
+53) RELEASES — DECIDED 2026-10-08, NOT BUILT. Named releases, and membership you
+    query rather than a field you maintain.
+
+    THE DECISION, in the user's words: *"they should be a named release and my
+    naming is going backwards"* — the naming being production / development /
+    experimental, which are CHANNELS. A channel is a small fixed set of tracks.
+    A NAMED RELEASE is a specific build with a date: "0.4 Experimental, 12 Nov".
+    Channels cannot express a history, and a game version has one.
+
+    AND MEMBERSHIP IS DERIVED BY QUERY, not stored on the asset:
+    *"you are right about finding the constituents of a game with a query — so
+    lets keep that"*.
+
+    --- THIS WAS ALREADY DECIDED ONCE, IN THE SCHEMA ---
+
+    db.js carries the note and this is a restatement of it, not a new idea:
+
+        "A single 'recommended version' pointer cannot express the intended
+         model — an asset can hold several production versions at once, and
+         PRODUCTION STATUS IS DERIVED FROM RELEASE MEMBERSHIP, not from a
+         pointer. Removed in the phase that introduces `releases`."
+
+    That phase never came. `asset_recommended_versions` is still sitting in the
+    schema, unused and orphaned — see the note about recommended_version_id in
+    the PRE-EXISTING section near the top of this file. It is the visible
+    symptom of a model that was designed and never built.
+
+    --- WHY NOT A FIELD ON THE ASSET SAYING WHICH CHANNEL IT IS IN ---
+
+      * THE SAME VERSION IS IN SEVERAL AT ONCE. In development now, experimental
+        next week, production after that. A field holds one value and would need
+        rewriting every time — by hand, so it would not get rewritten.
+      * IT WOULD BE A SECOND SOURCE OF TRUTH beside the membership, and the two
+        would drift.
+      * MEMBERSHIP IS MANY-TO-MANY: a release holds many asset versions, and one
+        asset version is in many releases. That is a table, not a column.
+
+    So "is this asset in production?" is a QUERY. A stored flag that answers the
+    same question is a flag that can be wrong.
+
+    --- FOUR LAYERS, NOT THREE ---
+
+        source_assets/     candidates; may never be used      the studio    never ships
+        workspace          private staging, iterations        ONE developer never ships
+        game store         APPROVED content                   the studio    ships
+        releases           which of it is in which build      the studio    that build
+
+    IN THE STORE IS NOT THE SAME AS IN THE GAME, and that was the gap this
+    started from: content can be tech-checked and creatively approved and sit
+    unplaced for months. That is normal — studios approve deliberately, before
+    they need something — so approved-but-unplaced BELONGS in the store. The
+    store means "approved, ownership has passed to the game", which is a fact
+    about the content and not about which build happens to use it.
+
+    The two axes are worth holding onto, because they are independent:
+
+        by VISIBILITY   private to one developer  →  visible to the studio
+        by DESTINY      never ships  →  ships in a named release
+
+    A workspace is private and never ships. The store is shared and ships. That
+    is why reference material cannot live in a workspace however convenient it
+    would be: it is studio material in the one place the system deliberately
+    hides from everyone else.
+
+    --- WHAT IT UNBLOCKS: STORAGE BY GAME VERSION ---
+
+    MOVED HERE FROM ITEM 38 on 2026-10-08. It was recorded as the fourth point of
+    the storage panel rework, which is where the PROVISION was made — but "bytes
+    per release" is a question about the game that happens to be displayed on
+    that tab, and item 38 is the panel's record.
+
+    What was asked for: how many bytes each game version takes, so the storage
+    needed to host a build elsewhere can be READ OFF rather than estimated, and
+    so a version growing out of proportion is visible before it is a problem.
+    Later, tools to break that down and find what is worth optimising.
+
+    THE STORAGE TAB CARRIES A MARKED "NOT BUILT" SECTION for it rather than
+    nothing at all. That section says what it will show, why it cannot yet, and
+    the one thing that will be true when it can: content is stored once and
+    referenced by everything that needs it, so a file counted under two versions
+    is ONE FILE ON DISK and the per-version figures WILL NOT SUM TO THE TOTAL.
+    That belongs on the screen rather than only in this file, because it is the
+    first thing somebody will report as a bug.
+
+    AND THE PLACEHOLDER IS NOT A REASON TO BUILD ANY OF IT. The instruction was
+    to make provision in the UI and write the backend once a real game version
+    exists — this item waits for the GAME, not for that panel. The tempting
+    mistake is the reverse: building a releases model to fill a placeholder, and
+    finding out afterwards that it answers the wrong question.
+
+    (It was also, until an hour ago, telling the next person not to build a
+    releases model at all — which was correct while the model was undecided and
+    became false the moment this item decided it. Recorded because the two
+    sentences were each right and together contradicted each other, which is how
+    a decision record starts arguing with itself.)
+
+    --- OPEN, AND NOT OBVIOUS ---
+
+      * WHO MANAGES RELEASES? The TODO used to say admin/superuser, and superuser
+        is gone (item 51). By the test used for prod — is this a decision about
+        the WORK or about the SYSTEM? — deciding what is in a build is a decision
+        about the work, which points at prod. But making a release is arguably an
+        administrative act. NOT DECIDED, and the three places that asserted
+        admin/superuser have been corrected to point here rather than left saying
+        something false.
+      * A RELEASE IS A HISTORICAL RECORD. What shipped, when. That argues for
+        immutability once created — you do not edit history — and for it being
+        audited like everything else that records a decision. Not settled.
+      * VERSIONS OR ASSETS? The db.js note says "an asset can hold several
+        production versions at once", so membership is at the VERSION level, not
+        the asset. Worth confirming when it is built, since it changes the join.
+      * WHAT IDENTIFIES A RELEASE? A name and a date at least. Whether it also
+        carries a build number, a git tag or a changelog is undecided.
+
+    --- AND WHAT IS NOT IN QUESTION ---
+
+    It is still deferred. Everything here is recorded so that when the game
+    exists the model is waiting rather than being re-derived — which is what
+    happened on 2026-10-08, when a discussion about where candidate images live
+    arrived at a decision the schema had already made.
