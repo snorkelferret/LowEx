@@ -7142,3 +7142,78 @@ no upside. If something seems to need one of them, ask.
       * AND PULLING LIBRARY MATERIAL INTO A WORKSPACE, which is item 59's
         check-out and was deliberately deferred: nothing wants it until somebody
         iterates on an approved asset.
+
+
+    ============================================================
+    TAG FILTERING — BUILT 2026-10-09, AND IT WAS THE FIRST THING OWED
+    ============================================================
+
+    ASKED FOR DIRECTLY: *"add tag filtering to the search"*. It is the first item
+    on the "still owed" list above, and it earns its place because IT IS A
+    DIFFERENT QUESTION FROM THE SEARCH BOX.
+
+        THE SEARCH BOX IS A GUESS AT WHAT SOMEBODY MEANT. It reads the name, the
+        note AND the tags, because a person typing "wales" does not know or care
+        which of those it was filed under.
+
+        THE TAG FILTER IS WHAT THE ITEM WAS FILED AS. It reads nothing else.
+
+    So an item whose NOTE mentions a river is found by searching "river" and NOT
+    by filtering for the tag `river`. That difference is the entire value of
+    tagging, and collapsing the two into one box would quietly throw it away.
+
+    BOTH APPLY AT ONCE when both are used.
+
+    --- AND IT IS AND, NOT OR ---
+
+    Item 54's example is "big trees with river" — the ones that are BOTH. An OR
+    would answer a question nobody asked, and it would GROW as tags were added,
+    which is the wrong way round: adding a condition should narrow what you are
+    looking at, never widen it.
+
+    --- WHAT WAS BUILT ---
+
+      * A FILTER ROW under the search: every tag in the library as a button with
+        its count, most-used first. BUTTONS RATHER THAN BADGES, deliberately — a
+        badge on a tile is a LABEL and this is a CONTROL, and they should not
+        look the same when they do different things. `aria-pressed` carries the
+        state, because a colour is not something anybody can hear.
+
+      * Selected tags are filled, unselected are outlined, and a Clear link
+        appears once anything is on.
+
+      * THE COUNT LINE SAYS WHY IT IS NARROWED — "1 of 4 — by the search and 1
+        tag". A filter that is on looks exactly like a library that has lost
+        things, otherwise.
+
+      * And the empty-result message names the filter that emptied it, for the
+        same reason: "Nothing matches" with an empty search box reads as a broken
+        page rather than as a filter doing its job.
+
+      * A tag that stops existing — its last item removed or relabelled — is
+        DROPPED from the selection on reload, or it would filter everything away
+        and look like an empty library.
+
+    --- AND THE RULE WAS EXTRACTED SO IT COULD BE TESTED ---
+
+    THE FILTERING RULE NOW LIVES IN frontend/src/libraryFilter.mjs, on its own,
+    as a PURE FUNCTION. It was three lines inside render() — the kind of three
+    lines that look obvious and are not, because there are two filters, they mean
+    different things, they combine, and the combining rule is what a later edit
+    gets wrong.
+
+    IT IS `.mjs`, ALONE AMONG THE FRONTEND'S FILES, AND THAT IS THE POINT:
+    package.json declares "type": "commonjs", so a .js file containing `export`
+    is parsed as CommonJS by node. The other frontend modules are only ever
+    loaded by vite, which does not care. This one is a pure rule with no imports,
+    so NODE CAN LOAD IT AND THE RULE CAN BE TESTED BY CALLING IT — and `.mjs` is
+    what makes that possible.
+
+    SIXTEEN CASES PASS, covering the distinction between the two filters, the AND
+    behaviour, case and whitespace tolerance, both filters at once, and items
+    with no tags or no note.
+
+    --- WHAT IS STILL OWED ---
+
+    The list above loses its first item. WHAT REMAINS: item 54's collection name
+    over a batch, and item 59's check-out into a workspace.

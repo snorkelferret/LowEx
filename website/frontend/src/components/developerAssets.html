@@ -592,7 +592,7 @@
              steps 6 and 8 of TODO 54 and land later.
              ------------------------------------------------------------ -->
 
-        <div class="mb-3">
+        <div class="mb-2">
           <label for="librarySearch" class="visually-hidden">Search the library</label>
           <input
             type="search"
@@ -601,6 +601,21 @@
             placeholder="Search by name, note or tag..."
           >
         </div>
+
+        <!-- ------------------------------------------------------------
+             FILTER BY TAG.
+
+             A different question from the search box above, and worth
+             its own control: "everything with river in the name, note
+             or tags" is not "everything TAGGED river". The first is a
+             guess at what somebody meant; the second is what they
+             filed it as.
+
+             Built by the script from the tags that actually exist, so
+             the options cannot drift from the items — and so an empty
+             library shows no filter at all rather than an empty row.
+             ------------------------------------------------------------ -->
+        <div id="libraryTagFilter" class="mb-3"></div>
 
         <div id="libraryGrid" class="text-secondary">
           Loading the library...

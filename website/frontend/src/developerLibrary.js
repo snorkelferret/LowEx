@@ -45,6 +45,9 @@
 import { $ } from './utils.js';
 import { apiFetch } from './api.js';
 import { formatBytes } from '../../shared/formatBytes.mjs';
+// The rule for which items a search is asking for, kept separate because it is
+// the part that is worth testing on its own — see that file.
+import { filterLibrary } from './libraryFilter.mjs';
 
 const API = '/api/library';
 
@@ -63,6 +66,10 @@ const ICONS = {
 
 let allItems = [];
 let query = '';
+
+// Which tags are switched on. A Set, because the questions asked of it are
+// "is this on" and "how many are on", and because a tag cannot be on twice.
+let selectedTags = new Set();
 
 function showAlert(boxId, message, variant) {
     const box = $(boxId);
@@ -211,31 +218,129 @@ function tile(item) {
     return card;
 }
 
+// Every tag in the library, with how many items carry it.
+function tagCounts() {
+    const counts = new Map();
+
+    for (const item of allItems) {
+        for (const tag of item.tags || []) {
+            counts.set(tag, (counts.get(tag) || 0) + 1);
+        }
+    }
+
+    return counts;
+}
+
+// ------------------------------------------------------------
+// The tag filter
+// ------------------------------------------------------------
+//
+// BUTTONS RATHER THAN BADGES, and the distinction is deliberate: a badge on a
+// tile is a LABEL, and this is a CONTROL. They look different because they do
+// different things.
+//
+// MOST-USED FIRST, then alphabetical. A library's tags are not equally useful —
+// the word on forty items is the one somebody wants — and alphabetical alone
+// buries it behind whatever starts with 'a'.
+
+function renderTagFilter() {
+    const box = $('libraryTagFilter');
+    if (!box) return;
+
+    box.textContent = '';
+
+    const counts = tagCounts();
+
+    // Nothing tagged yet. An empty row with a heading would read as a fault.
+    if (counts.size === 0) return;
+
+    const sorted = [...counts.entries()].sort(
+        (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+    );
+
+    const row = document.createElement('div');
+    row.className = 'd-flex flex-wrap align-items-center gap-1';
+
+    const label = document.createElement('span');
+    label.className = 'small text-secondary me-1';
+    label.textContent = 'Filter:';
+    row.appendChild(label);
+
+    for (const [tag, count] of sorted) {
+        const on = selectedTags.has(tag);
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = on
+            ? 'btn btn-sm btn-primary py-0 px-2'
+            : 'btn btn-sm btn-outline-secondary py-0 px-2';
+
+        // aria-pressed is what makes a toggle a toggle to a screen reader. The
+        // colour alone is not a state anybody can hear.
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+        button.dataset.tag = tag;
+        button.title = on
+            ? `Stop filtering by ${tag}`
+            : `Show only what is tagged ${tag}`;
+        button.textContent = `${tag} (${count})`;
+        row.appendChild(button);
+    }
+
+    if (selectedTags.size > 0) {
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'btn btn-sm btn-link py-0 px-2 text-secondary';
+        clear.dataset.clearTags = '1';
+        clear.textContent = 'Clear';
+        row.appendChild(clear);
+    }
+
+    box.appendChild(row);
+}
+
+function toggleTag(tag) {
+    if (selectedTags.has(tag)) {
+        selectedTags.delete(tag);
+    } else {
+        selectedTags.add(tag);
+    }
+
+    render();
+}
+
 function render() {
     const grid = $('libraryGrid');
     if (!grid) return;
 
     const needle = query.trim().toLowerCase();
 
-    // NAME, NOTE AND TAGS. Search that only read the name would miss the whole
-    // point of tagging — "trees" is a word somebody typed BECAUSE it is not in
-    // the filename.
-    const shown = needle
-        ? allItems.filter(item => [
-            item.display_name,
-            item.note,
-            ...(item.tags || []),
-        ].filter(Boolean).join(' ').toLowerCase().includes(needle))
-        : allItems;
+    // The rule lives in libraryFilter.mjs, where it can be tested by calling it.
+    const shown = filterLibrary(allItems, { query, tags: selectedTags });
+
+    renderTagFilter();
 
     grid.innerHTML = '';
     grid.className = '';
 
+    // The count has to say WHY it is showing fewer, or a filter that is on
+    // looks like a library that has lost things.
     const count = $('libraryCount');
+
     if (count) {
-        count.textContent = allItems.length === 0
-            ? ''
-            : `${shown.length} of ${allItems.length} item${allItems.length === 1 ? '' : 's'}`;
+        if (allItems.length === 0) {
+            count.textContent = '';
+        } else {
+            const filteredBy = [
+                needle ? 'the search' : null,
+                selectedTags.size > 0
+                    ? `${selectedTags.size} tag${selectedTags.size === 1 ? '' : 's'}`
+                    : null,
+            ].filter(Boolean);
+
+            count.textContent = filteredBy.length === 0
+                ? `${allItems.length} item${allItems.length === 1 ? '' : 's'}`
+                : `${shown.length} of ${allItems.length} — by ${filteredBy.join(' and ')}`;
+        }
     }
 
     if (allItems.length === 0) {
@@ -248,7 +353,15 @@ function render() {
 
     if (shown.length === 0) {
         grid.className = 'text-secondary';
-        grid.textContent = `Nothing matches "${query.trim()}".`;
+
+        // Say WHICH filter emptied it. "Nothing matches" when the search box is
+        // empty reads as a broken page rather than as a filter doing its job.
+        const by = [
+            query.trim() ? `"${query.trim()}"` : null,
+            selectedTags.size > 0 ? [...selectedTags].join(' + ') : null,
+        ].filter(Boolean);
+
+        grid.textContent = `Nothing here is tagged ${by.join(' and ')}.`;
         return;
     }
 
@@ -277,6 +390,16 @@ async function load() {
         }
 
         allItems = data.items || [];
+
+        // A tag can stop existing — its last item was removed, or relabelled.
+        // Left selected it would filter everything away and look like an empty
+        // library rather than a stale filter, so it is dropped on reload.
+        const live = tagCounts();
+
+        for (const tag of [...selectedTags]) {
+            if (!live.has(tag)) selectedTags.delete(tag);
+        }
+
         render();
 
     } catch (err) {
@@ -583,6 +706,22 @@ document.addEventListener('DOMContentLoaded', () => {
     tagsInput?.addEventListener('input', renderTagPreview);
 
     $('libraryEditSave')?.addEventListener('click', saveEdit);
+
+    // One delegated listener for the filter row, like the grid's — the row is
+    // rebuilt on every render, so per-button listeners would be re-attached
+    // endlessly.
+    $('libraryTagFilter')?.addEventListener('click', (event) => {
+        if (event.target.closest('[data-clear-tags]')) {
+            selectedTags.clear();
+            render();
+            return;
+        }
+
+        const button = event.target.closest('button[data-tag]');
+        if (!button) return;
+
+        toggleTag(button.dataset.tag);
+    });
 
     // Save on Enter in the name field — it is a one-line field and the dialog
     // has exactly one obvious action.
