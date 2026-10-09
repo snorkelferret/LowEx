@@ -4744,7 +4744,7 @@ no upside. If something seems to need one of them, ask.
         is: an inflated archive becomes ONE asset or MANY depending on the answer.
 
 
-57) THE IMAGE LIBRARY — a THIRD SPACE, and it does not exist. 2026-10-08.
+57) THE IMAGE LIBRARY — a THIRD SPACE. BUILT 2026-10-09. 2026-10-08.
 
     ADDS TO 54 AND 56, and CORRECTS BOTH. The user's words: *"Images cannot go
     into the game without being part of an asset but they can go into the image
@@ -6737,3 +6737,90 @@ no upside. If something seems to need one of them, ask.
     AND THE TIMING IS IN OUR FAVOUR EITHER WAY: switching is cheap now and
     expensive the moment the game has content. Same theme as the .gitkeep lesson
     and the repository question (item 68).
+
+
+    ============================================================
+    WHAT WAS BUILT, 2026-10-09
+    ============================================================
+
+    THE FIRST THING OFF THE LIST IN ITEM 70. The third space exists, and with it
+    the THIRD REFERENCER of stored_files — which is why this was worth doing
+    first: it is the test of the one-copy rule the whole design rests on, and the
+    test passed.
+
+    --- WHAT EXISTS ---
+
+      * library_items and library_thumbnails in db.js, beside the two file
+        tables. UNIQUE (stored_file_id) makes "one item per blob" STRUCTURAL —
+        the duplicate rule cannot be forgotten by a route.
+      * backend/routes/library.js — list, upload, thumbnail, content, remove.
+        Mounted at /api/library; developers and above.
+      * backend/lib/ingestFiles.js — THE ONE WAY A FILE ENTERS THE STORE,
+        extracted from the workspace upload so both paths call it. This was the
+        plan's most important structural decision: item 55 already says a second
+        upload path is how two pipelines end up disagreeing about what is
+        acceptable.
+      * Thumbnails with sharp, at upload, for images only. They are DERIVED, so
+        they are NOT stored_files rows (item 69) — they live in THUMB_DIR as a
+        cache, named <sha>_<kind>.webp. The kind is in the FILENAME because one
+        blob may have more than one thumbnail later, and keying by the source hash
+        alone would have the second silently overwrite the first.
+      * A Library tab on the developer dashboard, in the tab strip that already
+        existed, plus frontend/src/developerLibrary.js.
+
+    --- THE TWO PLACES THAT HAD TO LEARN ABOUT THE THIRD TABLE ---
+
+      * backend/jobs/daily.js — THE COLLECTOR. Its NOT EXISTS pair meant every
+        library blob became collectable once past the grace window: the library
+        would empty itself on a schedule, silently. A REMOVED item does NOT
+        protect its blob, which is deliberate — removing something from the
+        library is the act of releasing it.
+      * backend/lib/workspaceUsage.js — the quota NOT IN. Verified: pulling
+        library material into a workspace costs NO quota, because the rule is
+        that the quota measures what the developer holds THAT THE STUDIO DOES
+        NOT.
+
+    IF A FOURTH REFERENCER EVER APPEARS, both of those are where to look.
+
+    --- VERIFIED, NOT ASSUMED ---
+
+    The two silent-failure paths were tested against the REAL collector (run as
+    a subprocess with --dry-run) and the REAL quota function: a library item
+    protects its blob, a removed one releases it, and a library blob costs no
+    workspace quota. Then everything was driven over HTTP against a throwaway
+    account: upload, the one-copy rule through the route (second upload reports
+    the existing item and stored_files stays at one row), refusal of an
+    executable named .png, refusal of an empty file, a JPEG named .png ACCEPTED
+    with the contradiction recorded, a PDF listed with no thumbnail, content
+    served as application/octet-stream with identical bytes, and a soft delete
+    that stops serving. All test data removed; the store returned to 0 rows and
+    0 blobs.
+
+    --- THREE FINDINGS WORTH KEEPING ---
+
+      * THE APP IS LIGHT-ONLY. Bootstrap's dark theme is not in the bundle at
+        all. The library's styles use --bs-* variables anyway, so the panel would
+        follow a theme if one were ever added — but "check it in both themes" is
+        not a thing that can be done here, and the plan asked for it.
+
+      * npm audit IS NO LONGER CLEAN, AND SHARP DID NOT CAUSE IT. Item 22 records
+        0 vulnerabilities on 2026-10-01; audit now reports 3 (proxy-addr,
+        shell-quote, source-map-js) AT THE EXACT SAME VERSIONS as before the
+        install. Advisories were published in between. In practice:
+        shell-quote (via concurrently) and source-map-js (via vite) are DEV-ONLY,
+        and proxy-addr's advisory needs `trust proxy`, WHICH IS NOT SET. So
+        nothing here is a production risk, and `npm audit fix` was NOT run —
+        bumping transitive dependencies of a working app to clear a report
+        nobody is exposed to is the wrong trade. Item 22 needs re-checking rather
+        than re-believing.
+
+      * THE COLLECTOR'S "BELT AND BRACES" COVERS ONE OF THREE TABLES, and this is
+        recorded rather than changed. After deciding a blob is unreferenced it
+        deletes, and it also runs `DELETE FROM asset_version_files WHERE
+        stored_file_id = ?` — but not the workspace or library equivalents. The
+        asymmetry is latent for two reasons: the query has already proved there
+        are no references, so the delete is a no-op; and ADDING library_items to
+        it would be actively dangerous, because if the query were ever wrong that
+        line would DELETE A LIBRARY ITEM rather than fail. It either belongs on
+        all three tables or none, and "none" is the safer half — but that is a
+        change to the code that destroys data, and it wants doing deliberately.

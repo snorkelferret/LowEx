@@ -39,6 +39,7 @@ const pageConfigurations = [
 	'./src/header.js',          // Fill in login details
 	'./src/developerPanel.js',
 	'./src/developerWorkspace.js',
+	'./src/developerLibrary.js', // The Library tab: shared source material
 	'./src/feedback.js',        // Report-a-problem button
 	'./src/utilityBar.js',     // The utility bar: manual, and whatever else a page adds
 	'./src/notBuilt.js'         // Menu stubs for features that are not built yet

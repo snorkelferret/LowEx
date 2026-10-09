@@ -42,6 +42,9 @@ const {
 const { formatBytes } = require('../../shared/formatBytes.mjs');
 // Where the store's files live, and the only safe way to build a path to one.
 const { BLOB_DIR, TMP_DIR, isStorageKey, blobPath } = require('../lib/storagePaths');
+// Getting bytes into the store. SHARED WITH THE LIBRARY'S UPLOAD — there is one
+// implementation of this on purpose; see the note at the top of the file.
+const { storeOne } = require('../lib/ingestFiles');
 
 
 // ============================================================
@@ -2827,34 +2830,15 @@ router.post(
 
 
                         // --------------------------------------------
-                        // Prepare stored_files statements.
+                        // The statements this transaction still needs.
+                        //
+                        // stored_files USED TO BE PREPARED HERE — a lookup by
+                        // sha256 and an insert — and they are GONE rather than
+                        // merely unused: both now live in
+                        // backend/lib/ingestFiles.js, where the library's upload
+                        // reaches them too. Leaving a second copy here is how a
+                        // file ends up stored twice or not at all.
                         // --------------------------------------------
-
-                        const getStoredFile =
-                            db.prepare(`
-                                SELECT
-                                    id,
-                                    sha256,
-                                    file_size,
-                                    storage_key,
-                                    mime_type,
-                                    created_at
-                                FROM stored_files
-                                WHERE sha256 = ?
-                            `);
-
-
-                        const insertStoredFile =
-                            db.prepare(`
-                                INSERT INTO stored_files (
-                                    sha256,
-                                    file_size,
-                                    storage_key,
-                                    mime_type
-                                )
-                                VALUES (?, ?, ?, ?)
-                            `);
-
 
                         const insertVersionFile =
                             db.prepare(`
@@ -2879,114 +2863,32 @@ router.post(
                             const file = item.file;
                             const sha256 = item.sha256;
 
-                            let storedFile =
-                                getStoredFile.get(sha256);
-
-
                             // ----------------------------------------
-                            // Existing content.
+                            // Into the store.
+                            //
+                            // ONE IMPLEMENTATION, SHARED WITH THE LIBRARY'S
+                            // UPLOAD. The lookup by SHA that makes the one-copy
+                            // rule true lives in backend/lib/ingestFiles.js, and
+                            // so does the hard link. Two copies of those steps
+                            // would be two chances to disagree about what a file
+                            // is — see the note in that file.
                             // ----------------------------------------
 
-                            if (storedFile) {
-
-                                // blobPath() refuses a key that is not a
-                                // plain SHA-256, so a null here means the ROW
-                                // is corrupt rather than the caller. Throwing
-                                // rolls the transaction back and removes
-                                // anything this upload has already written,
-                                // which is the right outcome for a store that
-                                // cannot be trusted.
-                                const storagePath =
-                                    blobPath(storedFile.storage_key);
-
-                                if (!storagePath) {
-                                    throw new Error(
-                                        `stored_files #${storedFile.id} has a malformed storage_key`
-                                    );
-                                }
-
-
-                                // The database says the file exists.
-                                // If the physical file is missing, repair
-                                // it from this upload.
-                                if (!fs.existsSync(storagePath)) {
-
-                                    fs.linkSync(
-                                        file.path,
-                                        storagePath
-                                    );
-                                }
-
-
-                            } else {
-
-                                // ------------------------------------
-                                // New content.
-                                // ------------------------------------
-
-                                const storageKey = sha256;
-
-                                // storageKey is the hash this server just
-                                // computed from the bytes, so it is always a
-                                // valid key; blobPath still builds it, so there
-                                // is one way to make a store path.
-                                const storagePath = blobPath(storageKey);
-
-                                if (!storagePath) {
-                                    throw new Error(
-                                        `refusing to store content under a malformed key: ${storageKey}`
-                                    );
-                                }
-
-
-                                // Normally this path cannot already
-                                // exist because the database transaction
-                                // serialises all upload writers.
-                                //
-                                // If it does exist, it is an untracked
-                                // physical file left by an earlier failed
-                                // operation. Replace it with the verified
-                                // temporary upload.
-                                if (fs.existsSync(storagePath)) {
-
-                                    fs.unlinkSync(storagePath);
-                                }
-
-
-                                // Create the canonical physical file.
-                                //
-                                // This is a hard link, not a file copy.
-                                // It is therefore effectively an atomic
-                                // creation of the content-store entry.
-                                fs.linkSync(
-                                    file.path,
-                                    storagePath
-                                );
-
-
-                                newlyStoredPaths.push(
-                                    storagePath
-                                );
-
-
-                                // Create its database identity.
-                                insertStoredFile.run(
+                            const { storedFile, createdBlobPath } =
+                                storeOne({
                                     sha256,
-                                    file.size,
-                                    storageKey,
-                                    file.mimetype
-                                );
+                                    tempPath: file.path,
+                                    size: file.size,
+                                    mimeType: file.mimetype
+                                });
 
 
-                                storedFile =
-                                    getStoredFile.get(sha256);
-                            }
-
-
-                            if (!storedFile) {
-                                throw new Error(
-                                    `Unable to create stored file record for ${sha256}`
-                                );
+                            // ONLY A GENUINELY NEW BLOB IS ROLLED BACK. A repair
+                            // is not: it restored a file the database said should
+                            // be there, and undoing it would leave the store in
+                            // the state the repair was fixing.
+                            if (createdBlobPath) {
+                                newlyStoredPaths.push(createdBlobPath);
                             }
 
 

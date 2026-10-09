@@ -35,6 +35,14 @@ const CHECKS = [
         pages: ['devDashboard.html'],
     },
     {
+        // The Library tab. A separate client from developerWorkspace.js even
+        // though they share a page, because they are different spaces: a
+        // workspace version is a deliverable, and a library item is source
+        // material that is never approved into anything.
+        client: 'frontend/src/developerLibrary.js',
+        pages: ['devDashboard.html'],
+    },
+    {
         // Pre-auth: no header, no guard. Its ids live only on this page.
         client: 'frontend/src/register.js',
         pages: ['register.html'],

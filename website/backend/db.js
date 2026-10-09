@@ -406,6 +406,124 @@ const applyAssetRepositorySchema = () => {
     );
   `);
 
+  /*
+   * ----------------------------------------------------------
+   * The Library — THE THIRD SPACE
+   *
+   * Source material, not game assets. An image is a COMPONENT
+   * in a library; an asset is a unit of game content that a
+   * developer assembles, which may USE components. Neither is
+   * a stage of the other. See TODO 57 and 58.
+   *
+   * WHICH MAKES THIS THE THIRD REFERENCER OF stored_files —
+   * after workspace_version_files and asset_version_files —
+   * and that is not a detail. backend/jobs/daily.js decides
+   * a blob is GARBAGE when neither of the other two mentions
+   * it, so a third table it does not know about means every
+   * library blob becomes collectable once it ages past the
+   * grace window. THE COLLECTOR LEARNS ABOUT THIS TABLE IN
+   * THE SAME CHANGE, and if it ever gains a fourth referencer
+   * the same two places must be found again:
+   *
+   *   backend/jobs/daily.js       the NOT EXISTS pair
+   *   backend/lib/workspaceUsage.js   the quota NOT IN
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS library_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      -- The blob. UNIQUE, which is the one-copy rule made
+      -- structural rather than checked: the same content
+      -- cannot produce two items, so "it is already in the
+      -- library" is true by construction and cannot be
+      -- forgotten by a route.
+      stored_file_id INTEGER NOT NULL,
+
+      -- What a human calls it, and what it was called when it
+      -- arrived. The original is kept because a display name
+      -- is editable and the filename is evidence.
+      display_name TEXT NOT NULL,
+      original_name TEXT,
+      note TEXT,
+
+      -- THE LIGHT GATE. A library item is not approved into
+      -- anything, so it is not refused for being mislabelled
+      -- — a JPEG named .png is still a picture. It IS refused
+      -- for being blocked content or empty; see routes/library.js.
+      content_state TEXT NOT NULL DEFAULT 'unverified'
+        CHECK (
+          content_state IN (
+            'confirmed',
+            'contradicted',
+            'unverifiable'
+          )
+        ),
+
+      added_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      -- Soft delete, so removing something from the library
+      -- frees its blob for collection without destroying the
+      -- record that it was there.
+      is_active INTEGER NOT NULL DEFAULT 1,
+      deleted_at DATETIME,
+
+      FOREIGN KEY (stored_file_id)
+        REFERENCES stored_files(id),
+
+      UNIQUE (stored_file_id)
+    );
+  `);
+
+  /*
+   * Thumbnails are DERIVED, so they are NOT stored_files rows.
+   *
+   * stored_files holds authored content — one copy of every
+   * byte the studio made. A thumbnail is produced FROM that
+   * content, the way a build is produced from a project, and
+   * item 69 of the TODO draws that line. So they live in their
+   * own directory as a CACHE, named by the source blob's
+   * SHA-256 — deterministic, deduplicated by construction, and
+   * disposable: deleting one costs a regeneration, not a file.
+   *
+   * A TABLE RATHER THAN A COLUMN, because `kind` is the point:
+   * a video poster frame or a 3D turntable becomes a ROW, not
+   * a migration. Only `image` is generated today.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS library_thumbnails (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      library_item_id INTEGER NOT NULL,
+
+      kind TEXT NOT NULL
+        CHECK (
+          kind IN (
+            'image',
+            'video_frame',
+            'model_preview'
+          )
+        ),
+
+      -- A SHA-256, and the filename inside THUMB_DIR.
+      storage_key TEXT NOT NULL,
+
+      width INTEGER,
+      height INTEGER,
+
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (library_item_id)
+        REFERENCES library_items(id)
+        ON DELETE CASCADE,
+
+      UNIQUE (library_item_id, kind)
+    );
+  `);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS
       idx_workspace_assets_workspace
@@ -435,6 +553,21 @@ const applyAssetRepositorySchema = () => {
     CREATE INDEX IF NOT EXISTS
       idx_asset_recommended_version
       ON asset_recommended_versions(version_id);
+
+    -- The library is listed newest-first, and its blob link is
+    -- looked up by the collector's NOT EXISTS and by the quota
+    -- exclusion. Both want an index.
+    CREATE INDEX IF NOT EXISTS
+      idx_library_items_stored_file
+      ON library_items(stored_file_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_library_items_created
+      ON library_items(created_at);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_library_thumbnails_item
+      ON library_thumbnails(library_item_id);
   `);
 
   console.log('📦 Asset Repository tables ready.');

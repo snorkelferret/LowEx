@@ -141,10 +141,29 @@ function runPurge() {
 // 2. The collector
 // ============================================================
 
-// A stored file is garbage when NEITHER table points at it. Both are checked:
-// a workspace can reference content the store has never seen, and the store can
-// reference content no workspace holds any more — the overlap is exactly where
-// the interesting cases live.
+// A stored file is garbage when NO table points at it. ALL THREE are checked:
+// a workspace can reference content the store has never seen, the store can
+// reference content no workspace holds any more, and the LIBRARY holds content
+// that is in neither — the overlap is exactly where the interesting cases live.
+//
+// ============================================================
+// THE LIBRARY CLAUSE IS NOT OPTIONAL, AND ITS ABSENCE IS SILENT
+// ============================================================
+//
+// library_items is the THIRD referencer of stored_files. Before it existed, this
+// query was complete. With it, a missing clause here means EVERY LIBRARY BLOB
+// becomes collectable the moment it ages past the grace window — the library
+// empties itself on a schedule, with no error, and the first symptom is a page
+// of broken thumbnails and a store that has "lost" files nobody deleted.
+//
+// SO IF A FOURTH REFERENCER EVER APPEARS, IT BELONGS IN THIS LIST, and the same
+// is true of the quota exclusion in backend/lib/workspaceUsage.js. Those two are
+// the only places that enumerate what may reference a blob.
+//
+// A SOFT-DELETED LIBRARY ITEM DOES NOT PROTECT ITS BLOB. Removing something from
+// the library is the act of releasing it, so `is_active = 1` is deliberate: the
+// row survives to say it was there, and the blob is freed when nothing else
+// holds it.
 const unreferenced = db.prepare(`
     SELECT id, storage_key, file_size, created_at
     FROM stored_files sf
@@ -154,6 +173,11 @@ const unreferenced = db.prepare(`
       )
       AND NOT EXISTS (
           SELECT 1 FROM asset_version_files WHERE stored_file_id = sf.id
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM library_items
+          WHERE stored_file_id = sf.id
+            AND is_active = 1
       )
     ORDER BY sf.id
     LIMIT ?

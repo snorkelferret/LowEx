@@ -26,22 +26,30 @@
 //     files must not count again, or every iteration would appear to cost the
 //     full size of the tree.
 //
-//   * EXCLUDED: anything already in the GAME STORE. Game-owned content is not
-//     what the workspace is staging, and pulling an approved asset back down
-//     to iterate on it must not consume quota — that round trip is the workflow
-//     the portal exists to support.
+//   * EXCLUDED: anything already held by the STUDIO — the GAME STORE, and the
+//     LIBRARY. Studio-owned content is not what the workspace is staging, and
+//     pulling it down to work with must not consume quota — that round trip is
+//     the workflow the portal exists to support.
+//
+//     THE RULE, IN ONE LINE: THE QUOTA MEASURES WHAT THE DEVELOPER IS HOLDING
+//     THAT THE STUDIO IS NOT. Which is why the exclusion is BY BLOB and not by
+//     link — an asset that was checked out and then adjusted counts only the
+//     bytes that were actually added, and a full check-out counts nothing.
 //
 //   * A WORKSPACE IS PRIVATE. Nothing in it is visible to, or shared with,
-//     another developer. The GAME STORE is the only shared content in the
-//     system TODAY, which is why it is the only thing the exclusion above is
-//     about.
+//     another developer. The GAME STORE and the LIBRARY are the shared content
+//     in the system, which is why they are the two things the exclusion above
+//     is about.
 //
-//     THE IMAGE LIBRARY (TODO 57) IS THE SECOND, and this is the sentence that
-//     will cause the exclusion to be left wrong: library material is
-//     STUDIO-OWNED, so pulling it into a workspace to build an asset with must
-//     not consume quota either. WHEN THE LIBRARY IS BUILT, ITS FILES JOIN THE
-//     `NOT IN` AT THE BOTTOM OF THIS FILE. A rule that is right today and reads
-//     as a standing instruction is how the second case gets missed.
+//     THE LIBRARY JOINED THAT LIST ON 2026-10-09, and this note is kept in the
+//     shape it had beforehand on purpose: it used to say the game store was the
+//     ONLY shared content, and to warn that the sentence would be a standing
+//     instruction to leave the exclusion alone when the library arrived. It was
+//     right. IF A FOURTH REFERENCER OF stored_files EVER APPEARS, IT BELONGS IN
+//     THE `NOT IN` BELOW *AND* IN THE COLLECTOR'S NOT EXISTS PAIR IN
+//     backend/jobs/daily.js — those two are the only places that enumerate what
+//     may reference a blob, and the collector's omission is the one that deletes
+//     things.
 //
 //   * The store is content-addressed, so it cannot tell "the same bytes" from
 //     "the same file". If two developers independently upload identical
@@ -100,6 +108,10 @@ const workspaceStoredFileIds = db.prepare(`
       AND wv.is_active = 1
       AND wvf.stored_file_id NOT IN (
           SELECT stored_file_id FROM asset_version_files
+      )
+      AND wvf.stored_file_id NOT IN (
+          SELECT stored_file_id FROM library_items
+          WHERE is_active = 1
       )
 `);
 

@@ -86,6 +86,13 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/inviteDevs', inviteDevRoutes);
 app.use('/api/developer/workspace', developerWorkspaceRoutes);
 
+// THE LIBRARY — the third space. Source material, not game assets: reference
+// photographs, textures in waiting, scans. Nothing here is approved into
+// anything, because nothing in a library ships. See routes/library.js, which
+// also names the two places that had to learn about the third table pointing at
+// stored_files.
+app.use('/api/library', require('./routes/library'));
+
 // Bug reports and suggestions. Reachable from every page, signed in or not —
 // the route applies its own optionalAuth rather than requiring a session,
 // because someone who cannot sign in is the most likely person to want to

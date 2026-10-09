@@ -24,7 +24,7 @@
 // resolved once, here, from THIS file's own location.
 //
 // ============================================================
-// THE TWO DIRECTORIES, AND WHY THEY ARE NOT ONE
+// THE THREE DIRECTORIES, AND WHY THEY ARE NOT ONE
 // ============================================================
 //
 //   BLOB_DIR — the permanent store. FLAT: one file per SHA-256, named for the
@@ -38,9 +38,18 @@
 //     any table, it is safe to empty at any time, and it must never be counted
 //     as stored content.
 //
+//   THUMB_DIR — DERIVED content, and NOT the store. Library thumbnails, named
+//     by the SHA-256 of the blob they were made from, so they are deterministic
+//     and deduplicate by construction. A THUMBNAIL IS NOT AN AUTHORED FILE: it
+//     is produced FROM one, the way a build is produced from a project, which is
+//     why it does not get a stored_files row and is not counted, collected or
+//     verified as store content. It is a CACHE — deleting every file in here
+//     costs regeneration, not data.
+//
 // They are deliberately separate for that last reason. A sweep that clears
-// orphans in BLOB_DIR must not touch a half-written upload, and an upload being
-// hashed must not be mistaken for a stored blob.
+// orphans in BLOB_DIR must not touch a half-written upload OR a thumbnail, and
+// neither a half-written upload nor a thumbnail may be mistaken for a stored
+// blob.
 
 const path = require('path');
 
@@ -49,6 +58,7 @@ const UPLOADS_DIR = path.join(__dirname, '../uploads');
 
 const BLOB_DIR = path.join(UPLOADS_DIR, 'files');
 const TMP_DIR = path.join(UPLOADS_DIR, 'tmp');
+const THUMB_DIR = path.join(UPLOADS_DIR, 'thumbs');
 
 // ============================================================
 // THE KEY FORMAT, AND WHY IT IS CHECKED HERE
@@ -85,10 +95,39 @@ function blobPath(storageKey) {
     return path.join(BLOB_DIR, String(storageKey));
 }
 
+// The kinds of thumbnail a library item may have. Duplicated from the CHECK on
+// library_thumbnails.kind, deliberately and with the same reasoning as the key
+// regex above: the value becomes part of a FILENAME, so it is validated where
+// the filename is built rather than trusted because a column accepted it.
+const THUMB_KINDS = new Set(['image', 'video_frame', 'model_preview']);
+
+/**
+ * The absolute path of a thumbnail, or null if the key is not a plain SHA-256 or
+ * the kind is not one we make.
+ *
+ * THE KIND IS IN THE FILENAME, not only in the row. One blob can have more than
+ * one thumbnail — a still and, later, a poster frame or a turntable — so keying
+ * the file by the source hash ALONE would have the second kind silently overwrite
+ * the first. `<sha>_<kind>.webp` cannot collide.
+ *
+ * Same contract as blobPath() and for the same reason: the key arrives from the
+ * database and the path is built from it, so the validation and the join are one
+ * call and no caller can build a path from an unvalidated string.
+ */
+function thumbPath(storageKey, kind) {
+    if (!isStorageKey(storageKey)) return null;
+    if (!THUMB_KINDS.has(String(kind))) return null;
+
+    return path.join(THUMB_DIR, `${storageKey}_${kind}.webp`);
+}
+
 module.exports = {
     UPLOADS_DIR,
     BLOB_DIR,
     TMP_DIR,
+    THUMB_DIR,
+    THUMB_KINDS,
     isStorageKey,
-    blobPath
+    blobPath,
+    thumbPath
 };
