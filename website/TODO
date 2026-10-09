@@ -6963,3 +6963,57 @@ no upside. If something seems to need one of them, ask.
     THAT THIS FILE ADDS ALMOST NOTHING TO IT, with the correction written into
     it — a note that says "read this before adding a rule" is worth very little
     if it is itself wrong.
+
+
+75) STATIC ASSETS MUST LIVE IN frontend/public/ — FOUND BY BREAKING IT.
+    2026-10-09.
+
+    THE INDEX PAGE'S CLICKABLE REGION IS AN ALPHA MAP, and it stopped working.
+    index.html draws ./images/main.png and hit-tests against ./images/mainAlpha.png
+    on a canvas — clickable where the mask says so. Both files were present in
+    frontend/images/ and tracked in git. THE PAGE STILL BROKE.
+
+    --- WHY, AND IT WAS A BUILD THAT DID IT ---
+
+    backend/server.js SERVES frontend/dist. That directory is GITIGNORED — it is
+    a BUILD ARTEFACT, and nothing in it is safe from a build.
+
+    AND EVERY BUILD WIPES IT: vite.config.mjs sets `emptyOutDir: true`, so
+    `npm run build` deletes the whole of dist before writing into it.
+
+    AND NOTHING PUT THE IMAGES BACK, because there was NO frontend/public
+    DIRECTORY AT ALL. Vite copies the CONTENTS of `<root>/public` into the build
+    — that is its one mechanism for carrying a file through unchanged — and
+    frontend/public did not exist, so frontend/images/ was never copied anywhere.
+
+    THE RESULT: running any build produced a dist with NO images in it, the mask
+    request 404'd, and the clickable region silently stopped working. Silent,
+    because a missing mask is not an error the page reports — it just stops
+    responding to clicks.
+
+    AND IT WAS CAUSED HERE, by running `npm run build` while working on the
+    library. Not by editing index.html, which is untouched — by REBUILDING it.
+
+    --- THE FIX, AND WHY IT IS NOT "COPY THE FILES BACK" ---
+
+    frontend/images/ WAS MOVED TO frontend/public/images/. That is vite's own
+    mechanism rather than a workaround:
+
+      * the contents of public/ are copied to the ROOT of the build, so
+        public/images/mainAlpha.png becomes dist/images/mainAlpha.png — which is
+        exactly the path index.html already asks for;
+      * the dev server serves public/ at / as well, so the SAME path works in
+        development and in a build, with no conditional anything.
+
+    COPYING THE TWO FILES INTO dist/ WOULD HAVE FIXED THE SYMPTOM FOR AN HOUR.
+    The next build would have deleted them again, which is the second time this
+    would have happened.
+
+    VERIFIED, not assumed: two further builds in a row, and dist/images/ is still
+    populated; then the server was started and the files fetched — 200, image/png,
+    and the byte counts match the originals.
+
+    --- THE RULE, WHICH IS THE GENERAL PART ---
+
+    ANY FILE A PAGE LOADS BY PATH RATHER THAN BY IMPORT BELONGS IN
+    frontend/public/. frontend/dist is disposable; frontend/ is not.
