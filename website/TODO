@@ -7017,3 +7017,49 @@ no upside. If something seems to need one of them, ask.
 
     ANY FILE A PAGE LOADS BY PATH RATHER THAN BY IMPORT BELONGS IN
     frontend/public/. frontend/dist is disposable; frontend/ is not.
+
+
+    ============================================================
+    AND IT EXPOSED A REAL ONE, 2026-10-09: THREE PAGES HAD NO THEME
+    ============================================================
+
+    THE SHOPFRONT HAD NEAR-WHITE CARDS WITH WHITE TEXT ON THEM. Reported as
+    "ugly squares" and "white text on a very light almost white bg", in the
+    section headed "A Seamless Open World".
+
+    THE CAUSE, AND IT WAS THE OVERRIDE REMOVAL ABOVE THAT REVEALED IT. Only the
+    five GENERATED pages had data-bs-theme="dark" — build.js writes it into them.
+    THE THREE HAND-WRITTEN ONES DID NOT: index.html, shopfront.html and
+    discussion.html were `<html lang="en">` and nothing else.
+
+    THEY FAKED DARKNESS INSTEAD, with `body class="bg-dark text-light"`. That
+    worked for as long as .feature-card hardcoded #212529 — and stopped the
+    moment it was changed to var(--bs-secondary-bg), because ON A LIGHT-THEME
+    PAGE THAT VARIABLE IS LIGHT. White text on #e9ecef.
+
+    SO THE CHANGE WAS RIGHT AND THE PAGE WAS WRONG: it had been dark by accident
+    of two hardcoded colours rather than by asking for the theme.
+
+    --- THE FIX: GIVE ALL THREE THE THEME THEY SHOULD HAVE HAD ---
+
+    data-bs-theme="dark" added to index.html, shopfront.html and
+    discussion.html. ALL EIGHT PAGES NOW AGREE.
+
+    AND IT IS SAFE, WHICH WAS WORTH CHECKING RATHER THAN ASSUMING: Bootstrap
+    does NOT override --bs-light-rgb or --bs-dark-rgb in dark mode, so `.bg-dark`
+    and `.text-light` are LITERAL COLOURS THAT DO NOT FLIP. Every `<section
+    class="bg-dark">` on the shopfront stays dark, and the fix is confined to
+    the things that SHOULD follow the theme — cards, borders, body colour,
+    form controls.
+
+    VERIFIED BY RENDERING AND SAMPLING, not by looking: the feature card is
+    #343a40, Bootstrap's dark secondary surface, with white headings on it;
+    the section around it is #212529. index.html renders on #212529, and
+    discussion.html is unchanged in character.
+
+    --- AND THE GENERAL LESSON, WHICH IS THE SAME ONE TWICE NOW ---
+
+    A HARDCODED COLOUR HIDES A MISSING THEME. It looks correct on the page that
+    set it, and it takes a change somewhere else to reveal that the page never
+    asked for the theme at all. The three hand-written pages were invisible to
+    every check because they render fine — right up until they do not.
