@@ -7230,3 +7230,198 @@ no upside. If something seems to need one of them, ask.
     A NOTE THAT DESCRIBES AN EDIT IS NOT THE EDIT. If a list is wrong, THE LIST
     IS WHAT GETS FIXED: a correction written beside the thing it corrects leaves
     two answers and no way to tell which is current.
+
+
+77) NO LOCKING — TELL PEOPLE INSTEAD. 2026-10-09.
+
+    THE USER'S ARGUMENT, VERBATIM: *"If I am working on bigTree and have the sam
+    area of game and somone else has the same area but is working on house why
+    can't that happen - it should if there are collisions - the devs should be
+    told about it on the slack like BB - direct message -maybe"*. And then:
+    *"So we can have multiple people possibly working on the same area of game
+    just need to communicate to avoid collisions"*.
+
+    --- THEY ARE RIGHT, AND IT CORRECTS ITEM 62 ---
+
+    TWO DEVELOPERS IN THE SAME AREA WORKING ON DIFFERENT OBJECTS IS NOT A
+    COLLISION. One File Per Actor means each actor INSTANCE is its own file on
+    disk — item 63 found exactly this, and OFPA exists precisely so that this is
+    fine. bigTree and house are different files.
+
+    SO LOCKING EVERYTHING PUNISHES THE COMMON CASE TO PROTECT THE RARE ONE, and
+    item 62's line — that LOCKING is "the property that decides it" — was too
+    strong. Locking is for the rare case: THE SAME ACTOR.
+
+    AND HANDLING THAT CASE SOCIALLY IS CHEAPER THAN LOCKING. Detect it, tell the
+    two people, let them sort it out.
+
+    --- AND IT REOPENS A QUESTION ITEM 62 CLOSED ---
+
+    Item 62 ruled out the portal holding the game partly BECAUSE a
+    content-addressed store cannot lock, and content addressing is
+    merge-by-content. IF COLLISIONS ARE HANDLED BY TELLING PEOPLE RATHER THAN BY
+    PREVENTING THEM, THAT ARGUMENT LOSES MOST OF ITS FORCE.
+
+    SO ITEM 62'S CONCLUSION MAY STILL STAND, BUT IT NOW RESTS ON DIFFERENT
+    GROUND — and the question the user asked two turns earlier, "can the
+    workspace page just fetch the stuff for me", is OPEN RATHER THAN ANSWERED.
+    It was ruled out on a premise that has just been removed.
+
+    THE READING: the two wants are the SAME DECISION. If the portal fetches the
+    files, IT KNOWS WHO IS HOLDING WHAT, and detecting "you and Sam both have
+    actor 4821" is free. If Perforce stays the client, the portal has to ASK
+    Perforce — an integration with the system item 67 said not to couple to.
+
+    --- WHERE THE TELLING GOES, AND A CORRECTION ---
+
+    *"bb is our slack bot, it already messages us"* — AND THAT IS NOT WHAT BB IS.
+    This file defines it at line 3996: **"BB" IS THE DISCUSSION BOARD, ITEM 27:
+    SELF-HOSTED MATRIX/ELEMENT, DECIDED BUT NOT BUILT.** There is a
+    discussion.html stub and nothing behind it. Reading it as a Slack bot was a
+    mistake made here, in conversation, and corrected by grepping this file —
+    which is what the file is for.
+
+    WHAT MATTERS IS THAT IT CHANGES NOTHING ABOUT THE PLAN AND ALMOST EVERYTHING
+    ABOUT THE DEPENDENCY:
+
+      * IT HAS AN API — but it is MATRIX's, via Synapse, not Slack's. Synapse was
+        chosen partly FOR this: item 27 says "the admin API and OIDC/SSO — the
+        features the portal actually wants — exist only in Synapse".
+      * SO THIS NOTIFICATION DEPENDS ON ITEM 27 BEING BUILT, which is decided and
+        not started. A collision message has nowhere to go today.
+      * AND IT FITS ITEM 27'S OWN PURPOSE. Its stated point is INTEGRATION, not
+        just jurisdiction: the portal already intends to create and deactivate
+        Matrix users. A message from the portal to a Matrix DM is the same
+        relationship, used one more way.
+
+    --- AND WHAT A COLLISION MESSAGE WOULD ACTUALLY SAY ---
+
+    Not recorded in detail, because it depends on the state question above. What
+    it must carry either way: WHICH ACTOR, WHO ELSE HAS IT, and WHEN THEY TOOK
+    IT. "You and Sam both have the North Forest lighting actor, and Sam took it
+    two hours ago" is enough for two adults to sort it out; anything more is
+    decoration.
+
+    AND IT IS NOT URGENT, WHICH IS WHY IT IS NOT notify.js. That file is email
+    to EVERY ADMIN, for things like a disk at 95%. This is a chat message to TWO
+    DEVELOPERS. Different audience, different channel, different weight, and
+    bolting it onto the urgent path would make both worse.
+
+
+78) THE SPECS AND THE TODO HAVE DRIFTED APART. AUDITED 2026-10-09.
+
+    ASKED: *"how much of this is in our todo and spec sheets"* — after a long
+    conversation about getting a piece of the game onto a developer's machine,
+    which turned out to be largely re-deriving things already written down.
+
+    --- WHAT WAS AUDITED, AND WHAT COULD NOT BE ---
+
+    READ: docs/assettypes01 (in full), docs/Specification_v04_web.html (sections
+    02, 03 and 04), and the headers of docs/dbspec01, docs/uploadmodel01 and
+    docs/discussionboard01.
+
+    NOT READ, AND THIS IS PART OF THE FINDING: THE THREE PDFs —
+    "OpenWorld Asset Library", "OpenWorld Asset Repository & Development System",
+    "OpenWorld Asset System". They are the ORIGINAL specs (Aug 10) and among the
+    largest documents in docs/. THERE IS NO TEXT EXTRACTOR ON THIS MACHINE
+    (no poppler, no pdftotext), and the streams are font and image data, so a
+    naive decompression yields noise rather than prose.
+
+    SO THIS AUDIT IS PARTIAL BY CONSTRUCTION. Three specs nobody has compared
+    against anything are sitting in docs/ — and docs/SuperUserSpecs (277 KB) and
+    docs/Specification_v04_web.html have not been read end to end either.
+
+    --- WHAT TODAY'S DISCUSSION WAS ALREADY SPECCED BY ---
+
+    MOST OF IT. docs/assettypes01 §5B is headed DOWNLOAD TO LOCAL WORKING COPY,
+    marked SMALL and "HIGHEST VALUE, LOWEST RISK", and describes:
+
+      * "ZIP preserving relative_path (which exists in the schema for exactly
+        this) plus a JSON manifest: per-file SHA-256, size, and target path."
+        THAT IS THE STAGING VIEW AND THE HAVE/WANT SUBSTRATE, ALREADY DESIGNED.
+      * "The approver has a working copy of the game, so files must land in the
+        right places." — the mapping problem, named.
+      * "A small CLI later lets an artist sync by hash instead of
+        re-downloading." — THE HASH NEGOTIATION, as a known later step.
+      * AND THE SECURITY, worked out: octet-stream never the stored mime type,
+        the storage key validated as exactly 64 hex, relative_path re-validated
+        at zip time because it originated client-side and is being used to build
+        entry names.
+
+    SO THE CHECK-OUT WORK IS NOT NEW. It is item 59 plus a spec section written
+    on 2026-09-29, and the conversation spent an hour arriving where the file
+    already was.
+
+    --- AND THREE PLACES THE SPECS AND THE TODO CONTRADICT EACH OTHER ---
+
+    1. WHERE THE GAME LIVES.
+       SPEC (Specification_v04_web.html §03): *"All game source code, compiled
+       binaries, raw assets, website files, and documentation reside in a central
+       private GitHub repository (using Git LFS for binary assets)."* ONE REPO,
+       EVERYTHING IN IT.
+       TODO (items 62, 73): PERFORCE for the game, git for the website, separate.
+       THAT IS A REVERSAL, AND IT IS NOT RECORDED AS ONE ANYWHERE. Whoever next
+       reads the spec will find the opposite of what the last three days decided.
+
+    2. recommended_version_id.
+       SPEC (assettypes01 §3.1) says removing it WAS WRONG and it must be
+       restored: "recommended and release membership are different things, both
+       coexist" — recommended_version_id is WHICH VERSION TO BUILD FROM NOW (one,
+       a pointer); release membership is WHAT SHIPPED, AND WHEN (many, history).
+       TODO (item 53) records the removal as the settled decision, and names
+       release membership as carrying the meaning instead.
+       ONE OF THESE IS OUT OF DATE AND IT IS NOT OBVIOUS WHICH. Either the spec
+       was never updated after item 53 decided, or item 53 decided wrongly and
+       nobody noticed the spec said so. The column is still gone from db.js and
+       `asset_recommended_versions` is still sitting there orphaned, so the code
+       currently matches item 53 and neither the spec nor the code describes the
+       state the other expects.
+
+    3. STORAGE.
+       SPEC: Cloudflare R2. CODE: local disk, backend/uploads/files/.
+       Not a contradiction so much as a divergence that will bite on the day
+       somebody deploys — and it interacts with the blob-size question, since
+       object storage is what a terabyte wants (see item 74's neighbours).
+
+    --- WHAT IS IN THE SPECS AND NOT IN THE TODO AT ALL ---
+
+      * "SEAMLESS SSO HANDOFF" (Specification_v04 §03): *"Logged-in web portal
+        contributors pass seamlessly into GitHub without requiring secondary
+        authentication."* THE USER'S "I DON'T WANT TO LOG INTO ANOTHER SITE" IS
+        ALREADY IN THE SPEC. It was treated, in conversation, as a new
+        requirement. It is not — it is an unbuilt one.
+      * IMAGE TO 3D RECONSTRUCTION — vision tagging, CLIP/SigLIP embeddings in
+        Qdrant or pgvector, and Trellis/Rodin on serverless GPU. An entire
+        pipeline stage, specced in detail, absent from the TODO.
+      * THE VETTING GATE — polygon limits, texture dimensions, naming
+        conventions, format compliance.
+      * A CONTROL FILE THE REPOSITORY NEVER AUTO-MODIFIES.
+      * DEPENDENCY DISCOVERY, and reporting a missing dependency when identical
+        content exists elsewhere by SHA.
+
+    --- AND WHAT IS IN NEITHER ---
+
+      * THE SERVER-SIDE HAVE-LIST — that the Perforce server already holds what
+        each workspace has, so the portal can produce the sync list WITHOUT
+        anything running on the developer's machine. Worked out in conversation
+        on 2026-10-09 and written down nowhere until now (item 77's neighbour).
+      * AND "ONE LOGIN" AS A STATED REQUIREMENT, which the spec has as a feature
+        and the TODO has never had as a constraint.
+
+    --- WHAT TO DO, AND THE ORDER ---
+
+      1. DECIDE THE THREE CONTRADICTIONS, each as its own question: is the
+         one-repo model dead, is recommended_version_id restored or the spec
+         corrected, is storage staying local.
+      2. GET THE PDFs READABLE. A spec nobody can read is not a spec. Either
+         pdftotext in the shell (poppler), or convert them once and keep the
+         text beside them.
+      3. THEN AUDIT WHAT IS LEFT. Three unread PDFs plus two unread text specs,
+         against 78 items of decisions taken since — the drift is only going to
+         be worse in the parts nobody has looked at.
+
+    AND THE GENERAL POINT, WHICH IS WHY THIS ITEM EXISTS: THE TODO HAS BEEN
+    TREATED AS THE DECISION RECORD AND THE SPECS AS HISTORY. They are not
+    history — assettypes01 is dated 2026-09-29 and is more specific about the
+    check-out than anything written since. A decision record that never re-reads
+    its own inputs is just a longer way of forgetting.
