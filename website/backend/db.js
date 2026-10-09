@@ -307,6 +307,51 @@ const applyAssetRepositorySchema = () => {
     );
   `);
 
+  /*
+   * ----------------------------------------------------------
+   * asset_recommended_versions — WHICH VERSION TO USE
+   *
+   * RESTORED 2026-10-09. This table was retired on 2026-09-29 in commit
+   * 5d3d24f, together with the recommended_version_id column it had just
+   * replaced, on this reasoning:
+   *
+   *     "A single 'recommended version' pointer cannot express the intended
+   *      model -- an asset can hold several production versions at once, and
+   *      production status is derived from release membership, not from a
+   *      pointer."
+   *
+   * THAT REASONING WAS WRONG, and docs/assettypes01 §3.1 says so in as many
+   * words. It is perfectly true that a pointer cannot express releases. IT DOES
+   * NOT HAVE TO, BECAUSE THEY ANSWER DIFFERENT QUESTIONS:
+   *
+   *     release membership      what went into which named build, and when
+   *     a recommended version   which version to use by default, right now
+   *
+   * WITHOUT IT, "WHICH VERSION DO I USE?" HAS EXACTLY ONE POSSIBLE ANSWER --
+   * THE NEWEST -- and the newest is not always the right one. An asset can
+   * hold several approved versions at once, which is what this schema already
+   * does: approving a version ADDS one rather than replacing one.
+   *
+   * --- A TABLE AND NOT A COLUMN, WHICH IS ONE DEPARTURE FROM THE SPEC ---
+   *
+   * assettypes01 §3.1 describes restoring `recommended_version_id` on `assets`.
+   * THIS TABLE DOES THE SAME JOB AND CONSTRAINS IT: the composite foreign key
+   * below proves the recommended version BELONGS TO THIS ASSET, because
+   * asset_versions carries UNIQUE (id, asset_id) for exactly this purpose. A
+   * bare integer column cannot say that, and a pointer to another asset's
+   * version is a state nothing would catch.
+   *
+   * THE TABLE ALSO ALREADY EXISTED. Two mechanisms for one fact would be worse
+   * than either, and the argument in the spec is about the FACT, not the
+   * column.
+   *
+   * --- AND NOTHING WRITES IT YET ---
+   *
+   * That is the next decision rather than an oversight: WHO recommends a
+   * version, and whether creative approval does it by default. See TODO 78.
+   * ----------------------------------------------------------
+   */
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS asset_recommended_versions (
       asset_id INTEGER PRIMARY KEY,
@@ -321,12 +366,6 @@ const applyAssetRepositorySchema = () => {
       )
     );
   `);
-  // NOTE: this table is unused and slated for removal. A single "recommended
-  // version" pointer cannot express the intended model -- an asset can hold
-  // several production versions at once, and production status is derived from
-  // release membership, not from a pointer. Removed in the phase that
-  // introduces `releases`. Kept for now so the schema change is reviewable on
-  // its own.
 
   /*
    * ----------------------------------------------------------

@@ -7354,28 +7354,29 @@ no upside. If something seems to need one of them, ask.
 
     --- AND THREE PLACES THE SPECS AND THE TODO CONTRADICT EACH OTHER ---
 
-    1. WHERE THE GAME LIVES.
+    1. WHERE THE GAME LIVES. — RESOLVED 2026-10-09. THE SPEC IS STALE.
        SPEC (Specification_v04_web.html §03): *"All game source code, compiled
        binaries, raw assets, website files, and documentation reside in a central
        private GitHub repository (using Git LFS for binary assets)."* ONE REPO,
        EVERYTHING IN IT.
        TODO (items 62, 73): PERFORCE for the game, git for the website, separate.
-       THAT IS A REVERSAL, AND IT IS NOT RECORDED AS ONE ANYWHERE. Whoever next
-       reads the spec will find the opposite of what the last three days decided.
+       THE USER, 2026-10-09: *"The game does not live on github"*. SO THE SPEC'S
+       ONE-REPO MODEL IS OUT OF DATE AND ITEMS 62 AND 73 STAND.
+       AND IT IS WORTH SAYING WHY IT READ AS A LIVE CONTRADICTION RATHER THAN AN
+       OLD DOCUMENT: the spec was written on Aug 10, before Perforce was ever
+       considered, AND NOTHING IN IT WAS MARKED SUPERSEDED. A document describing
+       a world that has since changed, with no note saying so, reads as a
+       COMPETING DECISION rather than an EARLIER ONE — which is precisely how it
+       was read here, and how it would be read by anybody else.
+       WHICH IS THE SAME FAILURE THIS WHOLE ITEM IS ABOUT, ONE LEVEL UP: the
+       record not being re-read, and the older layers not saying they are older.
 
-    2. recommended_version_id.
-       SPEC (assettypes01 §3.1) says removing it WAS WRONG and it must be
-       restored: "recommended and release membership are different things, both
-       coexist" — recommended_version_id is WHICH VERSION TO BUILD FROM NOW (one,
-       a pointer); release membership is WHAT SHIPPED, AND WHEN (many, history).
-       TODO (item 53) records the removal as the settled decision, and names
-       release membership as carrying the meaning instead.
-       ONE OF THESE IS OUT OF DATE AND IT IS NOT OBVIOUS WHICH. Either the spec
-       was never updated after item 53 decided, or item 53 decided wrongly and
-       nobody noticed the spec said so. The column is still gone from db.js and
-       `asset_recommended_versions` is still sitting there orphaned, so the code
-       currently matches item 53 and neither the spec nor the code describes the
-       state the other expects.
+    2. recommended_version_id. — RESOLVED 2026-10-09. THE SPEC WAS RIGHT.
+       SPEC (assettypes01 §3.1): removing it WAS WRONG, and it must be restored
+       — "recommended and release membership are different things, both coexist".
+       TODO (item 53): the removal is the settled decision.
+       THE SPEC WINS. It was not that item 53 misread anything; it inherited a
+       line of reasoning that was simply wrong, explained below.
 
     3. STORAGE. — NOT A CONTRADICTION. TEMPORARY, TO BE DECIDED.
        SPEC: Cloudflare R2. CODE: local disk, backend/uploads/files/.
@@ -7427,6 +7428,60 @@ no upside. If something seems to need one of them, ask.
       3. THEN AUDIT WHAT IS LEFT. Three unread PDFs plus two unread text specs,
          against 78 items of decisions taken since — the drift is only going to
          be worse in the parts nobody has looked at.
+
+    ============================================================
+    AND CONTRADICTION 2 CLOSED: THE RECOMMENDED VERSION IS RESTORED
+    ============================================================
+
+    THE ARGUMENT THAT RETIRED IT, from db.js (commit 5d3d24f, 2026-09-29):
+
+        "A single 'recommended version' pointer cannot express the intended
+         model -- an asset can hold several production versions at once, and
+         production status is derived from release membership, not from a
+         pointer."
+
+    IT IS PERFECTLY TRUE THAT A POINTER CANNOT EXPRESS RELEASES. IT DOES NOT
+    HAVE TO, BECAUSE THEY ANSWER DIFFERENT QUESTIONS:
+
+        release membership      what went into which named build, and when
+        a recommended version   which version to use by default, right now
+
+    AND WITHOUT IT, "WHICH VERSION DO I USE?" HAS EXACTLY ONE POSSIBLE ANSWER —
+    THE NEWEST — which is not always the right one.
+
+    --- A TABLE, NOT A COLUMN, WHICH IS ONE DEPARTURE FROM THE SPEC ---
+
+    The spec says restore `recommended_version_id` on `assets`. THE TABLE
+    ASSET_RECOMMENDED_VERSIONS DOES THE SAME JOB AND CONSTRAINS IT: its
+    composite foreign key proves the recommended version BELONGS TO THIS ASSET,
+    because asset_versions carries UNIQUE (id, asset_id) for exactly that
+    purpose. A bare integer column cannot say that, and a pointer to another
+    asset's version is a state nothing would catch.
+
+    THE TABLE ALSO ALREADY EXISTED — the same commit removed the column and kept
+    the table, "so the schema change is reviewable on its own". So this is an
+    UN-RETIREMENT rather than an addition, and TWO MECHANISMS FOR ONE FACT WOULD
+    BE WORSE THAN EITHER. The spec's argument is about the FACT, not the column.
+
+    db.js now carries the whole of this reasoning where the table is declared,
+    including the reasoning that was wrong — so the next person to consider
+    retiring it has to argue with it rather than rediscover it.
+
+    --- AND WHAT IS STILL OPEN, WHICH IS THE NEXT DECISION ---
+
+    NOTHING WRITES IT. That is not an oversight and it is not finished: it is
+    the same shape of question item 53 already carries about releases.
+
+        WHO RECOMMENDS A VERSION, and does creative approval do it by default?
+
+    The case for approval doing it: a version that has just been approved is
+    usually the one to use, and asking somebody to say so twice is a step that
+    will be skipped. The case against: approval means "good enough for the
+    game", which is not the same as "use this one now", and the whole reason the
+    pointer exists is that those can differ.
+
+    NOT DECIDED, and it should be decided with item 53's "who manages releases",
+    because they are the same person doing two halves of one job.
 
     AND THE GENERAL POINT, WHICH IS WHY THIS ITEM EXISTS: THE TODO HAS BEEN
     TREATED AS THE DECISION RECORD AND THE SPECS AS HISTORY. They are not
