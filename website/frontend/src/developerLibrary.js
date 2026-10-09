@@ -89,22 +89,29 @@ function formatWhen(value) {
 // ------------------------------------------------------------
 
 function tile(item) {
+    // CANONICAL BOOTSTRAP THROUGHOUT, with a custom class only where Bootstrap
+    // has nothing to offer. `card` already gives the surface, the border and the
+    // radius; `overflow-hidden` clips the image to it. See the theme note at the
+    // top of frontend/styles/styles.css.
     const card = document.createElement('div');
-    card.className = 'library-tile';
+    card.className = 'card h-100 overflow-hidden';
 
+    // aspect-ratio is the one thing here Bootstrap cannot express.
     const frame = document.createElement('div');
-    frame.className = 'library-tile-frame';
+    frame.className =
+        'library-tile-frame d-flex align-items-center justify-content-center';
 
     if (item.thumbnail_kind) {
         const img = document.createElement('img');
-        img.className = 'library-tile-image';
+        img.className = 'w-100 h-100 object-fit-cover';
         img.loading = 'lazy';
         img.alt = '';
         img.src = `${API}/${item.id}/thumbnail`;
         frame.appendChild(img);
     } else {
         const icon = document.createElement('i');
-        icon.className = `bi ${ICONS[item.asset_type] || 'bi-file-earmark'} library-tile-icon`;
+        icon.className =
+            `bi ${ICONS[item.asset_type] || 'bi-file-earmark'} fs-1 text-secondary`;
         icon.setAttribute('aria-hidden', 'true');
         frame.appendChild(icon);
     }
@@ -112,19 +119,20 @@ function tile(item) {
     card.appendChild(frame);
 
     const body = document.createElement('div');
-    body.className = 'library-tile-body';
+    body.className = 'card-body p-2 d-flex flex-column gap-1';
 
     // The name is the download. textContent throughout: a filename is something
     // a person wrote, and a filename with a quote in it is a filename.
     const name = document.createElement('a');
-    name.className = 'library-tile-name';
+    // The clamp is custom; everything else is Bootstrap.
+    name.className = 'library-tile-name small fw-medium';
     name.href = `${API}/${item.id}/content`;
     name.textContent = item.display_name;
     name.title = item.display_name;
     body.appendChild(name);
 
     const meta = document.createElement('div');
-    meta.className = 'library-tile-meta';
+    meta.className = 'small text-secondary';
     meta.textContent = [
         item.asset_type || 'File',
         formatBytes(item.file_size),
@@ -136,20 +144,21 @@ function tile(item) {
     // is still a picture, and the library says so rather than hiding it.
     if (item.content_state === 'contradicted') {
         const warn = document.createElement('div');
-        warn.className = 'library-tile-warn';
+        warn.className = 'small text-warning-emphasis';
         warn.textContent = 'Contents do not match the name';
         body.appendChild(warn);
     }
 
     if (item.note) {
         const note = document.createElement('div');
-        note.className = 'library-tile-note';
+        note.className = 'small text-secondary';
         note.textContent = item.note;
         body.appendChild(note);
     }
 
     const actions = document.createElement('div');
-    actions.className = 'library-tile-actions';
+    // mt-auto keeps the button on the bottom edge whatever the tile contains.
+    actions.className = 'mt-auto pt-1';
 
     const remove = document.createElement('button');
     remove.type = 'button';

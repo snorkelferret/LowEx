@@ -6824,3 +6824,70 @@ no upside. If something seems to need one of them, ask.
         line would DELETE A LIBRARY ITEM rather than fail. It either belongs on
         all three tables or none, and "none" is the safer half — but that is a
         change to the code that destroys data, and it wants doing deliberately.
+
+
+74) THE THEME — A HALF-APPLIED DARK THEME, AND THE RULE FOR NEW WORK.
+    2026-10-09. IMPORTANT.
+
+    ASKED: *"Please make sure the css theme is put somewhere obvious for future
+    use - website must be consistent - use canonical bootstrap as much as
+    possible"*.
+
+    --- THE RULE, AND IT IS NOW WRITTEN AT THE TOP OF THE FILE ---
+
+    frontend/styles/styles.css NOW BEGINS with "THE THEME — READ THIS BEFORE
+    ADDING A RULE TO THIS FILE", which states the order of preference:
+
+      1. A BOOTSTRAP COMPONENT — .card, .alert, .table, .btn, .nav.
+      2. BOOTSTRAP UTILITIES, in the markup — a rule should not exist for
+         something `card-body p-2 d-flex flex-column gap-1` already does.
+      3. A BOOTSTRAP CSS VARIABLE — var(--bs-border-color) and the rest.
+      4. AND ONLY THEN A RULE, with a comment saying why Bootstrap could not.
+
+    IT IS AT THE TOP OF styles.css AND NOT IN A DOCS DIRECTORY, deliberately: it
+    is read by the person about to add a rule, at the moment they are about to
+    add one, and nowhere else would be seen.
+
+    --- AND WHAT IT SAYS ABOUT THE CURRENT STATE, WHICH IS NOT CONSISTENT ---
+
+    THE SITE IS A HALF-APPLIED DARK THEME, AND IT WAS FOUND BY MEASURING RATHER
+    THAN LOOKING. `body` is hand-darkened to #0d0e12, but Bootstrap's own dark
+    theme is NOT loaded — `data-bs-theme="dark"` appears NOWHERE in the bundle —
+    and no component is overridden. So the page is dark and every `.card` on it
+    is Bootstrap's default LIGHT surface. Sampling the pixels of a rendered panel
+    gave #0d0e12 outside and #f8f8f8 for the card.
+
+    IT WAS NOT DESIGNED, IT ACCUMULATED, and the scattered `!important` overrides
+    in the header, auth and utility-bar sections are the rest of it.
+
+    TWO WAYS OUT, AND IT IS THE USER'S DECISION RATHER THAN A TIDY-UP:
+
+      * ADOPT BOOTSTRAP'S DARK THEME PROPERLY — set data-bs-theme="dark" on the
+        html element and DELETE the hand-darkened body and the scattered
+        overrides. Everything follows, including components this file has never
+        touched. MUCH THE SMALLER CHANGE, and the one that makes "canonical
+        Bootstrap" true rather than aspirational.
+
+      * OR COMMIT TO A LIGHT SITE — drop the dark body entirely.
+
+    EITHER WAY IT IS DONE IN ONE PASS. A page that is half one and half the other
+    is exactly what we have now, and doing it panel by panel reproduces it.
+
+    --- AND WHAT WAS DONE HERE ---
+
+    THE LIBRARY WAS BROUGHT INTO LINE, as the first thing to follow the new rule.
+    It began with ten custom classes; it now ships THREE, and the built bundle
+    confirms it:
+
+        library-grid        CSS Grid — no Bootstrap utility does this
+        library-tile-frame  aspect-ratio — no Bootstrap equivalent
+        library-tile-name   line-clamp — no Bootstrap equivalent
+
+    ALL THREE ARE LAYOUT. Everything else became canonical Bootstrap in the
+    markup: `.card`, `.card-body`, `d-flex`, `gap-1`, `p-2`, `small`,
+    `text-secondary`, `fw-medium`, `text-warning-emphasis`, `object-fit-cover`,
+    `mt-auto`. The warning colour in particular was a custom rule and is now
+    Bootstrap's own `text-warning-emphasis`, which is designed for contrast.
+
+    SO THE PATTERN FOR THE REST OF THE SITE IS DEMONSTRATED, NOT JUST DESCRIBED:
+    a panel can be built with three layout rules and nothing else.
