@@ -524,6 +524,46 @@ const applyAssetRepositorySchema = () => {
     );
   `);
 
+  /*
+   * ----------------------------------------------------------
+   * Library tags — WHAT A THING DEPICTS
+   *
+   * The point of a library is finding something again, and a
+   * filename is a poor index: a folder of reference photographs
+   * arrives as IMG_4823, IMG_4824, IMG_4825. So an item carries
+   * TAGS — trees, boat, river — and the search looks at those as
+   * well as the name and the note.
+   *
+   * A TABLE RATHER THAN A COMMA-SEPARATED COLUMN, because the
+   * questions asked of it are "everything tagged river" and
+   * "what tags exist", and both are a query over rows rather
+   * than a LIKE over a string. It is also the shape the asset
+   * categories never needed and this does.
+   *
+   * FREE TEXT, NORMALISED, FOR NOW. There is no controlled
+   * vocabulary — a tag is whatever somebody typed, lowercased
+   * and trimmed. A vocabulary is a decision about who owns the
+   * words, and it is better made once there are enough tags to
+   * see what they are. TODO 76.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS library_item_tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      library_item_id INTEGER NOT NULL,
+      tag TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (library_item_id)
+        REFERENCES library_items(id)
+        ON DELETE CASCADE,
+
+      -- The same word twice on one item is one tag.
+      UNIQUE (library_item_id, tag)
+    );
+  `);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS
       idx_workspace_assets_workspace
@@ -568,6 +608,16 @@ const applyAssetRepositorySchema = () => {
     CREATE INDEX IF NOT EXISTS
       idx_library_thumbnails_item
       ON library_thumbnails(library_item_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_library_item_tags_item
+      ON library_item_tags(library_item_id);
+
+    -- The other direction, and the one the search uses: every item
+    -- carrying a given word.
+    CREATE INDEX IF NOT EXISTS
+      idx_library_item_tags_tag
+      ON library_item_tags(tag);
   `);
 
   console.log('📦 Asset Repository tables ready.');

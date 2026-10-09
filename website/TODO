@@ -7063,3 +7063,82 @@ no upside. If something seems to need one of them, ask.
     set it, and it takes a change somewhere else to reveal that the page never
     asked for the theme at all. The three hand-written pages were invisible to
     every check because they render fine — right up until they do not.
+
+
+76) THE LIBRARY'S LABELLING STEP — BUILT 2026-10-09. AND THE VOCABULARY
+    DECISION IT LEAVES OPEN.
+
+    THE LIBRARY WAS A PILE. A folder of reference photographs arrives as
+    IMG_4823, IMG_4824, IMG_4825, and a list of those is not a library. So an
+    item now carries a NAME, a NOTE and TAGS, and the search reads all three.
+
+    THIS IS ITEM 54'S STEPS 6 AND 8 — labelling what the images depict, and
+    searching by content. Item 57 records both as LIBRARY concerns, because you
+    search a library for material and you do not search a finished build. The
+    user asked for exactly this in the first message about images: *"there needs
+    to be a system for identifying the contents e.g trees boat river"*.
+
+    --- WHAT EXISTS ---
+
+      * library_item_tags: one row per word per item, UNIQUE on the pair, with
+        ON DELETE CASCADE so tags do not outlive their item. A TABLE rather than
+        a comma-separated column, because the questions are "everything tagged
+        river" and "what tags exist", and both are a query over rows.
+
+      * POST /api/library/:id/update — name, note and tags together, because the
+        dialog holds the whole edit and a partial write would be a state the form
+        never showed anybody. TAGS ARE REPLACED, NOT MERGED: the form shows every
+        tag an item has, so what comes back is the whole set, and merging would
+        make a tag impossible to remove.
+
+      * The tile shows the tags as Bootstrap badges and grows an EDIT button; the
+        dialog is a modal, because a 150px tile is the wrong shape to type into.
+
+      * The search reads name, note AND tags. Reading only the name would miss
+        the entire point — "trees" is a word somebody typed BECAUSE it is not in
+        the filename.
+
+    --- NORMALISATION IS THE WHOLE OF THE DESIGN ---
+
+    "Trees", "trees " and "TREES" are ONE tag. They are the same word to a person
+    and three words to a search, so without normalising, an item is filed and
+    then never found — AND THE FAILURE IS SILENT, which is the worst kind. Tags
+    are trimmed, lowercased, inner whitespace collapsed, deduplicated and SORTED.
+
+    THE SORTING IS ON THE SERVER, and it fixed a real inconsistency found by
+    testing: the listing reads tags back with ORDER BY tag, so they come out
+    alphabetical, while the update response was returning them in submission
+    order. TWO ENDPOINTS, TWO ANSWERS TO THE SAME QUESTION. The test now asserts
+    they agree, which is the property that actually matters.
+
+    AND THE DIALOG PREVIEWS IT — type "Trees, river, TREES" and it shows the two
+    words that will be stored. The client duplicates the server's normalisation
+    for that preview ONLY; the server remains the authority.
+
+    --- THE DECISION THIS LEAVES OPEN, WHICH IS THE NEXT ONE ---
+
+    THERE IS NO CONTROLLED VOCABULARY, and that is deliberate rather than
+    unfinished. A tag is whatever somebody typed.
+
+    THE CASE FOR A VOCABULARY: "tree" and "trees", "wood" and "forest", "river"
+    and "stream" will all get used, and a search for one will miss the others.
+    THE CASE AGAINST: a vocabulary is a decision about WHO OWNS THE WORDS, and
+    choosing it before seeing what people actually type is guessing. The reading
+    is to leave it free until there are enough tags to see the shape of the
+    problem — THE OPTION LIST CAN BE BUILT FROM THE TAGS THAT EXIST, which is a
+    query this table already answers.
+
+    --- AND WHAT IS STILL OWED ---
+
+      * FILTERING BY TAG, as against the free-text search. "Show me everything
+        tagged river" is a different question from "show me things with river in
+        them", and it is the one that gets asked once there are hundreds of
+        items. The table answers it today; nothing offers it.
+
+      * THE COLLECTION NAME — item 54's finding (A), a label over a BATCH rather
+        than over one file, so a directory uploaded together can be retrieved
+        together. Related but not the same as a tag.
+
+      * AND PULLING LIBRARY MATERIAL INTO A WORKSPACE, which is item 59's
+        check-out and was deliberately deferred: nothing wants it until somebody
+        iterates on an approved asset.

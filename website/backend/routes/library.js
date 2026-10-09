@@ -16,6 +16,17 @@
 // a library "ships". What there is, is a GATE — a light one, described below.
 //
 // ============================================================
+// AND A LIBRARY IS ONLY USEFUL IF THINGS CAN BE FOUND AGAIN
+// ============================================================
+//
+// A folder of reference photographs arrives as IMG_4823, IMG_4824, IMG_4825. The
+// point of keeping it is being able to ask for "the ones with trees and a river"
+// six months later, so an item carries a NAME, a NOTE and TAGS, and the search
+// looks at all three. This is item 54's labelling step and its content search —
+// both of which item 57 says are LIBRARY concerns, because you search a library
+// for material and you do not search a finished build.
+//
+// ============================================================
 // THE THIRD REFERENCER, AND THE TWO PLACES THAT CARE
 // ============================================================
 //
@@ -171,6 +182,33 @@ const thumbForServing = db.prepare(`
       AND li.is_active = 1
 `);
 
+const updateItem = db.prepare(`
+    UPDATE library_items
+    SET display_name = ?,
+        note = ?
+    WHERE id = ?
+      AND is_active = 1
+`);
+
+// EVERY TAG OF EVERY ITEM, in one query rather than one per item. A page of a
+// hundred tiles should not be a hundred round trips.
+const allTags = db.prepare(`
+    SELECT t.library_item_id, t.tag
+    FROM library_item_tags t
+    JOIN library_items li ON li.id = t.library_item_id
+    WHERE li.is_active = 1
+    ORDER BY t.library_item_id, t.tag
+`);
+
+const clearTags = db.prepare(`
+    DELETE FROM library_item_tags WHERE library_item_id = ?
+`);
+
+const addTag = db.prepare(`
+    INSERT OR IGNORE INTO library_item_tags (library_item_id, tag)
+    VALUES (?, ?)
+`);
+
 const softDelete = db.prepare(`
     UPDATE library_items
     SET is_active = 0,
@@ -182,6 +220,29 @@ const softDelete = db.prepare(`
 // ============================================================
 // Helpers
 // ============================================================
+
+// ============================================================
+// Tags
+// ============================================================
+//
+// FREE TEXT, NORMALISED, AND THE NORMALISATION IS THE WHOLE OF THE DESIGN.
+// "Trees", "trees " and "TREES" are one tag, or the search silently misses
+// two-thirds of what was filed — which is worse than having no tags, because it
+// looks like it works.
+//
+// THERE IS NO CONTROLLED VOCABULARY YET, deliberately: a vocabulary is a
+// decision about who owns the words, and it is better made once there are enough
+// tags to see what people actually type. Recorded as TODO 76.
+const MAX_TAGS = 40;
+const MAX_TAG_LENGTH = 40;
+
+function normaliseTag(raw) {
+    return String(raw || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .slice(0, MAX_TAG_LENGTH);
+}
 
 /**
  * The first SIGNATURE_HEAD_BYTES of a file, as a Buffer.
@@ -271,9 +332,22 @@ router.get(
                 ORDER BY li.created_at DESC, li.id DESC
             `).all();
 
+            // Tags in ONE query for the whole page, then grouped. Doing it per
+            // item would be a round trip per tile.
+            const tagsByItem = new Map();
+
+            for (const row of allTags.all()) {
+                if (!tagsByItem.has(row.library_item_id)) {
+                    tagsByItem.set(row.library_item_id, []);
+                }
+
+                tagsByItem.get(row.library_item_id).push(row.tag);
+            }
+
             return res.json({
                 items: rows.map(row => ({
                     ...row,
+                    tags: tagsByItem.get(row.id) || [],
                     // The TYPE, from the same function that decides it
                     // everywhere else — not from the stored mime_type, which is
                     // whatever the browser guessed at upload and is metadata for
@@ -690,6 +764,108 @@ router.get(
 
             return res.status(500).json({
                 error: 'Could not serve that file'
+            });
+        }
+    }
+);
+
+// ============================================================
+// POST /api/library/:id/update
+// ============================================================
+//
+// THE LABELLING STEP. A name, a note, and what the thing depicts.
+//
+// ALL THREE ARE OPTIONAL EXCEPT THE NAME, and they are sent together rather than
+// one at a time: the page holds the whole edit and saves it, so a partial write
+// would be a state the form never showed anybody.
+//
+// TAGS ARE REPLACED, NOT MERGED. The form shows every tag an item has, so what
+// comes back is the whole set the person chose — merging would make a tag
+// impossible to remove.
+// ============================================================
+
+router.post(
+    '/:id/update',
+    authenticateToken,
+    requireRole('developer', 'admin'),
+
+    async (req, res) => {
+        const id = Number(req.params.id);
+        const actorId = req.user?.id;
+
+        if (!Number.isInteger(id)) {
+            return res.status(400).json({ error: 'Invalid library item ID' });
+        }
+
+        if (!actorId) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        const displayName = String(req.body?.display_name ?? '').trim();
+        const note = String(req.body?.note ?? '').trim();
+
+        // An item with no name is unfindable, which is the one thing a library
+        // cannot afford. The ORIGINAL filename is always kept regardless, so
+        // nothing is lost by insisting on this.
+        if (!displayName) {
+            return res.status(422).json({
+                error: 'An item needs a name.'
+            });
+        }
+
+        const rawTags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+
+        // Deduplicated AFTER normalising, so "Trees" and "trees" sent together
+        // become one tag rather than fighting over the UNIQUE.
+        //
+        // SORTED, so that this response and the listing agree about the order.
+        // The listing reads tags back with ORDER BY tag — that is the canonical
+        // order, because a set of badges that reshuffles is worse than one that
+        // does not — and returning them in submission order here would mean a
+        // client seeing two different answers to the same question.
+        const tags = [...new Set(rawTags.map(normaliseTag).filter(Boolean))]
+            .sort()
+            .slice(0, MAX_TAGS);
+
+        try {
+            const item = itemForServing.get(id);
+
+            if (!item) {
+                return res.status(404).json({ error: 'Library item not found' });
+            }
+
+            const save = db.transaction(() => {
+                updateItem.run(displayName, note || null, id);
+
+                clearTags.run(id);
+
+                for (const tag of tags) addTag.run(id, tag);
+
+                audit.record(actorId, 'library.update', displayName, {
+                    library_item_id: id,
+                    from: item.display_name,
+                    to: displayName,
+                    tags
+                });
+            });
+
+            save();
+
+            return res.json({
+                status: 'updated',
+                id,
+                display_name: displayName,
+                note: note || null,
+                tags
+            });
+
+        } catch (err) {
+            console.error('Could not update a library item:', err);
+
+            return res.status(500).json({
+                error: 'Could not save those changes'
             });
         }
     }

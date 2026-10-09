@@ -22,6 +22,19 @@
 // item named. The server decides this; this file only reports what it said.
 //
 // ============================================================
+// A LIBRARY IS ONLY USEFUL IF THINGS CAN BE FOUND AGAIN
+// ============================================================
+//
+// A folder of reference photographs arrives as IMG_4823, IMG_4824, IMG_4825, and
+// a pile of those is not a library — it is a pile. So an item carries a NAME, a
+// NOTE and TAGS, and the search reads all three. That is item 54's labelling
+// step and its content search, which item 57 says are this space's own job.
+//
+// THE TAGS ARE NORMALISED AS YOU TYPE and the preview shows it, because the
+// failure mode is silent: "Trees" and "trees" are the same word to a person and
+// two words to a search, so the item is filed and then never found.
+//
+// ============================================================
 // AND A THUMBNAIL THAT IS MISSING IS NOT AN ERROR
 // ============================================================
 //
@@ -156,9 +169,33 @@ function tile(item) {
         body.appendChild(note);
     }
 
+    // Tags as Bootstrap badges. Wrapped, because there is no telling how many
+    // somebody will use, and a tile that grows is better than one that hides
+    // what it holds.
+    if (item.tags?.length) {
+        const tags = document.createElement('div');
+        tags.className = 'd-flex flex-wrap gap-1';
+
+        for (const tag of item.tags) {
+            const badge = document.createElement('span');
+            badge.className = 'badge text-bg-secondary fw-normal';
+            badge.textContent = tag;
+            tags.appendChild(badge);
+        }
+
+        body.appendChild(tags);
+    }
+
     const actions = document.createElement('div');
     // mt-auto keeps the button on the bottom edge whatever the tile contains.
     actions.className = 'mt-auto pt-1';
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'btn btn-sm btn-outline-secondary py-0 px-2 me-1';
+    edit.dataset.edit = String(item.id);
+    edit.textContent = 'Edit';
+    actions.appendChild(edit);
 
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -179,9 +216,16 @@ function render() {
     if (!grid) return;
 
     const needle = query.trim().toLowerCase();
+
+    // NAME, NOTE AND TAGS. Search that only read the name would miss the whole
+    // point of tagging — "trees" is a word somebody typed BECAUSE it is not in
+    // the filename.
     const shown = needle
-        ? allItems.filter(item =>
-            String(item.display_name || '').toLowerCase().includes(needle))
+        ? allItems.filter(item => [
+            item.display_name,
+            item.note,
+            ...(item.tags || []),
+        ].filter(Boolean).join(' ').toLowerCase().includes(needle))
         : allItems;
 
     grid.innerHTML = '';
@@ -346,6 +390,143 @@ async function onUpload() {
 }
 
 // ------------------------------------------------------------
+// Labelling — the name, the note, and what it shows
+// ------------------------------------------------------------
+
+let editingId = null;
+
+// The SAME normalisation the server applies, so the preview is what will be
+// stored rather than a guess at it. Duplicated deliberately and narrowly: the
+// server is the authority, and this exists only to show the person what it will
+// do before they commit to it.
+function parseTags() {
+    const input = $('libraryEditTags');
+    if (!input) return [];
+
+    return [...new Set(
+        input.value
+            .split(',')
+            .map(tag => tag.trim().toLowerCase().replace(/\s+/g, ' '))
+            .filter(Boolean)
+    )];
+}
+
+function renderTagPreview() {
+    const box = $('libraryEditTagPreview');
+    if (!box) return;
+
+    box.textContent = '';
+
+    const tags = parseTags();
+
+    if (tags.length === 0) return;
+
+    const label = document.createElement('div');
+    label.className = 'small text-secondary mb-1';
+    label.textContent = tags.length === 1
+        ? 'Filed under:'
+        : `Filed under ${tags.length} words:`;
+    box.appendChild(label);
+
+    const row = document.createElement('div');
+    row.className = 'd-flex flex-wrap gap-1';
+
+    for (const tag of tags) {
+        const badge = document.createElement('span');
+        badge.className = 'badge text-bg-secondary fw-normal';
+        badge.textContent = tag;
+        row.appendChild(badge);
+    }
+
+    box.appendChild(row);
+}
+
+function openEdit(item) {
+    editingId = item.id;
+
+    const title = $('libraryEditTitle');
+    if (title) title.textContent = item.display_name || 'Edit item';
+
+    const name = $('libraryEditName');
+    if (name) name.value = item.display_name || '';
+
+    const note = $('libraryEditNote');
+    if (note) note.value = item.note || '';
+
+    const tags = $('libraryEditTags');
+    if (tags) tags.value = (item.tags || []).join(', ');
+
+    // The picture, so it is obvious WHICH one is being named. A grid of
+    // IMG_48xx is exactly the case this dialog exists for.
+    const thumb = $('libraryEditThumb');
+
+    if (thumb) {
+        if (item.thumbnail_kind) {
+            thumb.src = `${API}/${item.id}/thumbnail`;
+            thumb.classList.remove('d-none');
+        } else {
+            thumb.removeAttribute('src');
+            thumb.classList.add('d-none');
+        }
+    }
+
+    showAlert('libraryEditAlert', '');
+    renderTagPreview();
+
+    window.bootstrap?.Modal.getOrCreateInstance($('libraryEditModal'))?.show();
+}
+
+async function saveEdit() {
+    if (editingId === null) return;
+
+    const nameInput = $('libraryEditName');
+    const displayName = String(nameInput?.value || '').trim();
+
+    // The server refuses this too. Checked here as well so the person is told
+    // in the dialog they are looking at rather than by an alert behind it.
+    if (!displayName) {
+        showAlert('libraryEditAlert', 'An item needs a name.', 'danger');
+        nameInput?.focus();
+        return;
+    }
+
+    const button = $('libraryEditSave');
+
+    if (button) button.disabled = true;
+
+    try {
+        const response = await apiFetch(`${API}/${editingId}/update`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                display_name: displayName,
+                note: String($('libraryEditNote')?.value || '').trim(),
+                tags: parseTags(),
+            }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not save those changes.');
+        }
+
+        window.bootstrap?.Modal.getOrCreateInstance($('libraryEditModal'))?.hide();
+
+        editingId = null;
+
+        await load();
+
+    } catch (err) {
+        showAlert('libraryEditAlert', err.message, 'danger');
+
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+// ------------------------------------------------------------
 // Removing
 // ------------------------------------------------------------
 
@@ -398,7 +579,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // One delegated listener for the whole grid, so a reload cannot leave
     // listeners attached to tiles that no longer exist.
+    const tagsInput = $('libraryEditTags');
+    tagsInput?.addEventListener('input', renderTagPreview);
+
+    $('libraryEditSave')?.addEventListener('click', saveEdit);
+
+    // Save on Enter in the name field — it is a one-line field and the dialog
+    // has exactly one obvious action.
+    $('libraryEditName')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveEdit();
+        }
+    });
+
     grid?.addEventListener('click', (event) => {
+        const editButton = event.target.closest('button[data-edit]');
+
+        if (editButton) {
+            const item = allItems.find(i => i.id === Number(editButton.dataset.edit));
+            if (item) openEdit(item);
+            return;
+        }
+
         const button = event.target.closest('button[data-remove]');
         if (!button) return;
 
