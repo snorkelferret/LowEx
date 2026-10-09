@@ -4810,14 +4810,24 @@ no upside. If something seems to need one of them, ask.
 
     --- OPEN ---
 
-      * IS THE LIBRARY SHARED, OR PER-DEVELOPER? It is described as "the image
-        library in the source assets", and source_assets is studio material — so
-        SHARED is the reading. But a developer's own reference cull might want to
-        be private first, and that would make it two libraries rather than one.
-        NOT DECIDED.
-      * WHAT MAY LIVE IN IT? Images are the case in hand. Does video? Audio? A
-        PDF of a book that inspired the art? The name says images; the need may
-        not be.
+      * IS THE LIBRARY SHARED, OR PER-DEVELOPER? DECIDED 2026-10-09: SHARED,
+        STUDIO-WIDE. One library; everyone browses it and draws from it. The
+        simpler table AND the simpler permissions, and it matches how
+        source_assets is described. (The alternative — per-developer, or a
+        private tier promoted later — would have meant the same image sitting in
+        two libraries, and "the library" ceasing to be one thing to browse.)
+
+      * WHAT MAY LIVE IN IT? DECIDED 2026-10-09: ANY FILE, WITH AN IMAGE-FIRST
+        UI. The table is the same either way and the technical check already
+        verifies file types (item 34), so allowing video, audio and PDFs costs
+        nothing now — and reference material for an open-world project is not
+        only pictures. THE PAGE LEADS WITH IMAGES, because thumbnails, labelling
+        and content search only mean anything for images.
+
+        WHICH MEANS THE NAME IS SLIGHTLY WRONG AND THAT IS DELIBERATE. "The image
+        library" is what it is called and what it is FOR first; it is not a
+        restriction on what it may hold. Recorded because a name describing the
+        first use is how a second use gets refused.
       * HOW DOES AN IMAGE GET INTO AN ASSET? The developer pulls it into their
         workspace and builds with it, and the asset carries a REFERENCE — so the
         asset's file set includes a blob that also lives in the library. That is
@@ -6182,3 +6192,548 @@ no upside. If something seems to need one of them, ask.
 
     NOT SCHEDULED. It is recorded as a consequence of the two-system decision, and
     it should happen before real content lands rather than after.
+
+
+69) WHAT A BUILD IS, AND WHY THE ONE-COPY RULE DOES NOT APPLY TO ONE.
+    2026-10-09.
+
+    ASKED, after a worry worth taking seriously: *"I do not like the idea that all
+    our lovely SHA one unique copy is now thrown away - what are my options"*,
+    and then *"what exactly is a build then - is it like compiled code?"*.
+
+    --- THE WORRY FIRST, BECAUSE IT IS MOSTLY UNFOUNDED ---
+
+    NOTHING IS THROWN AWAY. The one-copy rule governs THE STUDIO'S AUTHORED
+    CONTENT — stored_files, the workspace, the store, and soon the library — and
+    NONE OF THAT CHANGES. Three referencers of one blob instead of two, all by
+    SHA.
+
+    What changed is narrower than it sounds: BUILDS WERE NEVER THE PORTAL'S
+    CONTENT, so the rule was never doing anything for them.
+
+    --- AND A BUILD IS COMPILED CODE, WITH ONE ADDITION ---
+
+    YES, IT IS LIKE COMPILED CODE — except that the ASSETS GET COMPILED TOO. TWO
+    TRANSFORMATIONS, NOT ONE:
+
+      * COMPILING — the C++ becomes machine code. Exactly like compiling
+        anything.
+
+      * COOKING — THE UNREAL-SPECIFIC HALF, AND THE ONE THAT MATTERS. Every asset
+        in Content/ is converted from its EDITOR FORMAT into a RUNTIME FORMAT FOR
+        A SPECIFIC PLATFORM:
+
+            a texture   an uncompressed 4K source becomes a PLATFORM-COMPRESSED
+                        MIP CHAIN — BC7 for PC, ASTC for mobile. DIFFERENT BYTES,
+                        DIFFERENT FILE, DIFFERENT SIZE.
+            a mesh      full-precision source geometry becomes optimised geometry
+                        with LODs and collision.
+            shaders     written once, COMPILED PER TARGET GPU.
+
+      * PACKAGING — the cooked result is bundled into .pak FILES alongside the
+        executable and the engine.
+
+    SO A BUILD IS A FOLDER OF PAK ARCHIVES AND BINARIES, AND YOU CANNOT GET THE
+    PROJECT BACK OUT OF IT. IT IS LOSSY IN ONE DIRECTION — the same point as
+    item 61's export problem, one level up.
+
+    --- WHICH IS WHY THERE IS NO "ONE COPY" TO KEEP ---
+
+    THERE IS NO ONE COPY OF A BUILD'S CONTENT, EVEN IN PRINCIPLE. The same source
+    texture becomes DIFFERENT BYTES FOR PC AND FOR CONSOLE — and different again
+    for SHIPPING versus DEVELOPMENT, because Shipping strips debug data and turns
+    on optimisations.
+
+        ONE SOURCE TEXTURE -> FOUR DIFFERENT COOKED BLOBS.
+
+    SO CONTENT ADDRESSING CANNOT GIVE ON THE BUILD SIDE WHAT IT GIVES IN THE
+    STORE: THERE IS NO SINGLE CANONICAL BYTE SEQUENCE FOR "THE TEXTURE" THERE.
+
+    THE CANONICAL THING IS THE SOURCE. And the source IS stored once — the store,
+    the library, Perforce. THE GUARANTEE WORTH NAMING: EVERY BYTE THE STUDIO
+    AUTHORS IS STORED ONCE, and that is true today and stays true.
+
+    WHAT IS NOT STORED ONCE IS A BUILD, BECAUSE A BUILD IS NOT AUTHORED — IT IS
+    PRODUCED. Produced things are cheap to produce again.
+
+    --- AND THE PRINCIPLE IS NOT ABANDONED. IT IS IMPLEMENTED FOUR TIMES. ---
+
+        THE PORTAL    assets, by SHA — one copy, three referencers
+        PERFORCE      per-file deltas — you sync only what changed
+        UNREAL        the DDC is a CONTENT-ADDRESSED CACHE of DERIVED data, keyed
+                      by hashes of its inputs; and VIRTUAL ASSETS store bulk
+                      payloads REFERENCED BY HASH and de-duplicated (item 66)
+        STEAM         SteamPipe delivers builds in CHUNKS and sends only the
+                      chunks that changed
+
+    THE SAME INSTINCT RUNS THE WHOLE WAY DOWN. THE PORTAL IS SIMPLY NOT THE LAYER
+    THAT DOES IT FOR BUILDS — and if it tried, it would be re-implementing
+    Unreal's DDC, Unreal's patch paks AND Steam's delivery at once. That is the
+    scope creep the two-system decision (item 62) exists to prevent.
+
+    --- BUT BUILDS ARE NOT ALWAYS DISPOSABLE, AND THIS MODIFIES THE OPTIONS ---
+
+        NIGHTLY AND INTERNAL BUILDS   DISCARDED FREELY. Reproduce on demand.
+        RELEASED BUILDS               ARCHIVED, DELIBERATELY.
+
+    "Going gold" means KEEPING THE MASTER, because in two years, when a bug is
+    reported, YOU MAY BE UNABLE TO REBUILD THAT EXACT THING: a different engine
+    version, a different compiler, a different toolchain, and the output will not
+    be byte-identical.
+
+    SO: BUILDS ARE COMPILED OUTPUT, AND COMPILED OUTPUT IS REGENERABLE — EXCEPT
+    THE ONES YOU SHIPPED, WHICH YOU KEEP PRECISELY BECAUSE "REGENERABLE" STOPS
+    BEING TRUE ACROSS TIME.
+
+    --- AND IT CHANGES NOTHING ALREADY DECIDED ---
+
+    THE PORTAL KEEPS THE RELEASE RECORD — name, changelist, who, when — and THAT
+    is what points at an archived build wherever it is kept. Item 60's shape,
+    unchanged, which is a good sign: a decision that survives learning what the
+    thing actually is was probably the right decision.
+
+    --- THE OPTIONS, RECORDED SO THEY ARE NOT RE-DERIVED ---
+
+      1. NOTHING. RECOMMENDED. The rule holds for authored content, and the build
+         side gets the same benefit from three tools that already do it.
+
+      2. THE PORTAL HOLDS BUILDS AS PLAIN BLOBS. No dedupe, but no design either —
+         it costs disk and nothing else. Only if a case appears that Steam and
+         Perforce cannot serve.
+
+      3. STORE THE CHANGELIST AND REBUILD ON DEMAND. Nothing to store at all —
+         costs hours per build, and depends on reproducibility being real, WHICH
+         IT ONLY PARTLY IS (see "going gold" above).
+
+      4. CONTENT-ADDRESS THE BUILDS IN THE PORTAL. Unpacking pak files, hashing
+         cooked binaries, storing chunks, reassembling a runnable build on
+         download. Large, duplicates three existing tools, and is the scope creep
+         item 62 exists to prevent.
+
+
+70) WHAT TO BUILD FIRST, AND WHAT BLOCKS IT. 2026-10-09.
+
+    ASKED: *"Ok so what should we build first"*. Recorded so the next session
+    starts from an order rather than re-deriving one, AND SO THAT THE REASONING
+    IS AVAILABLE TO DISAGREE WITH.
+
+    =====================================================================
+    BEFORE ANY CODE — because these get worse with time, and neither is a build
+    =====================================================================
+
+      1. MOVE game/ OUT OF THIS REPOSITORY INTO PERFORCE (item 68). TEN FILES
+         TODAY. Item 68 verified that nothing in the portal reads game/ — not the
+         backend, not the frontend, not the config — so it is a clean removal, and
+         the moment real content lands it stops being clean. This is the .gitkeep
+         lesson a second time.
+
+      2. STAND UP PERFORCE AND CONFIGURE IT IN UNREAL (item 62's action list):
+         server OFF-SITE, the accounts, source control in the editor, exclusive
+         check-out on binaries and .uasset. Nothing about the game starts properly
+         without it, and every other decision assumes it.
+
+    =====================================================================
+    THE FIRST THING TO BUILD: THE IMAGE LIBRARY (item 57)
+    with the upload-type question (item 56) as its front door
+    =====================================================================
+
+    FOUR REASONS, in order of weight:
+
+      * IT IS THE LIVE CASE. The work actually in hand is images. Everything else
+        in this file is preparation for a game that DOES NOT EXIST YET.
+
+      * IT CORRECTS A BEHAVIOUR THAT IS WRONG TODAY. Item 54's run-through found
+        that images currently travel toward creative approval and the store — and
+        items 57/58 established that is not where they belong. RIGHT NOW,
+        UPLOADING A FOLDER OF REFERENCE PHOTOGRAPHS DOES THE WRONG THING. That is
+        a live bug, not a missing feature, which is why it outranks the rest.
+
+      * EVERYTHING IMAGE-SHAPED DEPENDS ON IT. Steps 6, 7 and 8 of item 54 —
+        labelling, thumbnails, content search — have nowhere to live until the
+        library exists.
+
+      * AND IT PROVES THE PROPERTY EVERYTHING RESTS ON. A library is a THIRD
+        REFERENCER OF stored_files — the first new one since the portal was built.
+        IF THE ONE-COPY RULE HOLDS WITH THREE, THE DESIGN IS SOUND. If it does
+        not, better to know now than after the store is full.
+
+    --- THE SMALLEST USEFUL SLICE ---
+
+      * a library table, and the third reference into stored_files
+      * an upload path whose destination is THE LIBRARY, not a workspace asset
+      * THE TYPE QUESTION ASKED AT UPLOAD — application project, or arbitrary
+        collection (item 56)
+      * a listing page
+
+    DELIBERATELY NOT IN THE FIRST SLICE: thumbnails, content search, labelling,
+    batch names. Those are steps 6-8 and they follow naturally once there is
+    somewhere to put them. (Thumbnails in particular are a LIBRARY concern — item
+    57 — so they are not being deferred out of the design, only out of the first
+    slice.)
+
+    =====================================================================
+    WHAT NOT TO BUILD YET, AND WHY
+    =====================================================================
+
+      * RELEASES, CANDIDATES, BUILDS (items 53, 60, 68's Steam half). EVERY ONE
+        DEPENDS ON A GAME THAT DOES NOT EXIST. Item 53 already carries an explicit
+        warning against building a releases model to fill a UI placeholder, having
+        watched that mistake almost happen once.
+
+      * AND THE CHECK-OUT (item 59), DESPITE THIS FILE HAVING CALLED IT "the door
+        everything goes through". It is the biggest single gap in the workflow and
+        that description was not wrong — but NOTHING WANTS IT UNTIL SOMEBODY
+        ITERATES ON AN APPROVED ASSET, and it is far easier to design once the
+        library exists, because THE LIBRARY IS ONE OF THE TWO THINGS YOU WOULD BE
+        CHECKING OUT FROM. Building the check-out first would mean designing both
+        ends at once.
+
+      * ITEM 55 (UNZIP) — AFTER the type question (item 56), and carefully. This
+        file calls it THE RISKIEST CODE IN THE UPLOAD AREA, and it cannot be built
+        correctly until item 56 says whether an inflated archive becomes ONE asset
+        or MANY.
+
+    =====================================================================
+    AND THE DECISIONS THAT BLOCK THE STEPS ABOVE
+    =====================================================================
+
+    None of these is needed before the two pre-code items, but each blocks
+    something:
+
+      * IS THE LIBRARY SHARED OR PER-DEVELOPER? (item 57.) Blocks the library's
+        table and its permissions. The reading is SHARED — source_assets is studio
+        material — but a developer's own cull might want to be private first.
+      * WHAT MAY LIVE IN THE LIBRARY? (item 57.) Images are the case in hand.
+        Does video? Audio? A PDF? The name says images; the need may not.
+      * WHO MANAGES RELEASES, AND WHO RUNS THE BUILD MACHINE? (items 53, 60, 62.)
+        Not before the game, but they are the two remaining "who" questions.
+      * AND WHETHER game/ ACTUALLY LEAVES (item 68) — recommended, verified safe,
+        not yet decided.
+
+
+71) THE PERFORCE SERVER AND ITS DEPOTS. 2026-10-09.
+
+    ASKED: *"if we are using perforce what new repository do we need and where
+    should it live"*.
+
+    --- THE WORD "REPOSITORY" IS DOING WORK, SO FIRST: ---
+
+    YOU DO NOT CREATE A REPOSITORY PER DEVELOPER. You create ONE SERVER, and on
+    it, DEPOTS. Developers have workspaces that map parts of a depot onto their
+    disk (item 62). There is no per-person copy to create or place.
+
+    --- WHAT TO CREATE ---
+
+      * ONE DEPOT FOR THE GAME PROJECT. //LowExpectations/... or similar — the
+        Unreal project: Content/, Config/, Plugins/, Source/, the .uproject.
+        THAT IS THE WHOLE GAME.
+
+      * ONE DEPOT FOR VIRTUALIZED BULK DATA — BUT ONLY IF VIRTUAL ASSETS ARE
+        USED. Epic explicitly recommends bulk payloads live in a SEPARATE DEPOT so
+        nobody syncs them by accident (item 66). A second depot, created later,
+        not now.
+
+      * AND THAT IS ALL. NOT the portal — that is code in git and git suits it.
+        NOT the docs — they live in the portal repository and the portal serves
+        them.
+
+    AND ONE RECOMMENDATION WHILE IT IS FREE: CREATE IT AS A *STREAM* DEPOT, NOT A
+    CLASSIC ONE. Streams are Perforce's branching model — mainline, development,
+    release lines — and they are what "which line of development am I on" MEANS
+    in item 64. Converting later is unpleasant; creating it as one costs nothing
+    today.
+
+    --- WHERE IT LIVES ---
+
+    OFF-SITE, AND THAT IS ALREADY DECIDED (item 62). On-prem would make the
+    studio's uplink everyone's bottleneck and a single point of failure.
+
+      * HELIX CORE CLOUD — Perforce runs it. No server administration, no backup
+        regime to build, paid.
+
+      * YOUR OWN VPS — Hetzner, DigitalOcean, AWS, whatever. Cheaper per byte,
+        more control, AND YOU OWN THE BACKUPS.
+
+    --- AND THE FOUR THINGS THAT WILL ACTUALLY DECIDE IT ---
+
+      * DISK. The project grows to 300 GB - 1 TB. THAT DOMINATES THE HOSTING COST,
+        and it is the number to price BEFORE choosing.
+
+      * LATENCY. PERFORCE IS CHATTY — many small requests per operation, so a
+        server on the wrong continent makes every sync feel broken. PUT IT NEAR
+        THE TEAM, and near the build machine.
+
+      * EGRESS. Remote developers syncing large trees is bandwidth, and bandwidth
+        is billed. NOT a rounding error on a 1 TB project.
+
+      * BACKUPS — THE ONE PEOPLE GET WRONG. Perforce is NOT backed up by copying
+        files while it runs. It needs CHECKPOINTS AND JOURNALS, rotated, and
+        COPIED OFF-SITE. A studio that skips this discovers it exactly once.
+
+    --- AND IF THE PROJECT OUTGROWS A SINGLE SERVER ---
+
+    Perforce has an answer worth knowing exists BEFORE it is needed: REPLICAS AND
+    EDGE SERVERS — a local copy of the depot near each group of developers, so
+    syncs are fast while the central server stays authoritative. That is the
+    standard solution for a remote team with a large repository, AND IT IS THE
+    REASON NOT TO PANIC ABOUT EGRESS.
+
+    --- ONE THING THAT DOES NOT GO IN PERFORCE ---
+
+    source_assets/ AT THE REPOSITORY ROOT — the folder currently holding a 3.3 GB
+    zip and two photographs. UNDER ITEM 57 THAT MATERIAL BELONGS IN THE IMAGE
+    LIBRARY, which is the portal's content-addressed store: not a Perforce depot
+    and not a git repository. It is a leftover of where the idea started, and it
+    is worth naming before somebody builds tooling around a directory that is
+    about to stop being the place.
+
+
+72) PERFORCE: SELF-HOSTED FIRST, UK/EU REGION. 2026-10-09.
+
+    DECIDED: SELF-HOSTED TO BEGIN WITH, MIGRATED LATER. REGION UK/EU.
+
+    --- WHY THAT IS A GOOD FIT, IN ONE LINE ---
+
+    SELF-HOSTING IS HOW THE FREE TIER IS OBTAINED. The free 5-users/20-workspaces
+    licence (item 62) is for the HELIX CORE SERVER you run yourself; Helix Core
+    Cloud is a separate PAID offering. So self-hosting first is the free option as
+    well as the flexible one, and migrating later is a decision that can be made
+    on cost and convenience rather than on being stuck.
+
+    --- AND THE ONE THING TO DO NOW, BECAUSE IT MAKES THE MIGRATION CHEAP ---
+
+    GIVE THE SERVER A DNS NAME AND NEVER AN IP ADDRESS.
+
+    A developer's workspace records the server as a hostname (`P4PORT`). IF THE
+    HOSTNAME IS STABLE AND ONLY DNS MOVES, THEN MIGRATING THE SERVER IS A DNS
+    CHANGE AND NOBODY HAS TO RECONFIGURE ANYTHING. If the address is an IP, or a
+    provider-generated hostname like a bare VPS identifier, then every developer
+    must repoint every workspace by hand on migration day — and somebody will
+    forget, and their client will talk to a server that no longer exists.
+
+    SO: A NAME UNDER A DOMAIN THE STUDIO CONTROLS, from the first day, chosen
+    before the provider. It costs nothing and it is the whole difference between
+    a migration that is an afternoon and one that is a week of support.
+
+    --- AND THE DOMAIN EXISTS. DECIDED 2026-10-09. ---
+
+    THE STUDIO ALREADY OWNS lowexpectations.zone — the game's domain. SO THE
+    SERVER GETS A SUBDOMAIN OF IT AND THE MIGRATION PROBLEM IS ALREADY HALF
+    SOLVED, because the name is not something to be invented later.
+
+        HOSTNAME   vcs.lowexpectations.zone
+
+    AND `vcs` RATHER THAN `p4` OR `perforce`, DELIBERATELY: THE NAME SHOULD
+    OUTLIVE THE TOOL. Item 73 puts a plausible migration to Epic's Lore in 2027,
+    and a hostname saying "perforce" would then be a lie that every developer's
+    workspace still points at. NAME THE ROLE, NOT THE PRODUCT — so `vcs.`
+    survives Perforce, Lore, or whatever follows.
+
+    THE SETUP:
+
+        DNS      A/AAAA  vcs.lowexpectations.zone  ->  <VPS address>
+        TLS      certificate for that hostname
+        P4PORT   ssl:vcs.lowexpectations.zone:1666
+
+    AND MIGRATION BECOMES: CHANGE THE A RECORD. No developer reconfigures
+    anything, because nothing they hold names an address.
+
+    --- TWO THINGS WORTH KNOWING NOW, BOTH CHEAP ---
+
+      * CERTIFICATE TRANSPARENCY. A Let's Encrypt certificate for
+        vcs.lowexpectations.zone PUBLISHES THAT HOSTNAME IN PUBLIC CT LOGS, so
+        anybody can learn a version control server runs on the domain. Minor, and
+        avoidable: A WILDCARD CERTIFICATE for *.lowexpectations.zone covers it
+        without naming the subdomain — and a wildcard is plausibly wanted anyway
+        for the game's own site.
+
+      * REACHABILITY. The team is REMOTE, so IP allowlisting is impractical —
+        dynamic addresses, home connections. That leaves TLS PLUS STRONG
+        CREDENTIALS as the control, which is normal. A NON-DEFAULT PORT cuts
+        background scanner noise, though that is tidiness rather than security.
+
+    --- AND ONE ADJACENT THOUGHT, NOT A DECISION TODAY ---
+
+    THE PORTAL IS THE STUDIO'S TOOL — developers, testers, admins — not a
+    game-facing thing. If the game later has a public site on this domain, the
+    portal may belong somewhere NEUTRAL rather than under the game's brand. Worth
+    not defaulting into, and not worth deciding now.
+
+    --- AND THE DOMAIN IS ON CLOUDFLARE. ONE SETTING DECIDES WHETHER THIS WORKS.
+        Added 2026-10-09, because getting it wrong looks like a broken server.
+    ---
+
+    THE vcs. RECORD MUST BE DNS-ONLY — GREY CLOUD, NOT ORANGE.
+
+    CLOUDFLARE'S PROXY ONLY UNDERSTANDS HTTP, HTTP/2, HTTP/3 AND WEBSOCKET.
+    PERFORCE IS NONE OF THOSE. If vcs.lowexpectations.zone is orange-clouded,
+    traffic is REJECTED AT THE EDGE AND IT WILL LOOK LIKE THE SERVER IS DOWN —
+    and somebody will spend an afternoon debugging a VPS that is working
+    perfectly.
+
+    CLOUDFLARE'S OWN DOCS GIVE EXACTLY TWO ANSWERS FOR A NON-HTTP PROTOCOL:
+
+      1. DNS-ONLY (grey cloud) — Cloudflare returns the real IP and does not
+         route the traffic. STANDARD PRACTICE FOR NON-HTTP SERVICES.
+      2. CLOUDFLARE SPECTRUM — a parallel proxy opening raw TCP listeners,
+         forwarding bytes without parsing them, with IP-hiding and L3/L4 DDoS
+         protection. PAID AND USAGE-BILLED, and described as a fairly expensive
+         workaround.
+
+    FOR FIVE PEOPLE: OPTION 1.
+
+    --- WHAT GREY CLOUD COSTS US, STATED PLAINLY ---
+
+      * THE ORIGIN IP BECOMES PUBLIC. Normal for a VCS server, and it means:
+      * OUR OWN TLS CERTIFICATE. Universal SSL applies to PROXIED hostnames, so
+        it does not cover this one. LET'S ENCRYPT WITH DNS-01 VALIDATION THROUGH
+        CLOUDFLARE'S API is straightforward, and permits a wildcard.
+      * NO CLOUDFLARE DDoS PROTECTION on that hostname. So the FIREWALL MATTERS:
+        DROP EVERYTHING EXCEPT THE PERFORCE PORT, and keep SSH restricted rather
+        than open.
+      * AND STRONG CREDENTIALS PLUS TLS are the control — now with the corollary
+        that the server is FINDABLE.
+
+    --- AND THE GOOD PART ---
+
+    THE DOMAIN BEING ON CLOUDFLARE IS GOOD NEWS FOR THE MIGRATION. Changing an A
+    record is a dashboard edit, so the advice above works exactly as intended:
+    vcs.lowexpectations.zone repoints to a new host and NOBODY RECONFIGURES
+    ANYTHING.
+
+    AND DIFFERENT HOSTNAMES ON THE SAME DOMAIN GET DIFFERENT TREATMENT, which is
+    the useful thing about the orange/grey distinction:
+
+        THE GAME'S SITE   ORANGE   HTTP — Cloudflare's proxy, CDN, protection
+        THE PORTAL        ORANGE   HTTP — same
+        vcs.              GREY     Perforce is NOT HTTP; the proxy cannot carry it
+
+    --- WHAT SELF-HOSTING MEANS YOU NOW OWN ---
+
+    A managed service would have done all of this. On a VPS, none of it is
+    anybody else's job:
+
+      * BACKUPS. PERFORCE IS NOT BACKED UP BY COPYING FILES WHILE IT RUNS. It
+        needs `p4 admin checkpoint` on a schedule, JOURNAL ROTATION, and the
+        checkpoint COPIED OFF-SITE — off the same provider, ideally. AND THE
+        RESTORE MUST BE TESTED, because an untested checkpoint is a belief rather
+        than a backup. THIS IS THE ITEM MOST LIKELY TO BE SKIPPED AND THE ONE
+        THAT COSTS THE MOST.
+
+      * TLS. A remote team sends tickets and file content over the internet.
+        Perforce supports it (`P4PORT=ssl:host:1666`) and it is a requirement
+        rather than a nicety, because the alternative is credentials in clear.
+
+      * DISK, sized for 300 GB - 1 TB of project plus Perforce's own database and
+        journal growth. Block storage is where the bill lands, so size it before
+        choosing a provider rather than after.
+
+      * MONITORING — that the server is up, and that the CHECKPOINTS ARE RUNNING.
+        The second is the one nobody notices has stopped.
+
+    --- AND THE MIGRATION ITSELF, SO IT IS NOT A SURPRISE ---
+
+    The procedure is documented and well-trodden: CHECKPOINT, move the checkpoint
+    and the depot files, RESTORE on the new host, repoint DNS. Two things worth
+    knowing in advance:
+
+      * KEEP THE ARCHITECTURE THE SAME. Perforce's depot storage is
+        platform-dependent, so moving between architectures is not a file copy —
+        it needs a recovery step. Staying on the same architecture avoids the
+        whole question, and a migration is a bad time to discover it.
+
+      * AND SCHEDULE IT. A migration is downtime for everybody, so it wants a
+        quiet window and a message to the team, not an afternoon where syncs
+        mysteriously stop working.
+
+    --- REGION ---
+
+    UK/EU, which is also sensible on latency: PERFORCE IS CHATTY (item 71), so
+    the server wants to be on the same side of the Atlantic as the team. Note
+    that a UK/EU region and a UK/EU TEAM are two different things — if the team
+    is spread, the region should follow where most of the sync traffic is, and
+    the answer to that is replicas and edge servers rather than a compromise
+    location (item 71).
+
+
+73) WHY NOT EPIC'S LORE. 2026-10-09.
+
+    ASKED PLAINLY: *"Sop why not use Epic's Lore - it is an unreal game - and
+    perforce has a bad rep"*. A FAIR CHALLENGE, and the answer is NOT "stick with
+    Perforce because we said so". It is TIME-SENSITIVE, which is why it is
+    written down with dates.
+
+    --- FIRST, LORE'S DESIGN IS BETTER FOR A GAME THAN PERFORCE'S ---
+
+    Worth saying plainly, because it is the property the user was worried about
+    losing two questions earlier: LORE IS CONTENT-ADDRESSED, CHUNKED,
+    DEDUPLICATED, AND DOES SPARSE/LAZY FETCHING. That is the one-copy principle
+    applied to the WHOLE PROJECT, binaries included — the thing item 69 concluded
+    was impossible for builds and is merely hard for cooked content.
+
+    WHAT IT IS: Epic's own open-source VCS, MIT licensed, written in Rust. It
+    ORIGINATED AS UNREAL REVISION CONTROL, is used inside Epic, and POWERS
+    UEFN'S IN-EDITOR VERSION CONTROL — Auto Checkout, Auto Revert, Sync Changes,
+    Check-in Changes. SDKs in JavaScript, Python, C#, Go and Rust.
+
+    SO ON DESIGN IT IS NOT A COMPROMISE. IT IS WHAT WE WOULD WANT.
+
+    --- AND THREE FACTS STOP IT TODAY ---
+
+      1. THE UNREAL EDITOR PLUGIN IS SLATED FOR 2027. Lore is usable with UE 5.8
+         TODAY, but there is NO IN-EDITOR SOURCE CONTROL YET — the plugin will
+         ship IN THE ENGINE CORE, per Epic's roadmap. Which means NO AUTO
+         CHECKOUT, NO PER-ACTOR CHECK-OUT FROM THE EDITOR. And for a project
+         built on ONE FILE PER ACTOR, PER-ACTOR CHECK-OUT IS THE WORKFLOW (item
+         63). Everything Lore does well today, it does best in UEFN — NOT IN THE
+         ENGINE THIS GAME IS IN.
+
+      2. IT IS PRE-1.0 — 0.8.3 — AND EPIC WARNS THAT "INTERFACES AND STORAGE
+         FORMATS MAY CHANGE BETWEEN RELEASES". In a version control system that
+         is not a rough edge: IT IS THE REPOSITORY FORMAT POSSIBLY CHANGING UNDER
+         US.
+
+      3. AND EPIC ITSELF SAYS DO NOT. Their EVP, on the record: "Until we have
+         fully moved our development to it, I don't think we necessarily
+         recommend that everyone goes out and moves all their critical
+         infrastructure just yet." THE COMPANY THAT MAKES THE ENGINE, AND THE
+         TOOL, IS TELLING US NOT TO MOVE CRITICAL INFRASTRUCTURE ONTO IT YET.
+
+    --- SO THE ANSWER IS NOT "PERFORCE". IT IS "PERFORCE NOW, LORE LATER". ---
+
+    Epic has said Lore is core to UE6, whose EARLY ACCESS IS TARGETED AT LATE
+    2027, and the editor plugin lands the same year.
+
+    WHICH MAKES ITEM 72'S ADVICE MORE IMPORTANT, NOT LESS. There is now a
+    SPECIFIC AND LIKELY MIGRATION in the future, AT A KNOWN TIME. THE DNS NAME
+    DECIDES WHETHER THAT IS AN AFTERNOON OR A WEEK. A name under a domain the
+    studio controls turns the 2027 migration into a DNS change.
+
+    AND IT MEANS A TRIAL NOW WOULD TEST THE WRONG THING. Two weeks with Lore
+    today exercises it WITHOUT the editor plugin — so it would NOT show the OFPA
+    workflow, which is the thing that matters and the thing that does not exist
+    yet. WATCH IT RATHER THAN TRIAL IT.
+
+    --- ON THE BAD REPUTATION ---
+
+    LARGELY EARNED, AND LARGELY ABOUT COST AND ERGONOMICS AT SCALE: expensive for
+    large teams, cumbersome to administer, an interface that feels its age. WHAT
+    IT IS NOT IS UNRELIABLE — and at five users it is FREE, which removes the
+    loudest complaint.
+
+    The practitioner summary is worth keeping: "everyone in mid/large games uses
+    Perforce — ancient and not ideal, but it works at these data sizes and needed
+    feature sets." THE COMPLAINTS AND THE UBIQUITY ARE ABOUT DIFFERENT THINGS.
+
+    --- AND WHAT WOULD CHANGE THIS ANSWER ---
+
+      * THE UNREAL EDITOR PLUGIN SHIPPING (2027), which is the missing half.
+      * LORE REACHING 1.0, which is when "storage formats may change" stops being
+        true.
+      * OR HITTING A PERFORCE WALL — cost, an admin problem, a workflow it cannot
+        do. That is a reason to look again, and it should be written down here
+        when it happens rather than silently endured.
+
+    AND THE TIMING IS IN OUR FAVOUR EITHER WAY: switching is cheap now and
+    expensive the moment the game has content. Same theme as the .gitkeep lesson
+    and the repository question (item 68).
