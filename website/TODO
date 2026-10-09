@@ -7377,11 +7377,19 @@ no upside. If something seems to need one of them, ask.
        currently matches item 53 and neither the spec nor the code describes the
        state the other expects.
 
-    3. STORAGE.
+    3. STORAGE. — NOT A CONTRADICTION. TEMPORARY, TO BE DECIDED.
        SPEC: Cloudflare R2. CODE: local disk, backend/uploads/files/.
-       Not a contradiction so much as a divergence that will bite on the day
-       somebody deploys — and it interacts with the blob-size question, since
-       object storage is what a terabyte wants (see item 74's neighbours).
+       THE USER, 2026-10-09: *"storage is temp TBD"*. SO THIS IS A KNOWN
+       DEFERRAL, NOT A DRIFT — the spec describes where the blobs are going,
+       and local disk is where they live until that is decided.
+       CORRECTED HERE RATHER THAN LEFT AS A CONTRADICTION, because calling a
+       deferral a conflict devalues the two above it. The one-repo reversal and
+       the recommended_version_id clash are DECISIONS THAT DISAGREE; this is a
+       decision not yet taken. Listing them together made the real ones look
+       like housekeeping.
+       AND IT STILL INTERACTS WITH SIZE: object storage is what a terabyte
+       wants, so if the portal ever holds the project this stops being optional
+       (item 77's neighbours).
 
     --- WHAT IS IN THE SPECS AND NOT IN THE TODO AT ALL ---
 
