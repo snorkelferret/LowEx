@@ -4779,3 +4779,968 @@ no upside. If something seems to need one of them, ask.
     game assets… approved work goes into the game's asset store" — implied that
     everything uploaded becomes a game asset, which is exactly the thing that is
     not true.
+
+
+59) THE ROUND TRIP — check out, adjust, check in. AND THE HASH NEGOTIATION.
+    2026-10-09.
+
+    HOW CHANGE HAPPENS, and the user's correction that made the model smaller:
+    *"if it is worked on - adjusted etc - that will be done by the dev checking
+    it out - downloading those pieces on their local machine which don't already
+    exist and then uploading it again"*.
+
+    SO THE GAME DOES NOT TRANSFORM ANYTHING. Adjustment is WORK, work happens in
+    a workspace, so adjustment is A NEW VERSION. There is no fifth layer: the
+    four of item 53 stand — library, workspace, store, releases — plus THE
+    DEVELOPER'S MACHINE, which is a real place content lives and NOT a layer we
+    model, because we only ever learn what is on it by being told.
+
+    --- THE LOOP IS NOT SYMMETRICAL, AND THAT IS THE FINDING ---
+
+    CHECK-IN WORKS, and it preserves identity. developerWorkspace.js:4258 —
+    "If this workspace asset was explicitly derived from an existing repository
+    asset, use it." So an approval on a linked workspace asset adds a NEW VERSION
+    to that store asset rather than making a new one.
+
+    CHECK-OUT DOES NOT EXIST. workspace_assets.repository_asset_id is written in
+    EXACTLY ONE PLACE — the approve route, :4374. The upload route never sets it.
+    So the column means "this BECAME that", recorded after the fact: it is
+    ANCESTRY, not DERIVATION. Nothing anywhere pulls store content into a
+    workspace.
+
+    WHICH PRODUCES A LIVE FAILURE. A developer who adjusts a store asset and
+    re-uploads it fresh: the upload makes a NEW unlinked workspace asset;
+    approval looks for a store asset of the same name (:4319), finds one, and
+    THROWS — "A repository asset with this name already exists, but this
+    workspace asset is not associated with it" (:4323). And assets.name is
+    UNIQUE, so this is guaranteed for any name already in the store.
+
+    So the loop only closes FOR THE DEVELOPER WHO ORIGINALLY MADE IT, while their
+    workspace asset survives — their re-upload lands on the linked asset. Anyone
+    else, which is the normal case, has no way in and a hard stop on the way out.
+    That is the gap, and everything else here depends on closing it.
+
+    --- STAGING FIRST, DECIDED ---
+
+    Check-out STAGES INTO THE WORKSPACE, and the developer views it and confirms
+    before anything reaches their machine. The user's words: *"it stages first
+    into the workspace where the dev can view and check they want to proceed with
+    downloading to the local machine"*.
+
+    Three jobs at once:
+
+      * they SEE THE FILE LISTING, sizes and types BEFORE pulling gigabytes;
+      * the workspace asset is created WITH ITS ANCESTRY RECORDED — which is the
+        link the eventual upload needs, and therefore REPAIRS THE FAILURE ABOVE;
+      * nothing is downloaded if they decline.
+
+    So staging is not a nicety on top of the round trip. IT IS THE MISSING HALF
+    OF IT.
+
+    DOES A STAGED CHECK-OUT COUNT AGAINST THE WORKSPACE LIMIT? NO, AND THAT IS
+    ALREADY THE RULE. The user's principle: the quota is *"only the things that
+    are still owned by the dev - and not shared"*. Studio-owned content is not
+    the developer's to be charged for.
+
+    AND IT IS ALREADY IMPLEMENTED, in the precise form. workspaceUsage.js:93:
+
+        AND wvf.stored_file_id NOT IN (
+            SELECT stored_file_id FROM asset_version_files
+        )
+
+    THE EXCLUSION IS BY BLOB, NOT BY LINK — a stored file appearing in any store
+    version is not charged, whatever workspace asset points at it. Which gives
+    more than was asked for:
+
+      * A FULL CHECK-OUT COUNTS ZERO. Every blob is already in the store. A 3 GB
+        project stages against a 5 GB quota and the quota does not move.
+
+      * AN ADJUSTED CHECK-OUT COUNTS ONLY WHAT WAS ADDED. The untouched 3 GB
+        stays free; the one changed texture exists nowhere else, so it counts.
+        That is the quota measuring material that exists BECAUSE OF THIS
+        DEVELOPER, and it is taken as the reading.
+
+      * AND THE EXISTING DESIGN ALREADY ANSWERED THE HARD CASE: two developers
+        independently uploading identical bytes are BOTH charged, because that is
+        not sharing — neither can see the other's work — it is deduplication.
+        Consistent with the rule above, and the one place "shared" could be read
+        two ways, so the existing reading stands.
+
+    --- AND THE ONE GAP, WHICH IS A TRAP ---
+
+    THE LIBRARY DOES NOT EXIST, SO LIBRARY BLOBS ARE NOT EXCLUDED. When it is
+    built, item 57's material MUST JOIN THAT `NOT IN` — otherwise pulling library
+    images into a workspace charges quota for STUDIO-OWNED CONTENT, the precise
+    opposite of the rule.
+
+    AND IT WILL GO WRONG RATHER THAN BE CAUGHT, because workspaceUsage.js:35 says:
+
+        "The GAME STORE is the only shared content in the system, which is why
+         it is the only thing the exclusion above is about."
+
+    True today. FALSE THE DAY THE LIBRARY EXISTS. That sentence is an instruction
+    to the next person, and it currently instructs them to leave the exclusion
+    alone. Whoever builds item 57 must change it in the same breath.
+
+    --- HASH NEGOTIATION — the piece that makes the round trip affordable ---
+
+    THE USER ASKED FOR THIS EXPLICITLY. The dev downloads only *"those pieces on
+    their local machine which don't already exist"*, and the same idea applies in
+    both directions.
+
+    THE READ SIDE ALREADY EXISTS. GET /assets/:id/versions/:id/manifest and
+    .../files/:fileId/content. WHAT IS MISSING IS THE NEGOTIATION: the server
+    does not know what is on the developer's disk, so THE CLIENT MUST SAY SO.
+
+        THE MANIFEST IS THE INTERFACE, AND HASHES ARE THE CURRENCY.
+
+      * CHECK-OUT: the server offers the version's manifest — every file with its
+        relative_path and its SHA-256 — and the client pulls only the blobs it
+        does not already hold. It already knows, because it can hash its own
+        files.
+
+      * CHECK-IN: the client announces the hashes it HAS; the server asks for
+        only the blobs it LACKS. WITHOUT THIS, adjusting one texture in a 3 GB
+        Nuke project re-uploads 3 GB: the store dedupes the STORAGE so nothing is
+        wasted on disk, but every byte crosses the wire again.
+
+    This is the exchange git and rsync already use, and it falls out of content
+    addressing for free. NOT a new concept — a negotiation on top of routes that
+    exist.
+
+    AND IT IS WHAT MAKES ITEM 55 (unzip on upload) MATTER LESS: the reason to
+    send an archive is to avoid sending many bytes, and negotiation is the better
+    answer to the same problem.
+
+    --- BRANCHING, DECIDED ---
+
+    An adjustment BRANCHES: it produces a NEW STORE ASSET, not a new version of
+    the one it came from. The user's decision — *"I think it should branch"* —
+    and the argument is THE ASYMMETRY OF THE FAILURES:
+
+      * version-in-place gone wrong — "bigTree" SILENTLY STOPS MEANING what it
+        meant, and somebody else's reference or a release query quietly picks up
+        a different thing. SILENT.
+
+      * branching gone wrong — an extra asset nobody uses. NOISE.
+
+    When one failure is silent and the other is merely untidy, take the loud one.
+
+    Two more reasons, both about the store being SHARED:
+
+      * TWO PEOPLE ADJUSTING THE SAME SOURCE IN DIFFERENT DIRECTIONS IS NORMAL,
+        and in-place versioning forces v4/v5 as though 5 succeeded 4. They are
+        SIBLINGS. That is a lie stored in the data, and unfixable later.
+
+      * NAMES ARE HOW PEOPLE REFER TO THINGS. A store where bigTree means one
+        fixed thing is usable; one where it drifts is not. Immutability is what
+        makes "approved" mean anything at all.
+
+    AND BRANCHING NEEDS NO NEW CONCEPT — IT FIXES THE DIRECTION OF ONE ALREADY
+    THERE. repository_asset_id is written only at approval today, so it means
+    "became". Under branching it is written at CHECK-OUT and means "came from",
+    which is what a column with that name on a WORKSPACE asset obviously ought to
+    mean.
+
+    BUT IT FORCES PROVENANCE. A branch must record that it came from bigTree v3 or
+    the thread is lost. And it must be MANY-TO-MANY, because both directions are
+    real:
+
+        one source  → several branches     bigTree v3 → mossyTree, deadTree
+        several     → one asset            tree + hut + fence → village
+
+    So a TABLE, not a column — the same reasoning item 53 used to reject a
+    `recommended_version` field on the asset.
+
+    --- OPEN ---
+
+      * DOES EVERY ROUND TRIP BRANCH? A one-character fix would then make a new
+        asset. The suggestion is that THE DEV CHOOSES — update in place, or
+        branch — DEFAULTING TO BRANCH for the failure-mode reason above. NOT
+        SETTLED.
+
+      * AND VERSIONING CONTINUES WITHIN A BRANCH, so the two coexist: branch at
+        the asset level, versions within. What decides which one a given change
+        is, is the question above.
+
+      * WHERE THE STAGED VERSION GOES when the dev uploads an adjusted one: does
+        it supersede the staging, or sit beside it? Not decided.
+
+
+60) GAME VERSIONS ON THE DEVELOPER PAGE — IMPORTANT. 2026-10-09.
+
+    The user's words: *"we should put the latest game versions to download on the
+    devs page - TODO - Important"*.
+
+    WHY IT MATTERS, from the scenario that produced it: *"most devs will have a
+    copy of the game - inprogress dev whatever - and they will upload their asset
+    into the game to see how it works before uploading it to the website"*.
+
+    SO THE PORTAL HONOURS A WORKFLOW THAT ALREADY HAPPENS. Developers test in a
+    local game before submitting. The portal's pipeline therefore BEGINS AFTER
+    LOCAL VALIDATION — tech check and creative approval are about STANDARDS AND
+    OWNERSHIP, not about whether the thing works. The developer already knows.
+
+    DEPENDS ON ITEM 53. A downloadable game version IS a release, so this cannot
+    be built before releases exist. It is the DISTRIBUTION half of item 53, which
+    recorded what a release IS and not how one reaches anybody.
+
+    --- WHAT IT NEEDS ---
+
+      * ACCESS: developers and above. Not users. A game build is studio material.
+
+      * AND IT MUST BE A RELEASE, NOT A WORKING COPY. A developer's local game has
+        their own unapproved work in it. Handing out builds must hand out CLEAN
+        ones, or one person's half-finished experiment lands in another person's
+        test and confuses everybody. This is the single most important constraint
+        here.
+
+      * WHICH ONES? "The latest" is what was asked for. The open question is
+        whether older releases stay available — a developer testing against the
+        wrong version needs the right one, and pinning to a version is the normal
+        reason to want an old one. Probably: keep all named releases, offer the
+        latest prominently.
+
+      * SIZE. Game builds are enormous, and this is a NEW kind of content in the
+        portal — the store holds assets, this holds BUILDS. It is not
+        content-addressed and it should not pretend to be: two builds are two
+        large blobs, mostly identical, and deduplicating them means content
+        addressing a whole build tree. WORTH DECIDING DELIBERATELY rather than
+        discovering the disk is full.
+
+    --- AND HOW BIG, AND HOW IT GETS THERE. ANSWERED 2026-10-09. ---
+
+    ASKED: *"So how big is a normal openworld game? Once the game has been
+    downloaded once - it only needs the differences - both plus and minus - so
+    the local machine does not fill up with useless stuff... should we make a
+    script that the dev can run on their local machine? Or what else can you
+    suggest"*.
+
+    SIZES — THREE TIERS, AND ONLY THE FIRST IS A PUBLISHED FIGURE:
+
+        SHIPPED GAME          60-120 GB     Elden Ring ~60, Cyberpunk ~70-80
+                                           (108 with expansions), RDR2 ~120
+                                           (150 to install). Cooked, compressed.
+        PACKAGED DEV BUILD    ~150-250 GB   debug symbols, less compression.
+                                           ESTIMATE, not a searched figure.
+        THE FULL PROJECT      300 GB-1 TB+  source assets, PSDs, FBX, DDC,
+                                           Intermediate, Binaries. WHY NOBODY
+                                           SYNCS THE WHOLE THING.
+
+    SO THE FIRST QUESTION IS WHICH ONE A DEVELOPER NEEDS, and it differs: an
+    artist testing an asset wants to run it, a tester wants a build.
+
+    THE DELTA INSTINCT IS RIGHT, AND CONTENT ADDRESSING MAKES IT BETTER THAN
+    EXPECTED:
+
+      * DIFFERENCES BOTH WAYS, and THE MINUS MATTERS MORE THAN PEOPLE THINK.
+        Leaving stale files behind breaks the game in ways that look like code
+        bugs.
+
+      * AND RENAMES ARE FREE. A file that moved has the same SHA, so it is a
+        RELINK, not a download. Only changed CONTENT costs bandwidth — and an
+        enormous share of change between builds is files moving.
+
+    --- BUT DO NOT WRITE THE CLIENT. THREE REASONS. ---
+
+      1. IT ALREADY EXISTS, TWICE. "We know what the dev has, send only the
+         differences, plus and minus, don't leave junk" IS A LITERAL DESCRIPTION
+         OF `p4 sync`. For build artifacts it is a literal description of
+         `rsync --delete`.
+
+      2. A TOOL THAT DELETES FILES IS THE MOST DANGEROUS THING TO WRITE. "Delete
+         everything not in the manifest" eats a developer's work the first time
+         the manifest is wrong, and Perforce and rsync have had decades of bugs
+         shaken out of exactly that logic.
+
+      3. THE PORTAL IS NOT A FILE SERVER. Node and Express serving 100 GB has no
+         range requests, no resumability and no CDN. Works in testing, falls over
+         in use.
+
+    --- WHAT TO DO INSTEAD, IN ORDER ---
+
+      1. PERFORCE FOR THE PROJECT (item 62). p4 sync gives deltas, deletions,
+         resume, verification and locking, and there is NOTHING TO BUILD. The
+         developer page links to a CHANGELIST; the portal never touches the bytes.
+
+      2. `rsync -a --delete` FOR PACKAGED BUILDS. If builds sit on a server with
+         SSH, that ONE COMMAND is the entire delta mechanism — incremental,
+         resumable, deletes what is gone. Almost free to adopt.
+
+      3. UNREAL'S OWN PATCH PAKS if small GAME patches are wanted rather than
+         whole builds. Packaging in Patch mode produces paks containing only
+         changed assets. THE ENGINE HAS ALREADY SOLVED DELTA FOR COOKED BUILDS.
+
+      4. A SCRIPT ONLY AS A WRAPPER — ask the portal for the manifest, then
+         invoke p4 or rsync. A thin shell script over a solved problem, NOT a new
+         transfer protocol.
+
+    --- AND ONE CORRECTION TO THE FRAMING ---
+
+    "IF WE KNOW WHAT VERSION THE DEV HAS ALREADY DOWNLOADED" — DO NOT TRACK THAT
+    SERVER-SIDE. A client's state is a bad thing to mirror: they reimage a
+    machine, work on two machines, delete a folder — and the server's belief is
+    silently wrong, WHICH IS EXACTLY WHEN A DELETE-EVERYTHING-NOT-IN-THE-MANIFEST
+    TOOL DOES DAMAGE.
+
+    ASK THE CLIENT INSTEAD. It hashes what it has and says so; the server replies
+    with what is missing. Self-correcting, no state to drift, and it is THE SAME
+    HASH NEGOTIATION ALREADY DESIGNED FOR CHECK-OUT (item 59). Perforce does
+    this, rsync does this, git does this — and it works because THE CLIENT IS THE
+    AUTHORITY ON THE CLIENT.
+
+    SO ITEM 60 CHANGES SHAPE: THE DEVELOPER PAGE LISTS AND LINKS GAME VERSIONS.
+    It does not store or serve them. The portal keeps the MANIFEST AND THE
+    RECORD — which changelist, who built it, what changed — and the transfer is
+    somebody else's solved problem.
+
+      * AND WHO UPLOADS A BUILD? Somebody has to build the game and put it
+        somewhere. That is a job for whoever manages releases — still NOT
+        DECIDED, see item 53.
+
+    --- AND ONE THING THAT IS MISSING WHATEVER IS DECIDED HERE ---
+
+    NOTHING RECORDS WHICH GAME VERSION AN ASSET WAS TESTED AGAINST.
+
+    A developer validates against a specific build, submits, and the fact is
+    lost. If the asset is later used in a different version, nobody knows it was
+    only ever seen against the first. That is "IT WORKED ON MY MACHINE" with no
+    way to check it, and the fix is small: ONE FIELD ON THE SUBMISSION — the game
+    version it was tested against — offered from the same list this item puts on
+    the developer's page.
+
+    Cheap now, impossible to reconstruct later.
+
+
+61) ALL AUTHORING HAPPENS OUTSIDE THE ENGINE. 2026-10-09.
+
+    A PREMISE, not a task. Stated by the user when asked how much artist work
+    happens in Unreal: *"all done outside and then imported"*.
+
+    So the engine is a CONSUMER, not an authoring space. Work is made in Blender,
+    Maya, Nuke and the like, and imported. Nothing is authored in Unreal that has
+    no source outside it.
+
+    WHAT IT SETTLES:
+
+      * THE STORE IS AUTHORITATIVE. The source and its tree is the real thing, and
+        the engine's copy is derived from it. Provenance runs one way.
+
+      * AND THE EXPORT-BACK PROBLEM DISAPPEARS. There is nothing to export back,
+        because nothing was authored there. The earlier worry — that engine-side
+        work would be stranded with no route to its source — does not arise,
+        PROVIDED THIS PREMISE HOLDS.
+
+      * SO THE PORTAL RECORDS THE STORE->GAME LINK AND NOTHING MORE. Modelling the
+        engine's internals here would duplicate what it already knows and drift.
+        The link is worth keeping precisely because the engine's own import
+        metadata is local, absolute-path, and dies with the machine.
+
+    ASKED AND NOT YET ANSWERED: DOES THIS INCLUDE THE WORLD ITSELF? Level layout,
+    lighting, foliage placement and set dressing are normally engine-side work in
+    an open-world project, and are not "imported" in the way a mesh is. If this
+    premise covers them, the pipeline is entirely one-way and unusually clean. If
+    it does not, the engine holds authored work with no source in the store, and
+    that work needs its own provenance — the game repository's history, not ours.
+
+    --- CORRECTED THE SAME DAY, BECAUSE THE PREMISE IS TOO STRONG ---
+
+    THE USER'S COUNTEREXAMPLE, put to me directly: *"if I am working on my local
+    machine I have bigTree originally created in blender - and the wip game - and
+    I import bigTree and make changes to big tree in the game - for instance - i
+    apply some matrix transform - and then want to export it back - how should
+    this be done"*.
+
+    SO "ALL DONE OUTSIDE" IS TRUE OF CREATION AND NOT OF ADJUSTMENT. Things are
+    MADE outside. They are also CHANGED inside, and that change needs a route
+    back to the source.
+
+    AND THERE ARE TWO CHANGES BEHIND ONE PHRASE, with opposite answers:
+
+      * A - PLACEMENT. The tree is moved in the world and the ASSET is untouched.
+        What changed is the LEVEL. There is no asset round trip: it is layout, it
+        is world data, and the store is not involved. The engine would export a
+        placement list — which asset, which matrix — and the DCC would consume
+        that.
+
+      * B - BAKED. The transform is applied INTO the mesh, so the asset HAS
+        changed and the source is stale.
+
+      AND B IS THE LUCKY ONE: A PURE TRANSFORM IS THE ONLY ASSET CHANGE THAT
+      ROUND-TRIPS PERFECTLY, because there is nothing to lose — no materials, no
+      UV authoring, no modifier stack, no procedural history. It is geometry.
+      FBX carries it faithfully both ways.
+
+      FOR ANYTHING THAT IS NOT A TRANSFORM — retopology, a repainted material,
+      edited UVs — EXPORT-BACK IS LOSSY AND THE CHANGE SHOULD BE MADE IN THE DCC.
+      Not a rule the portal imposes: the engine's representation cannot express
+      what was done in a form the DCC accepts back.
+
+      AND THE THIRD POSSIBILITY WORTH RULING OUT: a matrix applied to fix an
+      IMPORT problem (Blender and Unreal disagreeing about forward axis) belongs
+      in the EXPORT SETTINGS, applied consistently — not in the engine, and not
+      in a round trip. It is the most common reason a matrix appears there.
+
+    WHAT THE PORTAL DOES, IN ALL OF IT: NOT THE EXPORT. Unreal and the DCC do
+    that, and the portal must not parse a .uasset. THE PORTAL RECORDS THAT A NEW
+    SOURCE ARRIVED AND WHICH STORE VERSION IT BRANCHED FROM — item 59's loop,
+    unchanged. The engine is simply another place a change can originate.
+
+    --- AND THE NORMAL WAY, WHICH SETTLES IT ---
+
+    ASKED: *"what is the normal way - It must be a common problem"*. IT IS COMMON,
+    AND THE INDUSTRY ANSWER IS THAT IT IS NOT ROUND-TRIPPED AT ALL.
+
+    THE STANDARD PIPELINE IS ONE-WAY: DCC -> export -> engine, and the DCC FILE IS
+    THE SOURCE OF TRUTH. When the source changes you export again and hit
+    REIMPORT in Unreal, which re-runs the import with the original settings.
+
+    WHICH EXPLAINS UNREAL'S IMPORT METADATA. The source path and timestamp exist
+    PRECISELY to support Reimport, and they work perfectly well for one artist on
+    one machine. They are only useless as a STUDIO-WIDE RECORD — a different job,
+    which is the one we were asking of them.
+
+    SO THE RULE IS: THE ENGINE IS DOWNSTREAM. Asset changes are made in the DCC
+    and flow one way. Level layout, lighting and set dressing are ENGINE work and
+    STAY THERE. You do not edit an asset in the engine and carry it back.
+
+    AND THE MATRIX CASE IS ALMOST ALWAYS AN AXIS OR SCALE PROBLEM — Blender and
+    Unreal disagree about forward axis — whose normal fix is A SETTING APPLIED
+    ONCE, in the FBX export and Unreal import options, so nothing ever needs
+    correcting. A matrix applied by hand to every import is the SYMPTOM; the cure
+    is upstream, in the export settings.
+
+    --- AND THE ROUND TRIP ALREADY EXISTS: IT IS PERFORCE ---
+
+    IN A NORMAL STUDIO bigtree_v01.blend LIVES IN PERFORCE. The artist checks it
+    out, edits it in Blender, checks it in, and reimports in Unreal. THE ENGINE
+    NEVER ROUND-TRIPS — THE SOURCE ROUND-TRIPS THROUGH VERSION CONTROL.
+
+    WHICH IS EXACTLY ITEM 59'S LOOP. The store plays Perforce's role: check out,
+    edit, check in, branch. The same shape, because it is the same problem, solved
+    decades ago by keeping the source in a depot and reimporting.
+
+    SO THERE IS NOTHING TO INVENT. The user's own instinct — check it out, adjust,
+    upload it again — IS the normal way. The only question is WHERE the adjustment
+    happens: IN THE DCC.
+
+    AND GENUINE ENGINE->DCC ROUND TRIPS ARE SPECIFIC TOOLS, NOT A GENERAL
+    CAPABILITY: Houdini Engine (procedural, live both ways), USD (increasingly the
+    direction of travel), Datasmith (scene interchange, mostly CAD inward), and
+    scene/instance export for LAYOUT. All exceptions. None is what a texture or a
+    tree does.
+
+    --- WHICH MEANS ITEM 61'S PREMISE SURVIVES ---
+
+    "All done outside and then imported" is right about ASSETS, and the counter-
+    example does not overturn it: the normal way is to make the change in
+    the DCC and reimport, not to edit in the engine and export back. The premise
+    is too strong only in that it does not SAY the engine can be edited — it can,
+    and the answer is that you should not need to.
+
+    OPEN: whether case A (placement) belongs to the store at all, or is purely
+    world data the portal never sees. The reading is the latter.
+
+
+62) THE GAME PROJECT AND VERSION CONTROL — A SCOPE QUESTION. 2026-10-09.
+
+    RAISED BY THE USER: *"I think that the lighting etc are done in Unreal - and
+    that the unreal game can be downloaded worked on - say the lighting and then
+    the lighting update uploaded to the dev portal - what do you think? Is
+    perforce free? should we be using it?"*
+
+    SO THE PREMISE OF ITEM 61 IS NOW SETTLED: lighting and the world ARE authored
+    in the engine. Item 61 already carries the correction.
+
+    BUT WHAT IS DESCRIBED IS NOT THE ASSET STORE. IT IS VERSION CONTROL FOR THE
+    GAME PROJECT, which is a different system with a different tool.
+
+    --- WHY THEY ARE DIFFERENT ---
+
+                     THE STORE                    THE GAME PROJECT
+        churn        on submission                all day, every day
+        contents     curated approved sources     a huge tree of binary .uasset
+        conflicts    rare, one dev one asset      constant, two artists one level
+        needs        approval, provenance,        LOCKING, branching, merging,
+                     one-copy                     deltas
+
+    AND THE PROPERTY THAT DECIDES IT IS LOCKING. Two people editing one level is
+    not a merge conflict to resolve, it is CORRUPTION — you need "I have this
+    checked out, nobody else may touch it". That is Perforce's core feature, and
+    it is exactly what a CONTENT-ADDRESSED store cannot give, because content
+    addressing is MERGE-BY-CONTENT and Unreal's binaries do not merge at all.
+
+    --- RECOMMENDATION ---
+
+      * THE PORTAL DISTRIBUTES GAME VERSIONS AND RECORDS RELEASES. It does NOT
+        version the project. Item 60 puts builds on the developer page; item 53
+        defines what a release is. Growing the portal into a VCS means building
+        locking, branching, binary deltas and histories — badly, and against a
+        tool that has done it for twenty years.
+
+      * THE BOUNDARY IS A CHANGELIST NUMBER. A release records which Perforce
+        changelist it was built from. The portal knows THAT a build exists and
+        where it came from; Perforce knows how it got there.
+
+      * AND IT IS THE "NORMAL WAY" ANSWER ONE LEVEL UP. The source round-trips
+        through version control and the engine reimports — item 61. This is the
+        same sentence about the PROJECT: the project round-trips through version
+        control, and the portal records which build came out.
+
+    --- PERFORCE, ANSWERED ---
+
+    FREE AT THIS SIZE. Helix Core is free for small teams — UP TO 5 USERS AND 20
+    WORKSPACES — and paid above that. Checked 2026-10-09 against Perforce's own
+    pages; licensing changes, so it is worth rechecking before committing.
+
+    LICENCES ARE PER NAMED USER, NOT PER IP OR PER CONNECTION. Asked directly —
+    *"are the perforce licenses per ip address?"* — and the answer is no. Five
+    standard accounts is five accounts wherever those people are, which is what
+    makes it work for a remote team at all.
+
+      * A STANDARD USER — can sign in, make a workspace, submit — CONSUMES ONE.
+      * OPERATOR USERS and SERVICE USERS DO NOT CONSUME LICENCES, but NEITHER CAN
+        DO FILE WORK, so neither can be a build machine. See below.
+      * YOUR OWN ADMIN ACCOUNT COUNTS — unless it is made an OPERATOR user, which
+        is the one economy this licence model offers.
+
+    AND WHAT THE TWO FREE TYPES ACTUALLY ARE, since it was asked:
+
+      * OPERATOR USER — for ADMINISTERING THE SERVER, human or automated. No
+        licence. Restricted to a fixed command list: admin stop/restart/
+        checkpoint, counter, dbstat, dbverify, diskspace, configure, info,
+        journal*, login, log*, lockstat, monitor, passwd, ping, serverid, verify,
+        user. NOTABLY ABSENT: sync, submit, edit, add — AN OPERATOR CANNOT TOUCH
+        FILES AT ALL. Because the list is that narrow, giving it `super` is
+        considered safe.
+
+      * SERVICE USER — for ONE SERVER TALKING TO ANOTHER: remote depots,
+        replicas, multi-server setups. No licence. It exists so each installed
+        service has its own identity, which makes logs readable and forces remote
+        services to hold valid tickets. Not a human, not a client.
+
+      * IN ONE LINE: OPERATOR ADMINISTERS THE SERVER; SERVICE IS SERVER-TO-SERVER.
+        NEITHER DOES DEVELOPMENT, AND NEITHER CAN BE A BUILD MACHINE.
+
+    AND THE ONE PLACE THE OPERATOR TYPE SAVES MONEY, which Perforce says plainly:
+    organizations whose admins do not use versioning features may economise via
+    this type. SO IF WHOEVER RUNS THE SERVER ONLY ADMINISTERS IT AND NEVER SYNCS
+    OR SUBMITS, MAKE THEM AN OPERATOR AND THEY STOP CONSUMING A LICENCE.
+
+    AND THE USER LIMIT IS PROBABLY NOT THE ONE THAT BITES — THE SECOND ONE IS.
+    20 WORKSPACES, AND WORKSPACES MULTIPLY WHERE USERS DO NOT: every machine a
+    person uses is another workspace. A developer with a laptop and a desktop is
+    TWO. Five people is easily ten before any build machine.
+
+    AND THE BUILD MACHINE TAKES FROM BOTH POTS — A WORKSPACE AND A STANDARD USER
+    ACCOUNT. IT CANNOT BE AN OPERATOR OR A SERVICE USER: it syncs a changelist
+    and runs commands, which is FILE WORK, and both free types are barred from
+    file work. (An earlier version of this note said otherwise. It was wrong.)
+
+    SO FIVE STANDARD USERS REALISTICALLY MEANS FOUR HUMANS PLUS THE BUILD
+    MACHINE — or five humans if the admin is an operator and no build machine
+    sits on the server. SIX IS WHERE THE FREE TIER ENDS.
+
+    IF YOU GO OVER, YOU ARE NOT CUT OFF: the unlicensed server CAPS THE DEPOT AT
+    1,000 FILES rather than refusing to run. Which for a game project is a hard
+    stop in practice, since a thousand files is nothing. The free tier is real
+    only while inside 5 users and 20 workspaces.
+
+    AND IT IS BUILT INTO UNREAL: the editor's source-control menu speaks Perforce
+    natively — check out, check in, history, reconcile — with no plugin. For an
+    Unreal project that is a strong argument by itself.
+
+    THE ALTERNATIVE: git with git-LFS, which is already in use here and free
+    without user limits. Small studios do run Unreal on it, but it has NO REAL
+    FILE LOCKING and Unreal binaries in git are painful at scale.
+
+    --- AND WHAT IT ACTUALLY LOOKS LIKE, ASKED AND ANSWERED ---
+
+    ASKED: *"if all the developers are working remotely they would each have
+    their own copy of perforce on their local machine - and the studio would also
+    have a copy?"*
+
+    NOT QUITE, AND THE MENTAL MODEL IS GIT'S. PERFORCE IS CENTRALISED: there is
+    exactly ONE authoritative copy — the depot, on the server. Developers do not
+    have copies of it. They have WORKSPACES: a mapping saying which parts of the
+    depot appear where on their disk, plus the files they have synced and their
+    own edits. NO HISTORY, NO BRANCHES — just files.
+
+    AND A WORKSPACE SYNCS A SUBSET. An artist syncs the art folders, a programmer
+    the source, and nobody syncs 200 GB of textures to edit a level. Native to
+    Perforce, and a large part of why studios use it over git for a project.
+
+    --- TWO OPERATIONAL FACTS THIS TURNS UP, BOTH ASSUMED BY ITEM 60 ---
+
+      * WHERE THE SERVER LIVES. NOT IN THE STUDIO. If it is a machine in the back
+        room, the studio's internet connection becomes every developer's
+        bottleneck and a single point of failure for the company. FOR A REMOTE
+        TEAM THE SERVER WANTS TO BE CLOUD OR DATACENTRE HOSTED — Perforce sells
+        this, or it runs on a VPS. Developers work over the internet and CAN work
+        offline, but SUBMITTING REQUIRES THE SERVER, because the server arbitrates.
+
+      * AND A BUILD MACHINE, WHICH ITEM 60 DEPENDS ON AND DOES NOT MENTION.
+        Somewhere there is a machine with its own workspace which syncs a known
+        changelist and builds the game. THAT IS WHAT PRODUCES THE RELEASES on the
+        developer page. Not a developer's copy, not the server — and without it
+        "download the latest game version" has nothing to download.
+
+    --- AND THE BIT THAT TIES BACK ---
+
+    LOCKING REQUIRES A CENTRAL AUTHORITY. You cannot have it with distributed
+    copies agreeing among themselves, which is why git is bad at it and Perforce
+    is built around a server. THE CENTRALISATION IS NOT AN IMPLEMENTATION DETAIL
+    — IT IS THE FEATURE.
+
+    WHICH IS ALSO WHY THE PORTAL CANNOT BE THE ANSWER HERE. The portal is
+    content-addressed, and content addressing is MERGE-BY-CONTENT: no arbiter, no
+    lock. Adding one means building the thing Perforce already is.
+
+    --- IF WE GO WITH PERFORCE, THESE ARE THE ACTIONS — ASKED FOR 2026-10-09 ---
+
+    The user asked whether the ACCOUNTS WE NEED and the fact that this has to be
+    INSTALLED AND CONFIGURED IN UNREAL are written down. They were not, so:
+
+      [ ] DECIDE ONE SYSTEM OR TWO (below). Nothing here happens until that is
+          answered.
+
+      [ ] A SERVER, HOSTED OFF-SITE. Not a machine in the studio: for a remote
+          team, on-prem makes the studio's uplink everyone's bottleneck and a
+          single point of failure. Perforce's own cloud, or a VPS.
+
+      [ ] THE ACCOUNTS, AND THE COUNT MATTERS. Five standard users on the free
+          tier:
+            * ONE PER DEVELOPER who does file work.
+            * THE BUILD MACHINE — a STANDARD user, unavoidably. It syncs a
+              changelist and builds, which is file work, and the two free types
+              are barred from file work.
+            * THE ADMIN — a standard user, UNLESS whoever runs the server only
+              administers it and never syncs or submits, in which case make them
+              an OPERATOR user and they consume no licence. This is the one
+              economy the licence model offers and it is worth taking.
+            * NOBODY needs a service user unless we run replicas or remote
+              depots. Do not create one "just in case" — it is for
+              server-to-server and it buys nothing here.
+
+      [ ] AND WATCH THE WORKSPACES, NOT THE PEOPLE. The second limit is 20, and
+          workspaces multiply per MACHINE per person — a developer with a laptop
+          and a desktop is two. The build machine needs one. Five people is
+          easily ten before anything unusual happens.
+
+      [ ] CONFIGURE SOURCE CONTROL IN UNREAL. The editor's source-control menu
+          speaks Perforce natively — set the server, the user, and the workspace
+          in Project Settings > Source Control, with no plugin. Also configure
+          the file types that must be checkout-exclusive (binaries and .uasset),
+          because that locking is the entire reason for choosing Perforce.
+
+      [ ] AND TEST IT ON THE .uproject BEFORE TRUSTING IT. The first commit is
+          the project's own structure — game/ as it stands in this repository —
+          with .gitignore-style rules deciding what does NOT go in (Binaries/,
+          Intermediate/, Saved/, DerivedDataCache/).
+
+    --- THE QUESTION, WHICH IS OURS TO ANSWER AND NOT TO ASSUME ---
+
+    ONE SYSTEM OR TWO? The recommendation above is TWO — Perforce for the
+    project, the portal for assets, meeting at the changelist. The alternative is
+    to keep everything in the portal, which means building the VCS. THE CHOICE IS
+    THE USER'S, and it is the largest scope decision surfaced so far.
+
+
+63) HOW AN OPEN WORLD IS DIVIDED, AND WHAT A DEVELOPER ACTUALLY SYNCS. 2026-10-09.
+
+    ASKED: *"what are openworld games generally divided into - levels - but is
+    their finer grained chunks than that - where they can see how their big tree
+    works with the lighting and fx etc"*.
+
+    YES, AND ON THREE DIFFERENT AXES — which is why it is not simply "levels".
+
+      * SPATIAL — WORLD PARTITION CELLS. The world is ONE PERSISTENT LEVEL FILE,
+        subdivided into a streamable grid (256 m typical, 768 m loading range).
+        Actors with "Is Spatially Loaded" set load and unload by distance from a
+        streaming source. You never load the world, you load a neighbourhood.
+
+      * SEMANTIC — DATA LAYERS. THIS IS THE DIRECT ANSWER TO THE QUESTION. Data
+        Layers group actors LOGICALLY, independently of space, and load or unload
+        as a unit. They are what studios use for LIGHTING, FX, GAMEPLAY,
+        TIME-OF-DAY, seasonal variants, quest states, destroyed-versus-intact
+        towns, cinematic-only dressing. "How does my tree look with the lighting
+        and FX" IS WHAT DATA LAYERS ARE FOR.
+
+      * ATOMIC — ONE FILE PER ACTOR (OFPA). Each actor INSTANCE is its own file.
+        Move one tree and ONE FILE changes, not the level. The finest grain there
+        is, and on by default with World Partition.
+
+    --- AND OFPA EXISTS BECAUSE OF SOURCE CONTROL ---
+
+    Epic's documentation says it plainly: OFPA means editing an actor no longer
+    requires saving the main Level file, "REDUCING SOURCE-CONTROL CONFLICTS" — and
+    Perforce changelist support can show actor names, level paths and asset types.
+
+    THE ENGINE WAS DESIGNED THIS WAY TO MAKE VERSION CONTROL WORK. An independent
+    argument for item 62: with Perforce we are not fighting the tooling, we are
+    using it as intended.
+
+    CAVEAT: OFPA IS EDITOR-ONLY. At cook time all actors are collapsed into the
+    level files. It describes the DEVELOPMENT structure; the shipped build is a
+    different shape. Worth remembering when discussing builds.
+
+    --- SO A DEVELOPER'S WORKING SET IS NOT "THE GAME" ---
+
+      * their own content — Content/Developers/<name>/
+      * THE DATA LAYER their work belongs to — lighting, if they are lighting
+      * a REGION OF CELLS, not the world
+      * plus, in practice, A LOOK-DEV MAP: a small level with representative
+        lighting and a slice of terrain, where an asset can be judged IN CONTEXT
+        without syncing a terabyte. This is the pragmatic studio answer and
+        probably how the artists already work.
+
+    --- WHAT IT CHANGES FOR US ---
+
+      * ITEM 60'S SHAPE SHIFTS AGAIN. "Download the latest game version" is THE
+        WRONG SHAPE FOR AN ARTIST, because nobody wants all of it. An artist
+        working on a tree wants to SYNC A SUBSET AND RUN THE EDITOR — which is
+        Perforce. A PACKAGED BUILD is for a tester who just wants to run it. TWO
+        AUDIENCES, TWO MECHANISMS, and the developer page should say which is
+        which rather than offering one "the game" button.
+
+      * AND ITEM 61'S A/B DISTINCTION IS NOW CONCRETE. The tree ASSET is a store
+        asset. The PLACED tree is an OFPA file inside a cell. Different kinds of
+        thing, in different systems — now with a file behind it.
+
+      * AND THE PARTIAL SYNC IS NOT AN OPTIMISATION, IT IS THE NORMAL CASE.
+        Perforce workspaces map subsets by design (item 62), which is exactly
+        what an open-world project needs and what a whole-repository clone cannot
+        do.
+
+
+64) WHAT A DEVELOPER DECLARES, AND WHAT THE SYSTEM ALREADY KNOWS. 2026-10-09.
+
+    ASKED: *"there also needs to be on the devs workspace a form asking what
+    spatial area of the game - maybe including new area - lighting including new
+    lighting - etc does this fit with the usual way of doing things? ... Does the
+    dev manually enter the version or chunk of the game they are building on or
+    what?"*
+
+    --- THE VERSION QUESTION, ANSWERED FIRST AND FIRMLY ---
+
+    NO, AND THE DEVELOPER SHOULD NOT BE ASKED. THE CLIENT ALREADY KNOWS. A
+    Perforce workspace records the last-synced revision of every file, so "what
+    am I building on" is STATE, not something anybody types. A typed version is
+    wrong from the moment anything syncs, and somebody will trust it.
+
+    AND THE ONE VERSION-SHAPED QUESTION THAT MUST BE TYPED IS A DIFFERENT KIND OF
+    THING (item 60):
+
+        WHAT I SYNCED FROM            the client, per file   NEVER typed — state
+        WHICH GAME VERSION I TESTED   only the human         ALWAYS typed —
+        AGAINST                                              an assertion
+
+    THE SECOND HAS TO BE ASKED BECAUSE THE PORTAL CANNOT OBSERVE A TEST THAT
+    HAPPENED ON THE DEVELOPER'S MACHINE. RULE: STATE IS NEVER TYPED, ASSERTIONS
+    ALWAYS ARE.
+
+    --- DOES THE AREA/LIGHTING FORM FIT THE USUAL WAY? PARTLY. ---
+
+    THE AREA AND THE LAYER ARE REAL, BUT NOT AS A PER-TASK FORM. In the usual
+    way they are expressed as:
+
+      * THE WORKSPACE MAPPING — the depot paths that appear on your disk. A
+        lighting artist's workspace holds the lighting Data Layer and the
+        relevant level paths. SET ONCE, EDITED RARELY. A config, not a form.
+
+      * THE STREAM — Perforce's branch concept — which is what "what line of
+        development am I on" actually means. CHOSEN WHEN THE WORKSPACE IS MADE.
+
+    AND "INCLUDING NEW AREA" A FORM CANNOT DO. A new area in Unreal means NEW
+    DATA LAYERS AND LEVEL INSTANCES, CREATED IN THE EDITOR. A web form cannot
+    make them and must not pretend to. It could record that somebody is STARTING
+    one; that record is a note, not a fact.
+
+    --- THE COORDINATION NEED IS REAL, AND THE SYSTEM ALREADY ANSWERS IT ---
+
+    KNOWING WHO IS WORKING ON WHAT IS A GENUINE NEED for a small remote studio.
+    The usual way to express it is not a form:
+
+      * PERFORCE JOBS — a lightweight issue tracker built into Helix Core.
+        Changelists attach to jobs, so "I am on JOB-1234, North Forest lighting"
+        lives in the same system and the history attaches to it.
+
+      * AND WITH ONE FILE PER ACTOR, PERFORCE ALREADY KNOWS WHO HAS WHAT CHECKED
+        OUT — PER ACTOR. Not per level, per OBJECT. A developer who has checked
+        out the lighting actors in the North Forest cells is VISIBLE IN THE
+        SERVER'S STATE without anybody typing anything.
+
+    SO THE BETTER SHAPE IS A VIEW, NOT A FORM: show who is on what, DERIVED FROM
+    Perforce — streams, jobs and file locks. A DECLARATION CAN BE FORGOTTEN,
+    MISTYPED OR STALE; THE CHECKED-OUT STATE CANNOT.
+
+    --- WHAT ACTUALLY BELONGS IN THE PORTAL ---
+
+      1. A DECLARED FOCUS, EXPLICITLY AS A LABEL — "working on: North Forest
+         lighting". Cheap, useful for a small team, HARMLESS PROVIDED IT IS
+         UNDERSTOOD AS A NOTE AND NOT A SOURCE OF TRUTH. Ideally it POINTS AT a
+         Perforce job rather than restating it.
+
+      2. AND FOR A SUBMISSION: THE INTENDED AREA OR DATA LAYER AS CATALOGUE
+         METADATA. DIFFERENT AND GENUINELY USEFUL — "show me every asset intended
+         for the North Forest" is a search both a reviewer and a future artist
+         want. THE PORTAL ASKS THIS ABOUT THE ASSET BEING SUBMITTED, NOT ABOUT THE
+         DEVELOPER'S WORK SESSION. That distinction is the whole of it.
+
+    --- AND THE HAZARD, WORTH NAMING ---
+
+    A SECOND, DRIFTING RECORD OF WHO IS DOING WHAT. If the portal says "North
+    Forest" and Perforce says otherwise, SOMEBODY WILL TRUST THE WRONG ONE — and
+    the portal's copy is the one that goes stale SILENTLY, because nobody updates
+    it after a change of plan. WHICH IS THE SAME FAILURE SHAPE AS EVERY OTHER
+    DUPLICATED FACT IN THIS FILE.
+
+
+65) GETTING A PIECE OF THE GAME TO WORK ON — NO FORM, AND WHY. 2026-10-09.
+
+    ASKED: *"alternatives to filling out a form to getting a piece of the game to
+    work on - what is normally done"*, with the standing instruction attached:
+    *"don't wnat to duplicate or battle against existing mechnaisms or practices
+    - only diverge for a good reason that must be requested and discussed"*.
+    THAT INSTRUCTION IS NOW THE TEST ANY FEATURE IN THIS FILE HAS TO PASS.
+
+    --- THE ANSWER: IT IS TWO OPERATIONS, AND NEITHER IS A FORM ---
+
+      * GETTING THE FILES — YOU SYNC THEM. p4 sync against the workspace mapping,
+        or against specific paths. In P4V, right-click > Get Latest or Get
+        Revision. THE STREAM chooses the branch. NO REQUEST, NO APPROVAL, NO FORM
+        — syncing a path is unrestricted within your permissions.
+
+      * GETTING THE PLACE IN THE WORLD — YOU LOAD IT IN THE EDITOR, using what
+        item 63 already set out: the World Partition window (load/unload regions),
+        LOCATION VOLUMES (named regions loaded as a unit), DATA LAYERS (toggle
+        lighting, FX, gameplay), LEVEL INSTANCES (open one in isolation), and the
+        LOOK-DEV MAP.
+
+      * AND COORDINATION IS PERFORCE JOBS PLUS FILE LOCKING — and with ONE FILE
+        PER ACTOR the locking is per OBJECT, so two people rarely collide at all.
+
+    THE NEAREST THING TO A FORM ANYWHERE IN THAT LIST IS CREATING A WORKSPACE,
+    AND THAT IS A ONE-TIME CONFIG, NOT A PER-TASK REQUEST.
+
+    --- WHY A FORM HERE WOULD BE BOTH A DUPLICATE AND A BATTLE ---
+
+    A FORM WOULD INSERT A PERMISSION STEP IN FRONT OF SOMETHING THAT IS CURRENTLY
+    FREE. Today a developer syncs a path and gets on with it. If the portal
+    required a form to obtain a piece of the game, every developer would have to
+    BOTH fill in the form AND sync from Perforce — the portal becomes a gate that
+    duplicates a decision Perforce already lets them make, and a bottleneck the
+    moment anybody is in a hurry.
+
+    THAT IS THE "BATTLE" HALF. IT DOES NOT MERELY DUPLICATE THE MECHANISM, IT
+    SLOWS DOWN THE THING IT DUPLICATES.
+
+    AND THE DIVERGENCE WOULD NOT BE JUSTIFIED: there is no problem here that
+    Perforce does not already solve. That is the test the user's instruction sets,
+    and this fails it.
+
+    --- WHAT THE PORTAL CAN DO INSTEAD: POINT AT IT ---
+
+      * A RECIPE — "the North Forest lighting is these four depot paths".
+        Documentation, not a mechanism.
+
+      * A GENERATED WORKSPACE SPEC a developer can copy into P4V. A helper for a
+        config they would otherwise hand-write: saves keystrokes without becoming
+        the gate.
+
+      * THE LIST OF STREAMS AND RELEASES — item 60's page. A LISTING, not a
+        request.
+
+    NONE OF THOSE CAN DENY ANYBODY ANYTHING, WHICH IS THE PROPERTY THAT MAKES THEM
+    SAFE.
+
+    --- AND WHERE A FORM IS RIGHT ---
+
+    THE SUBMISSION. Not because the portal grants anything, but because a
+    submission carries ASSERTIONS THE SYSTEM CANNOT OBSERVE — what the asset is
+    for, which game version it was tested against (item 64). Those have to be
+    typed, and typing them is the whole point.
+
+    THE DISTINCTION, IN ONE LINE: THE PORTAL ASKS ABOUT THINGS ONLY A HUMAN
+    KNOWS, AND NEVER GATES THINGS THE TOOLS ALREADY ALLOW.
+
+
+66) DETERMINING WHICH FILES A DEVELOPER NEEDS. 2026-10-09.
+
+    ASKED: *"exactly how do we determine what files the dev needs to download to
+    work on their bit of the game"*.
+
+    --- 1. THE MECHANISM IS THE WORKSPACE MAPPING ---
+
+    A FILTER listing which depot paths appear on disk. For one region:
+
+        //depot/LowExpectations/Config/...                 engine/project settings
+        //depot/LowExpectations/LowExpectations.uproject
+        //depot/LowExpectations/Plugins/...
+        //depot/LowExpectations/Source/...                 if built from source
+        //depot/LowExpectations/Content/_Core/...
+        //depot/LowExpectations/Content/Art/...            shared art they use
+        //depot/LowExpectations/Content/World/<region>/... the region they work in
+        //depot/LowExpectations/Content/Developers/<name>/... their own
+
+        -//depot/.../Content/Developers/*                  everyone else's
+        -//depot/.../Content/World/*                       regions they don't touch
+        -//depot/.../Binaries/...
+        -//depot/.../Intermediate/...
+        -//depot/.../Saved/...
+        -//depot/.../DerivedDataCache/...
+
+    THE EXCLUSIONS MATTER AS MUCH AS THE INCLUSIONS. The generated directories are
+    what make a workspace enormous and they are rebuilt locally.
+
+    AND HOW IT IS DETERMINED: IT IS NOT COMPUTED. A PERSON DECIDES IT, ONCE, PER
+    ROLE — "the art mapping", "the lighting mapping". A new starter is handed the
+    template for their discipline and extends it as they find gaps. THE FIRST
+    VERSION IS A GUESS AND IT CONVERGES. That is the normal practice and there is
+    no cleverer one in general use.
+
+    --- 2. AND THE GOTCHA ---
+
+    THE SYNC FILTER AND THE LOAD FILTER HAVE TO AGREE. You can sync one region and
+    still open the whole world in the editor, and everything outside the mapping
+    appears as MISSING-ASSET PLACEHOLDERS. Which is another reason Location
+    Volumes and Data Layers matter (item 63): they let you DELIBERATELY load a
+    region instead of accidentally loading the world.
+
+    --- 3. AND UE5 HAS MOVED THE ANSWER: VIRTUAL ASSETS ---
+
+    SINCE 5.1, Unreal SPLITS every .uasset and .umap in two:
+
+      * STRUCTURED DATA — small, stays in source control, syncs normally.
+      * BULK DATA — the large payload, moved to a SEPARATE PERFORCE LOCATION,
+        referenced BY HASH, and PULLED ON DEMAND when the editor needs it.
+
+    SO THE DEVELOPER SYNCS LIGHTWEIGHT METADATA AND THE PAYLOAD ARRIVES WHEN THEY
+    OPEN SOMETHING. THERE IS NO "DETERMINE WHICH FILES" STEP AT ALL — the editor
+    pulls what it loads.
+
+    AND NOTE THE SYMMETRY: BULK DATA IS DE-DUPLICATED BY HASH, WHICH IS THE SAME
+    ONE-COPY RULE THE PORTAL ALREADY RUNS ON.
+
+    CAVEATS, AND THEY ARE REAL:
+      * BETA, and one Epic forum thread reports the initiative is NO LONGER IN
+        ACTIVE DEVELOPMENT. Weigh before making it load-bearing.
+      * REQUIRES PERFORCE and a SHARED DERIVED DATA CACHE.
+      * BULK PAYLOADS ARE NOT AUTOMATICALLY PRUNED — changing data submits a new
+        payload and leaves the old one. Pruning needs a database mapping .uasset
+        revisions to payload references, WHICH NOBODY HAS.
+      * Epic recommends a SEPARATE DEPOT for virtualized data so nobody syncs it
+        by accident.
+
+    --- WHAT THE PORTAL DOES ABOUT IT: NOTHING THAT DETERMINES THE SET ---
+
+    PERFORCE ANSWERS IT WITH THE MAPPING; UNREAL ANSWERS IT WITH VIRTUAL ASSETS.
+    A PORTAL-COMPUTED FILE LIST WOULD BE A THIRD ANSWER THAT DRIFTS FROM BOTH.
+
+    THE MOST IT CAN DO WITHOUT DUPLICATING ANYTHING IS PUBLISH THE TEMPLATES — a
+    recipe per discipline. Item 65's rule: POINT AT IT, DO NOT GATE IT.
+
+    AND ONE THING WORTH REMEMBERING FOR ITEM 62: the licence count and the
+    workspace count now have a second dimension. If bulk payloads live in a
+    separate depot, that is more files in the depot — and the free tier's
+    1,000-file cap applies to the depot as a whole.

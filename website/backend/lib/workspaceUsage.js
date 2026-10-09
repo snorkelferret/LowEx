@@ -33,7 +33,15 @@
 //
 //   * A WORKSPACE IS PRIVATE. Nothing in it is visible to, or shared with,
 //     another developer. The GAME STORE is the only shared content in the
-//     system, which is why it is the only thing the exclusion above is about.
+//     system TODAY, which is why it is the only thing the exclusion above is
+//     about.
+//
+//     THE IMAGE LIBRARY (TODO 57) IS THE SECOND, and this is the sentence that
+//     will cause the exclusion to be left wrong: library material is
+//     STUDIO-OWNED, so pulling it into a workspace to build an asset with must
+//     not consume quota either. WHEN THE LIBRARY IS BUILT, ITS FILES JOIN THE
+//     `NOT IN` AT THE BOTTOM OF THIS FILE. A rule that is right today and reads
+//     as a standing instruction is how the second case gets missed.
 //
 //   * The store is content-addressed, so it cannot tell "the same bytes" from
 //     "the same file". If two developers independently upload identical
