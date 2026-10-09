@@ -6891,3 +6891,75 @@ no upside. If something seems to need one of them, ask.
 
     SO THE PATTERN FOR THE REST OF THE SITE IS DEMONSTRATED, NOT JUST DESCRIBED:
     a panel can be built with three layout rules and nothing else.
+
+
+    ============================================================
+    CORRECTED, 2026-10-09, THE SAME DAY AND BY THE SAME PERSON
+    ============================================================
+
+    THE FINDING ABOVE IS WRONG. "The site is a half-applied dark theme with
+    Bootstrap's own dark theme NOT loaded" IS FALSE. Bootstrap's dark theme WAS
+    loaded, and had been all along.
+
+    WHAT IS ACTUALLY TRUE:
+
+      * EVERY PAGE SETS data-bs-theme="dark" ON THE <html> ELEMENT. build.js
+        writes it into all five generated pages (build.js:174) and the
+        hand-written ones carry it too. The body also carries
+        class="bg-dark text-light".
+      * So the surfaces, borders, form controls, focus rings and alerts were ALL
+        Bootstrap's, and followed the theme by themselves.
+
+    HOW THE MISTAKE HAPPENED, BECAUSE IT IS THE USEFUL PART:
+
+      * The check grepped THE APP'S OWN CSS BUNDLE for `data-bs-theme=dark`. The
+        attribute is in the MARKUP and in BOOTSTRAP'S stylesheet — neither of
+        which is that file. It could never have been found there.
+      * AND THE MEASUREMENT CONFIRMED IT, WHICH IS THE WORSE HALF. A rendering
+        harness built to screenshot the panel had `data-bs-theme="light"`
+        HARDCODED IN IT. It faithfully rendered a light theme, and the light
+        card was read as evidence about the site rather than about the harness.
+      * A MEASUREMENT ONLY SETTLES THE QUESTION YOU ASKED IT. This one answered
+        "what does my harness look like".
+
+    SO THE INSTRUCTION IT PRODUCED — *"adopt the bootstrap dark theme
+    properly"* — WAS ANSWERED ON A FALSE PREMISE, and what was actually worth
+    doing turned out to be smaller and different: not adopting the theme, but
+    REMOVING THE HAND-ROLLED OVERRIDES THAT FOUGHT IT.
+
+    ============================================================
+    WHAT WAS ACTUALLY DONE, AND IT WAS STILL WORTH DOING
+    ============================================================
+
+    THE THEME WAS ALREADY ADOPTED; THE OVERRIDES ON TOP OF IT WERE THE PROBLEM.
+    All of the following are gone from frontend/styles/styles.css:
+
+      * body { background-color: #0d0e12 !important } — the page ground was
+        hand-darkened to a colour of its own instead of Bootstrap's.
+      * .form-control:focus with four hardcoded values and four !importants.
+        THIS WAS THE WORST OF THEM: it replaced Bootstrap's own focus ring, so
+        the one control everybody touches was the one control not following the
+        theme.
+      * .feature-card DEFINED TWICE, with different backgrounds. The second won
+        silently; only one is left.
+      * .panel-module:hover with !important on the border and the shadow —
+        reaching past Bootstrap to beat it, which also means beating every future
+        theme change.
+      * Hardcoded colours in the header, the utility bar, the login dropdown, the
+        social buttons and the usage bars. All now var(--bs-*).
+
+    AND THE RESULT IS VISIBLE AND SMALL, WHICH IS THE POINT: rendering the panel
+    before and after and sampling the pixels shows EXACTLY ONE COLOUR MOVED —
+    the page ground, #0d0e12 to Bootstrap's #212529. Card, tile and alert are
+    byte-identical, because they were already Bootstrap's and nothing here was
+    ever fighting over them.
+
+    THE ONE HARDCODED COLOUR THAT STAYS, deliberately: #sandbox-canvas on the
+    shopfront. It is the ground the 3D artwork is drawn against — content, not
+    chrome — and it should not move with a theme. There is now a comment saying
+    so, so it is not mistaken for another oversight.
+
+    AND THE RULE AT THE TOP OF THE FILE NOW SAYS THE THEME IS BOOTSTRAP'S AND
+    THAT THIS FILE ADDS ALMOST NOTHING TO IT, with the correction written into
+    it — a note that says "read this before adding a rule" is worth very little
+    if it is itself wrong.

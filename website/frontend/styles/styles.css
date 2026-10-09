@@ -40,48 +40,56 @@
    utility-bar sections — they predate this note and are not to be copied.
 
    --------------------------------------------------------------------------
-   THE CURRENT STATE, STATED PLAINLY BECAUSE IT IS NOT CONSISTENT
+   THE THEME IS BOOTSTRAP'S DARK THEME. THIS FILE ADDS ALMOST NOTHING TO IT.
    --------------------------------------------------------------------------
 
-   The site is a HALF-APPLIED DARK THEME. The `body` below is darkened by hand
-   to #0d0e12, but Bootstrap's own dark theme (`data-bs-theme="dark"`) is NOT
-   loaded, and no component is overridden — so the page is dark and every `.card`
-   on it is Bootstrap's default LIGHT surface. That is the look today: dark
-   ground, light cards.
+   Every page sets `data-bs-theme="dark"` on the html element (build.js writes it
+   into all five generated pages, and the hand-written ones carry it too) and
+   `class="bg-dark text-light"` on the body. So the surfaces, the text colours,
+   the borders, the form controls, the focus rings and the alerts are ALL
+   Bootstrap's, and they follow the theme by themselves.
 
-   IT WAS NOT DESIGNED, IT ACCUMULATED, and it is why the rule above is written
-   down rather than assumed. THERE ARE TWO WAYS OUT, and choosing between them is
-   a decision rather than a tidy-up:
+   THAT IS THE POINT OF THE ORDER ABOVE. A component styled here is a component
+   that stops following Bootstrap the next time Bootstrap changes.
 
-     * Adopt Bootstrap's dark theme properly — set `data-bs-theme="dark"` on the
-       html element and DELETE the hand-darkened body and the scattered
-       `!important` overrides below. Everything follows, including components
-       this file has never touched. Much the smaller change, and the one that
-       makes "canonical Bootstrap" true rather than aspirational.
+   --------------------------------------------------------------------------
+   WHAT WAS REMOVED ON 2026-10-09, AND WHY IT IS WORTH KNOWING
+   --------------------------------------------------------------------------
 
-     * Or commit to a light site — drop the dark body entirely.
+   This file used to hand-darken `body` to #0d0e12, hardcode the input focus
+   ring, define `.feature-card` TWICE with different colours, and override panel
+   hover borders with `!important`. All of it predated the theme being adopted
+   properly, and all of it fought it: the focus override in particular replaced
+   Bootstrap's own, so the one control everybody touches was the one control not
+   following the theme.
 
-   EITHER WAY IT IS DONE IN ONE PASS, not panel by panel, because a page that is
-   half one and half the other is what we have now. Recorded as TODO 74.
+   ALL OF IT IS GONE. What remains uses `var(--bs-*)` where a value is genuinely
+   wanted, so it is the theme's value rather than a copy of today's.
+
+   A CORRECTION WORTH RECORDING, because it is how this was nearly got wrong
+   twice: an earlier pass concluded the site was a "half-applied dark theme"
+   with light cards on a dark ground. THAT WAS WRONG, and the mistake was in the
+   measuring — a test harness had `data-bs-theme="light"` hardcoded in it, so it
+   rendered a light theme and reported the result as the site's. The site was
+   fine. CHECK THE THEME THE APP ACTUALLY SETS BEFORE CONCLUDING ANYTHING.
 
    ========================================================================== */
 
-/* THE ONE HAND-DARKENED RULE THAT EVERY PAGE INHERITS. See the note above: this
-   is the thing to remove if Bootstrap's dark theme is adopted. */
+/* The font is a real choice and stays. The COLOUR is Bootstrap's, and the
+   hand-darkened #0d0e12 that used to be here is gone — see above. */
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: #0d0e12 !important;
 }
 
-/* Feature Cards & Glassmorphism */
+/* ONE definition, not two. Both backgrounds are the theme's. */
 .feature-card {
-  background-color: #12141c;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .feature-card:hover {
-  border-color: rgba(13, 110, 253, 0.4);
+  border-color: var(--bs-primary);
   transform: translateY(-2px);
 }
 
@@ -91,20 +99,17 @@ body {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* NO !important. It was there to beat Bootstrap's own card border, which is the
+   wrong way round — the theme's value is the one we want, and reaching past it
+   means this rule wins over every future theme change too. */
 .panel-module:hover {
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+  border-color: var(--bs-secondary-color);
+  box-shadow: var(--bs-box-shadow-lg);
 }
 
-/* Form Controls Dark Theme Overrides */
-.form-control:focus {
-  background-color: #161822 !important;
-  color: #fff !important;
-  border-color: #0d6efd !important;
-  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
-}
-
-/* Modal Overlay Utility Classes (Compatibility with existing JS toggles) */
+/* Modal overlay, driven by CLASS rather than by Bootstrap's .modal JS — the
+   scripts toggle a class and this is what honours it. Not a colour, so not a
+   theme question. */
 .modal-overlay.hidden,
 .modal-overlay.d-none {
   display: none !important;
@@ -126,39 +131,35 @@ body {
    ========================================================================== */
 
 
-/* Custom storefront & login UI overrides */
+/* Storefront & login */
 
 .login-dropdown {
     width: 320px;
-    background-color: #1a1d20;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
 }
 
-.feature-card {
-    background-color: #212529;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    transition: transform 0.2s ease, border-color 0.2s ease;
-}
+/* The SECOND definition of .feature-card used to live here, with a different
+   background from the first. It is gone: two answers to one question, and the
+   later one silently won. */
 
-.feature-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(255, 255, 255, 0.25);
-}
-
+/* The 3D canvas on the shopfront. A deliberate near-black rather than a theme
+   value — it is the background the artwork is drawn against, so it is content
+   and not chrome, and it should not change with a theme. */
 #sandbox-canvas {
     background: #090a0f;
     cursor: crosshair;
 }
 
 .btn-social {
-    background-color: #2b3035;
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
 }
 
 .btn-social:hover {
-    background-color: #343a40;
-    color: #fff;
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
 }
 
 .letter-spacing-2 {
@@ -211,8 +212,10 @@ body {
   min-height: 64px;
   padding: 0.75rem var(--page-inset);
   margin-bottom: var(--page-inset);
-  background: #12141c;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  /* A surface one step off the page, which is Bootstrap's convention for a
+     bar that must read as sitting above the content. */
+  background: var(--bs-tertiary-bg);
+  border-bottom: 1px solid var(--bs-border-color);
   box-sizing: border-box;
 }
 
@@ -274,9 +277,9 @@ body {
   align-items: center;
   gap: .35rem;
   padding: .2rem .3rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--bs-border-color);
   border-radius: .5rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bs-tertiary-bg);
 }
 
 .utility-item {
@@ -296,9 +299,9 @@ body {
 
 .utility-item:hover,
 .utility-item:focus-visible {
-  color: var(--bs-light);
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--bs-body-color);
+  border-color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg);
 }
 
 /* ==========================================================================
@@ -425,7 +428,7 @@ body {
 .usage-bar {
   height: 0.5rem;
   border-radius: 0.25rem;
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--bs-secondary-bg);
   overflow: hidden;
 }
 
@@ -444,7 +447,7 @@ body {
    fill is given a sliver — enough to say "measured, and it is nothing". */
 .usage-bar-fill--empty {
   min-width: 2px;
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: var(--bs-secondary-color);
 }
 
 /* ==========================================================================
