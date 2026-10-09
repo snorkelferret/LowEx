@@ -85,7 +85,12 @@ function optionalAuth(req, res, next) {
 //
 //   SUPERUSER CAN DO EVERYTHING AN ADMIN CAN DO, plus more.
 //
-// The "plus more" is superuser-only — deploying the game, creating branches.
+// The "plus more" was superuser-only — and the two examples it gave, deploying
+// the game and creating branches, WERE NEVER THE PORTAL'S TO HOLD AT ALL:
+// deploying belongs to the build machine and branching to Perforce (TODO 62).
+// Corrected 2026-10-09. They are named here as superuser capabilities, which is
+// exactly how a capability that was never ours gets rebuilt by somebody reading
+// this comment.
 // The "everything an admin can do" part is the one that gets broken by
 // accident, because the failure is silent: a route that lists 'admin' and
 // forgets 'superuser' does not error, it just refuses the most privileged

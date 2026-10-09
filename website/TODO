@@ -330,10 +330,16 @@ filename containing quotes and newlines.
 INVITATIONS 2026-10-01 (backend done, delivery not)
 ---------------------------------------------------
 Testers are NOT a role. A tester is a plain `user` — a login with no extra
-privileges — because the tester features (download a build, comment, report)
-are available to anyone logged in. So `user` is invitable, and is the default
-invitation role as the least privileged. frontend/user.html is `<h1> User
-Hello </h1>`; that placeholder IS the current tester experience.
+privileges — because the tester features (download a release candidate,
+comment, report) are available to anyone logged in. So `user` is invitable, and
+is the default invitation role as the least privileged. frontend/user.html is
+`<h1> User Hello </h1>`; that placeholder IS the current tester experience.
+
+CORRECTED 2026-10-09. This said "download a build", WHICH IS NOT A THING. A
+downloadable artifact is a RELEASE CANDIDATE — named, numbered, tied to a
+changelist — and the portal RECORDS it and says who may see it; it does not
+store or serve the bytes (items 60, 62, 67). "A build" was vague enough that
+nobody could say when the feature was finished; a release candidate is not.
 
 SECURITY FIX — admin-to-superuser escalation, now closed.
 Both invitation endpoints took assigned_role straight from the request body
@@ -459,7 +465,8 @@ was built. That is the failure mode of every second copy.
 SECTIONS THE MANUAL STILL NEEDS, carried over from the old stubs so the list is
 not lost with them:
 
-  * How to download and install a build, once builds exist
+  * How to download and install a RELEASE CANDIDATE, once candidates exist —
+    and where they come from, WHICH IS NOT THE PORTAL (items 60 and 67)
   * [WRITTEN 2026-10-02] What makes a useful bug report — now a section of the
     manual's Testing page. It says what to include (what you did, what you
     expected, what happened, whether it repeats), what not to do, and which
@@ -476,8 +483,10 @@ to a version, deleting, and getting work back.
 
 For testers almost nothing exists, and the doc says so plainly. Its main job
 today is to record that TESTER IS NOT A ROLE: a tester is a plain `user`, and
-the tester features (download a build, comment, report) are meant to be
-available to anyone logged in.
+the tester features (download a release candidate, comment, report) are meant
+to be available to anyone logged in. THE FIRST OF THOSE IS A RELEASE CANDIDATE
+RATHER THAN "A BUILD" — corrected 2026-10-09, see the invitations section
+above.
 
 Neither is served yet. They should become pages on the portal once there is
 something to describe — and the tester one in particular will need the
@@ -1232,6 +1241,13 @@ They MUST be dealt with before any real user data exists.
     particularly IMAGES and MODELS — and pull it into their own work, rather
     than re-uploading a copy of something the store already holds.
 
+    CORRECTED 2026-10-09: "IMAGES and MODELS" IS NOW WRONG. An image is NEVER in
+    the game store — it lives in the IMAGE LIBRARY (items 57 and 58) — so what a
+    developer browses HERE is models and other store assets, and images are
+    browsed in the LIBRARY. The mechanism is unchanged and the correction is to
+    the destination, not the idea: both are "browse what exists and pull it in
+    rather than re-upload a copy".
+
     This is the consumption side of the model, and it is the same ground as
     GAME-SPACE READ below: neither exists, because both were deferred until
     the game itself is being built. Recorded separately because it is a
@@ -1320,6 +1336,58 @@ They MUST be dealt with before any real user data exists.
     Put on the list as a topic, not yet a task. No build distribution exists
     yet, so there is nothing to protect; but the DESIGN of distribution should
     account for this from the start rather than being retrofitted.
+
+    CORRECTED 2026-10-09 — THE PORTAL DOES NOT DISTRIBUTE BUILDS, so this is not
+    the portal's design to make (items 60, 62, 67). The build machine produces a
+    build and something puts it where it can be fetched; THE PORTAL RECORDS WHICH
+    CHANGELIST IT IS AND WHO MAY SEE IT. Everything below is still worth knowing,
+    and most of it now applies to whatever actually serves the bytes.
+
+    --- AND THE ONE PART THAT IS THE PORTAL'S: DECIDED 2026-10-09 ---
+
+    ASKED, AND THEN ANSWERED: *"Does the portal broker access to a build it does
+    not serve?"* — WAY TWO, THE PORTAL BROKERS.
+
+    WHAT THAT MEANS, CONCRETELY. A tester asks for 0.4-rc2. The portal checks the
+    account is live and allowed to see candidates, ASKS THE SERVING SIDE FOR A
+    TEMPORARY SIGNED LINK, and hands it over. THE FILE SERVER NEVER LEARNS WHO THE
+    TESTER IS; IT HONOURS LINKS THE PORTAL SIGNED. THE PORTAL NEVER HOLDS THE
+    BYTES.
+
+        way one — the portal shows a URL. Anyone with the link has the build,
+        for ever, and nothing is written down.
+        WAY TWO — THE PORTAL DECIDES WHO MAY FETCH; THE FILE SERVER SERVES.
+
+    WHY WAY TWO WON: it is the difference between a build link that circulates
+    for ever and one that dies in fifteen minutes, AND IT IS THE ONLY WAY TO
+    ANSWER "WHO LEAKED THIS". The attribution this item calls the highest-value
+    leak defence IS the portal's download log, and way one cannot produce it.
+
+    AND IT IS A LEGITIMATE GATE, not one of item 65's forbidden ones. Item 65 is
+    about not putting a form in front of what Perforce already allows a
+    DEVELOPER. A testers' build download is ACCESS CONTROL, and the portal is the
+    right place for it because IT IS THE ONLY SYSTEM THAT HAS THE ACCOUNTS.
+
+    --- WHAT IT REQUIRES, AND THE PRICE ---
+
+      * THE SERVING SIDE MUST SUPPORT TEMPORARY SIGNED LINKS. That constrains
+        where builds may live — it is no longer anywhere; it is anywhere that can
+        sign. Worth knowing BEFORE choosing where the build machine puts things.
+
+      * THE PORTAL HOLDS A SIGNING KEY. A SECRET, so it belongs with the others
+        (item 42), and it is now the most consequential secret in the system: it
+        is the key to every build.
+
+      * AND THE PRICE, WHICH IS WORTH SAYING OUT LOUD BECAUSE IT UNDOES SOMETHING
+        PRAISED IN ITEM 67: IF THE PORTAL IS DOWN, NOBODY CAN DOWNLOAD A BUILD.
+        Item 67's appeal was that neither system needs the other to be up. THAT
+        HOLDS FOR EVERYTHING EXCEPT THIS. It is a deliberate trade — control and
+        attribution bought with a dependency — and it is the right way round for
+        builds, which are the thing worth controlling.
+
+    Everything else in this item — the per-user binary marks, the HWID binding,
+    the visible-overlay warning — is about the RUNNING GAME and belongs to the
+    build machine, not here.
 
     THE PREMISE: it cannot be prevented. Anyone with a copy can leak it. Every
     real technique is deterrence, attribution or damage limitation.
@@ -1966,10 +2034,15 @@ They MUST be dealt with before any real user data exists.
       difficulty tells them apart. Two controls, deliberately different weight;
       see the DECIDED section above.
 
-    * WHO — SETTLED 2026-10-02: ADMIN CAN DELETE. Not superuser-only. Deleting
-      from the store is an admin capability, and superuser can do it too by the
-      standing rule below. The superuser-only capabilities are the bigger,
-      outward-facing ones: deploying the game, creating branches.
+    * WHO — SETTLED 2026-10-02: ADMIN CAN DELETE. Deleting from the store is an
+      admin capability. (It read "Not superuser-only ... and superuser can do it
+      too by the standing rule below", and named the superuser-only capabilities
+      as "deploying the game, creating branches". BOTH HALVES ARE NOW WRONG:
+      superuser was removed entirely on 2026-10-06 (item 51), AND NEITHER
+      DEPLOYING THE GAME NOR CREATING BRANCHES IS A PORTAL CAPABILITY AT ALL —
+      deploying is the build machine's and branching is Perforce's (item 62).
+      Corrected 2026-10-09 rather than deleted, because the bullet is a good
+      example of a capability that was never the portal's to hold.)
 
       THE ROLE RULE, and it is worth stating once in full because it is easy to
       break silently: SUPERUSER CAN DO EVERYTHING AN ADMIN CAN DO, plus more.
@@ -3439,6 +3512,13 @@ They MUST be dealt with before any real user data exists.
         requireRole('developer','admin','superuser'), following the rule in
         middleware/auth.js that naming 'admin' means naming 'superuser'.
 
+        CORRECTED 2026-10-09: that rule is GONE, and middleware/auth.js says so
+        itself ("THAT RULE IS NOW MOOT: 'superuser' was removed on 2026-10-06").
+        So the line above describes a route guard as it was on the day of the
+        fix, not as it is. Kept rather than rewritten, because it is a historical
+        record of a fix — but it read as a present-tense claim about the code,
+        which is how a removed role goes on being named in new work.
+
     Both verified after the fix: /app/user serves the tester page, and a
     developer gets 200 from /app/developer.
 
@@ -3625,8 +3705,12 @@ They MUST be dealt with before any real user data exists.
     system".
 
     DECIDED: creative approval moves to a role or attribute called **prod**,
-    which may also add comments. NOT admin, NOT superuser. (Superuser keeps its
-    role in the schema but no longer exists on the website — item 50.)
+    which may also add comments. NOT admin, NOT superuser. (Superuser was
+    removed ENTIRELY — schema, routes and page — on 2026-10-06; item 50 is the
+    inventory and item 51 is the removal. CORRECTED 2026-10-09: this said it
+    "keeps its role in the schema", which stopped being true when it was
+    removed, and a decision record that leaves a removed thing half-present is
+    how somebody builds against it.)
 
     --- SETTLED: A ROLE. ONE ROLE PER ACCOUNT, ALWAYS. ---
 
@@ -3634,7 +3718,7 @@ They MUST be dealt with before any real user data exists.
     one. So 'prod' is a role in the ladder, not an orthogonal attribute. The
     schema already enforces the constraint:
 
-        role TEXT CHECK(role IN ('user','developer','admin','superuser')) NOT NULL
+        role TEXT CHECK(role IN ('user','developer','prod','admin')) NOT NULL
 
     --- WHAT THAT DECISION EXPOSES, AND IT NEEDS SETTLING FIRST ---
 
@@ -3798,7 +3882,8 @@ They MUST be dealt with before any real user data exists.
     asset_comments IS AN UNUSED TABLE. Nothing reads it and nothing writes it —
     no route exists. Meanwhile the manual promises testers can "download,
     comment, report", and two of those three work. So there is a promise with
-    nothing behind it.
+    nothing behind it. (The first of the three is a RELEASE CANDIDATE rather than
+    "a build" — corrected 2026-10-09, see the invitations section.)
 
     Decided here: prod may comment. STILL OPEN: whether testers and everyone else
     may as well. The recommendation on 2026-10-06 was YES — a tester's entire
@@ -3976,11 +4061,21 @@ A) HOW DOES A REVIEWER SEE THE WORK THEY ARE JUDGING? — the blocker found whil
    while building its page — and the page now carries a visible note about it, so
    the postponement is at least honest.
 
-B) DEPLOYING THE GAME. The powerful half of what the removed superuser page
-   could do: triggering a release via GitHub. Withdrawn with that page and
-   currently with NO home at all — see item 50. It cannot be finished until there
-   is something to deploy and a decided shape for what "deploying" means: which
-   branch, which build, who is told.
+B) DEPLOYING THE GAME. What the removed superuser page could do: triggering a
+   release via GitHub. Withdrawn with that page and currently with NO home at
+   all — see item 50.
+
+   CORRECTED 2026-10-09, AND THE CORRECTION IS THAT IT SHOULD NOT COME BACK.
+   Under the two-system decision (item 62) DEPLOYING IS THE BUILD MACHINE'S JOB
+   AND THE GAME IS IN PERFORCE — so a portal that triggers a deploy duplicates
+   both, and GitHub was only ever right while the game was assumed to live in
+   this repository (see the note on game/ below). WHAT THE PORTAL DOES INSTEAD:
+   RECORDS THE RELEASE — a name, a changelist, who built it, when — and nothing
+   more. Item 67.
+
+   Kept rather than deleted because it is the clearest example of a capability
+   that was withdrawn AND should stay withdrawn, rather than waiting to be
+   rebuilt.
 
    It is recorded here rather than in item 50 because item 50 is an inventory of
    what was removed, and this is a piece of work in its own right.
@@ -3993,18 +4088,39 @@ C) STORAGE BY GAME VERSION. The Storage tab has a marked "not built" section for
    can be bought rather than estimated, and so a version quietly growing out of
    proportion is visible before it is a problem.
 
-   THE ARITHMETIC IS ALREADY KNOWN AND IS WRITTEN DOWN BECAUSE SOMEBODY WILL
-   REPORT IT AS A BUG: content is stored once and referenced by everything that
-   needs it, so a file in two versions is one file on disk and the per-version
-   figures will not sum to the total.
+   THE ARITHMETIC — CORRECTED 2026-10-09, BECAUSE IT SAID THE OPPOSITE OF THE
+   TRUTH ABOUT THE THING IT MEASURES.
+
+   It said: "content is stored once and referenced by everything that needs it,
+   so a file in two versions is one file on disk and the per-version figures will
+   not sum to the total."
+
+   THAT IS TRUE OF THE ASSET STORE AND FALSE OF BUILDS. Builds are NOT
+   content-addressed and must not pretend to be (item 60): each carries its own
+   cooked copy of a texture inside its own paks. SO PER-VERSION FIGURES FOR
+   BUILDS WILL SUM ROUGHLY TO THE TOTAL, WHICH IS THE OPPOSITE OF WHAT WAS
+   WRITTEN — and somebody would have gone looking for a double-counting bug that
+   does not exist, in the one place the note told them it would be.
+
+   The one-copy arithmetic DOES hold for the store, and if this figure is ever
+   computed over STORE CONTENT grouped by which release uses it, then it holds
+   and the original wording is right. WHICH OF THE TWO IT MEASURES IS PART OF
+   WHAT IS NOT BUILT, and it decides the answer.
 
 D) OPTIMISATION — where the bytes actually went. The follow-on to (C), and the
    thing to build when a build is too big to host. Needs (C) first.
 
-E) TESTERS PLAYING A BUILD. The tester page's first card, badged "not built
-   yet", and it is accurate: there is no build to download and no route that
-   would serve one. The manual promises testers "download, comment, report", and
-   two of the three exist.
+E) TESTERS PLAYING A RELEASE CANDIDATE. The tester page's first card, badged
+   "not built yet", and it is accurate — but CORRECTED 2026-10-09, because it
+   said "there is no build to download and no route that would serve one", and
+   under the two-system decision there never will be (items 60, 62). A portal
+   route serving builds is out of scope, not missing.
+
+   WHAT IS ACTUALLY WANTED is narrower and clearer: A RELEASE CANDIDATE under
+   test — named, numbered, tied to a changelist — with the portal RECORDING which
+   candidate it is and who may fetch it. The bytes come from wherever builds
+   live. The manual promises testers "download, comment, report", and two of the
+   three exist.
 
 F) COMMENTS (item 51) cannot be finished either. The table is unbuilt, the write
    route does not exist, and NOTHING RENDERS A COMMENT — and comments are about
@@ -4027,6 +4143,20 @@ kept in this file for now because there is one TODO rather than two.
 The game lives in `game/` at the repository root. UNREAL IS ALREADY INSTALLED
 and is not to be installed, configured or otherwise touched — see the note at
 the end of this entry.
+
+RAISED 2026-10-09, AND IT NEEDS AN ANSWER: THE GAME IS IN *THIS* REPOSITORY.
+`git ls-files game/` lists the .uproject and ten .gitkeep files, so the portal's
+git repository is currently versioning the game project's structure — which is
+exactly what the two-system decision (item 62) says PERFORCE should do. The
+.gitkeep work was right when it was done and there was no decision; now there is
+one, and two systems both versioning the same tree is the duplication this design
+exists to avoid.
+
+THE LIKELY ANSWER IS THAT THE GAME LEAVES THIS REPOSITORY — a website and a game
+are two projects with different histories, different sizes and different
+tools — with Perforce holding it from the first commit, which is what item 62's
+action list already assumes. NOT DECIDED, and recorded here because it is a
+consequence of a decision rather than a thing anybody would think to look for.
 
 --- WHAT THE PROJECT IS CALLED ---
 
@@ -4231,8 +4361,13 @@ no upside. If something seems to need one of them, ask.
       * VERSIONS OR ASSETS? The db.js note says "an asset can hold several
         production versions at once", so membership is at the VERSION level, not
         the asset. Worth confirming when it is built, since it changes the join.
-      * WHAT IDENTIFIES A RELEASE? A name and a date at least. Whether it also
-        carries a build number, a git tag or a changelog is undecided.
+      * WHAT IDENTIFIES A RELEASE? ANSWERED 2026-10-09 by item 67: A NAME, A
+        PERFORCE CHANGELIST, WHO BUILT IT AND WHEN. It said "a name and a date at
+        least. Whether it also carries a build number, a git tag or a changelog
+        is undecided" — and A GIT TAG IS WRONG, because the game is versioned in
+        Perforce, not git (items 62, 67). The changelist is the tag.
+        A changelog is still open, and probably belongs to the release as prose
+        rather than as a mechanism.
 
     --- AND WHAT IS NOT IN QUESTION ---
 
@@ -4981,9 +5116,76 @@ no upside. If something seems to need one of them, ask.
     LOCAL VALIDATION — tech check and creative approval are about STANDARDS AND
     OWNERSHIP, not about whether the thing works. The developer already knows.
 
-    DEPENDS ON ITEM 53. A downloadable game version IS a release, so this cannot
-    be built before releases exist. It is the DISTRIBUTION half of item 53, which
-    recorded what a release IS and not how one reaches anybody.
+    DEPENDS ON ITEM 53. A downloadable game version IS a release — or rather a
+    RELEASE CANDIDATE, which is the thing actually wanted; see below — so this
+    cannot be built before releases exist.
+
+    CORRECTED 2026-10-09: it said this is "the DISTRIBUTION half of item 53",
+    WHICH IS WRONG. The portal does not distribute game versions (items 62, 67).
+    Item 53 defines what a release IS; WHAT REACHES A DEVELOPER'S DISK IS
+    PERFORCE'S OR THE BUILD MACHINE'S JOB, and the portal's half is the RECORD.
+
+    --- AND WHAT IS ACTUALLY DOWNLOADED IS A RELEASE CANDIDATE ---
+
+    CORRECTED THE SAME DAY, on the user's instruction: *"This should be a
+    download of a pre-release candidate for shipping"*. So the thing on the page
+    is not "the game" and not "a build" — IT IS A RELEASE CANDIDATE, AND SAYING
+    SO REMOVES THE VAGUENESS THAT MADE THIS ITEM UNFINISHABLE:
+
+      * it has a NAME AND A NUMBER — 0.4-rc2 — so it can be referred to at all;
+      * it is A SPECIFIC CHANGELIST, so it is reproducible;
+      * it is what a tester is ASKED to try, which is why testers exist;
+      * AND IT IS THE THING THAT BECOMES THE RELEASE, or is discarded.
+
+    THE CHAIN IS CANDIDATE -> TESTED -> RELEASED, and the portal records all
+    three states.
+
+    --- AND IT IS A KIND OF RELEASE — SETTLED 2026-10-09, WITH A WRINKLE ---
+
+    The user: *"I think it is a kind of release - what do game studios sy"*. THE
+    INDUSTRY AGREES. THE LADDER, AS STUDIOS ACTUALLY USE IT:
+
+        first playable -> vertical slice -> ALPHA -> code freeze -> BETA
+        -> RELEASE CANDIDATE -> GOLD -> [CERTIFICATION] -> launch -> patches
+
+    ALPHA: features functional, content rough, still buggy.
+    BETA: FEATURE COMPLETE — all content in, only bug fixing remains. Closed or
+    open.
+    RELEASE CANDIDATE: the near-final build, ONLY CRITICAL FIXES ALLOWED.
+    GOLD / "going gold": the final approved build, handed over to manufacture.
+    CERTIFICATION: for console, the platform holder (Sony, Microsoft, Nintendo)
+    approves it against technical compliance rules — IT CAN FAIL AND A FAILED
+    SUBMISSION RESETS THE CLOCK. Most titles go through at least two rounds.
+
+    SO A CANDIDATE SITS EXACTLY WHERE THE USER PUT IT: the last state a release
+    is in before it becomes the release.
+
+    --- AND THE WRINKLE, WHICH DECIDES THE SCHEMA ---
+
+    STUDIOS CUT RC1, RC2, RC3, AND THE ONE THAT PASSES BECOMES GOLD. A version
+    routinely has SEVERAL candidates; the failed ones are DISCARDED, not shipped.
+    "Going gold" is PROMOTING ONE OF THEM.
+
+    WHICH MEANS AN EARLIER INSTINCT IN THIS ITEM WAS TOO QUICK. It said "one
+    record with a status, because it is the same build either way" — and if
+    0.4-rc1 is rejected and 0.4-rc2 is cut, THAT IS TWO BUILDS AND ONE RECORD
+    CANNOT BE BOTH.
+
+    THE CLEAN ANSWER, AND IT NEEDS NO SECOND TABLE: THE CHANGELIST IS THE
+    IDENTITY OF A BUILD. So one table, with the stage as a label:
+
+        NAME        CHANGELIST    STAGE
+        0.4-rc1     15320         candidate
+        0.4-rc2     15407         candidate
+        0.4         15407         shipped
+
+    0.4-rc2 AND 0.4 ARE THE SAME BUILD — SAME CHANGELIST — AT TWO STAGES. So
+    "which candidate became the release" is a CHANGELIST MATCH rather than a
+    column, and a rejected candidate is simply LEFT AT candidate FOREVER, which
+    is a truthful thing to display rather than a gap.
+
+    AND IT FITS EVERYTHING ALREADY DECIDED: the boundary is a changelist number
+    (item 62), and item 53's "membership derived by query" is the same style.
 
     --- WHAT IT NEEDS ---
 
@@ -5001,12 +5203,17 @@ no upside. If something seems to need one of them, ask.
         reason to want an old one. Probably: keep all named releases, offer the
         latest prominently.
 
-      * SIZE. Game builds are enormous, and this is a NEW kind of content in the
-        portal — the store holds assets, this holds BUILDS. It is not
-        content-addressed and it should not pretend to be: two builds are two
-        large blobs, mostly identical, and deduplicating them means content
-        addressing a whole build tree. WORTH DECIDING DELIBERATELY rather than
-        discovering the disk is full.
+      * SIZE. Game builds are enormous. CORRECTED 2026-10-09: this said they are
+        "a NEW kind of content in the portal — the store holds assets, this holds
+        BUILDS", WHICH THE REST OF THIS ITEM CONTRADICTS eight paragraphs later,
+        where it concludes the portal does not store or serve them at all. IT WAS
+        RIGHT THE SECOND TIME. The portal holds NO build content, so there is no
+        disk to fill and nothing to de-duplicate — what it holds is a RECORD, and
+        a record is bytes of no consequence.
+
+        (Kept as a correction because it is a live example of the failure this
+        file keeps naming: two sentences written at different moments, each true
+        of what it was describing, together arguing with each other.)
 
     --- AND HOW BIG, AND HOW IT GETS THERE. ANSWERED 2026-10-09. ---
 
@@ -5071,9 +5278,15 @@ no upside. If something seems to need one of them, ask.
          whole builds. Packaging in Patch mode produces paks containing only
          changed assets. THE ENGINE HAS ALREADY SOLVED DELTA FOR COOKED BUILDS.
 
-      4. A SCRIPT ONLY AS A WRAPPER — ask the portal for the manifest, then
-         invoke p4 or rsync. A thin shell script over a solved problem, NOT a new
-         transfer protocol.
+      4. A SCRIPT, IF ONE IS WANTED, IS A WRAPPER AROUND `p4` OR `rsync` AND
+         NOTHING MORE. CORRECTED 2026-10-09: it said "ask the portal for the
+         manifest, then invoke p4 or rsync", AND THE PORTAL HAS NO MANIFEST TO
+         GIVE. A manifest of build contents is a thing PERFORCE ALREADY KNOWS,
+         because a build IS a changelist; a second copy from the portal would be
+         the duplication item 67 forbids. (The MANIFEST is real and belongs to
+         the ASSET store — item 59's hash negotiation — which is a different
+         thing entirely, and the word doing double duty here is what made this
+         read as sensible.)
 
     --- AND ONE CORRECTION TO THE FRAMING ---
 
@@ -5089,14 +5302,22 @@ no upside. If something seems to need one of them, ask.
     this, rsync does this, git does this — and it works because THE CLIENT IS THE
     AUTHORITY ON THE CLIENT.
 
-    SO ITEM 60 CHANGES SHAPE: THE DEVELOPER PAGE LISTS AND LINKS GAME VERSIONS.
-    It does not store or serve them. The portal keeps the MANIFEST AND THE
-    RECORD — which changelist, who built it, what changed — and the transfer is
-    somebody else's solved problem.
+    SO ITEM 60 CHANGES SHAPE: THE DEVELOPER PAGE LISTS AND LINKS RELEASE
+    CANDIDATES AND RELEASES. It does not store or serve them. THE PORTAL KEEPS
+    THE RECORD — which changelist, who built it, when, and what state it is in —
+    and the transfer is somebody else's solved problem.
 
-      * AND WHO UPLOADS A BUILD? Somebody has to build the game and put it
-        somewhere. That is a job for whoever manages releases — still NOT
-        DECIDED, see item 53.
+    (CORRECTED 2026-10-09: this said the portal keeps "the MANIFEST AND THE
+    RECORD ... what changed". The RECORD is right; THE MANIFEST IS NOT. What
+    changed between two builds is what a changelist already is, and a portal copy
+    of it would be a second answer that drifts. Item 67.)
+
+      * AND WHO PRODUCES A RELEASE CANDIDATE? CORRECTED 2026-10-09: it asked "WHO
+        UPLOADS A BUILD? Somebody has to build the game and put it somewhere",
+        WHICH PRESUMES THE PORTAL RECEIVES IT. NOBODY UPLOADS A BUILD TO THE
+        PORTAL. The BUILD MACHINE produces it and something serves it; the portal
+        records that it exists and who may fetch it. WHO RUNS THE BUILD MACHINE
+        is still NOT DECIDED — see item 53.
 
     --- AND ONE THING THAT IS MISSING WHATEVER IS DECIDED HERE ---
 
@@ -5272,11 +5493,15 @@ no upside. If something seems to need one of them, ask.
 
     --- RECOMMENDATION ---
 
-      * THE PORTAL DISTRIBUTES GAME VERSIONS AND RECORDS RELEASES. It does NOT
-        version the project. Item 60 puts builds on the developer page; item 53
-        defines what a release is. Growing the portal into a VCS means building
-        locking, branching, binary deltas and histories — badly, and against a
-        tool that has done it for twenty years.
+      * THE PORTAL RECORDS RELEASES AND DOES NOT DISTRIBUTE THEM. It does NOT
+        version the project either. Item 60 puts release candidates and releases
+        on the developer page AS RECORDS; item 53 defines what a release is.
+        Growing the portal into a VCS means building locking, branching, binary
+        deltas and histories — badly, and against a tool that has done it for
+        twenty years.
+
+        (CORRECTED 2026-10-09: this said the portal "DISTRIBUTES GAME VERSIONS",
+        which the very next bullet and item 60 both contradict.)
 
       * THE BOUNDARY IS A CHANGELIST NUMBER. A release records which Perforce
         changelist it was built from. The portal knows THAT a build exists and
@@ -5438,12 +5663,62 @@ no upside. If something seems to need one of them, ask.
           with .gitignore-style rules deciding what does NOT go in (Binaries/,
           Intermediate/, Saved/, DerivedDataCache/).
 
-    --- THE QUESTION, WHICH IS OURS TO ANSWER AND NOT TO ASSUME ---
+    --- DECIDED 2026-10-09: TWO SYSTEMS. ---
 
-    ONE SYSTEM OR TWO? The recommendation above is TWO — Perforce for the
-    project, the portal for assets, meeting at the changelist. The alternative is
-    to keep everything in the portal, which means building the VCS. THE CHOICE IS
-    THE USER'S, and it is the largest scope decision surfaced so far.
+    RECORDED ON THE USER'S INSTRUCTION — *"lets put this into the TODO list using
+    the two systems"* — so this is no longer the recommendation it was written
+    as. It is the pattern.
+
+        THE PORTAL: login and accounts; THE ASSET STORE — upload, tech check,
+        creative approval, the image library; provenance for assets; and the
+        RELEASE RECORD — a name, a Perforce changelist, who built it, when, and
+        whether it is a candidate or shipped.
+
+        PERFORCE: the game project. Levels, lighting, world data, the Unreal
+        tree, source control, locking, branching, and getting the project to a
+        developer. A BUILD MACHINE syncs a changelist and builds it.
+
+        THE BOUNDARY IS A CHANGELIST NUMBER. The portal records THAT a build
+        exists and where it came from. IT DOES NOT STORE, SERVE, VERSION OR
+        TRANSFER A GAME BUILD, AND IT DOES NOT VERSION THE GAME PROJECT.
+
+    AND ONE STANDING TEST, which the user gave in the same discussion and which
+    everything from here has to pass (item 65):
+
+        DO NOT DUPLICATE OR BATTLE AN EXISTING MECHANISM. DIVERGE ONLY FOR A
+        REASON THAT IS REQUESTED AND DISCUSSED.
+
+    --- AND THE WHOLE FILE WAS SWEPT AGAINST IT THE SAME DAY ---
+
+    Every item was read against this decision, looking for anything that had the
+    portal storing, serving, versioning or transferring a build, tracking
+    developer-side state, gating access to the game, or duplicating Perforce or
+    Unreal. FINDINGS WERE CORRECTED IN PLACE, each marked as a correction with
+    the date so the wrong version is visible rather than silently overwritten:
+
+        * item 25 — browse the game store, "particularly IMAGES" — images are
+          never in the store; they are in the LIBRARY (items 57, 58).
+        * item 26 — leak prevention — the portal does not distribute builds, so
+          that design is not its to make; what remains open is whether the portal
+          BROKERS ACCESS to a build it does not serve.
+        * item 31 — a stale bullet naming superuser and calling deploying and
+          branching portal capabilities. Both halves were wrong.
+        * item 51b — two claims that superuser still existed in the schema, when
+          it was removed entirely on 2026-10-06.
+        * the tester page and the manual, in four places — "download a build",
+          now a RELEASE CANDIDATE.
+        * item 53 — "a git tag" as a candidate release identifier, when the game
+          is versioned in Perforce.
+        * item 60 — four separate claims that the portal stores, distributes or
+          holds a manifest of builds, all contradicted by that item's own
+          conclusion.
+        * and the storage-by-game-version arithmetic, which claimed per-version
+          figures would NOT sum to the total. TRUE OF THE STORE, FALSE OF BUILDS,
+          and it said so about builds.
+
+    THE SWEEP ALSO FOUND TWO THINGS UNRELATED TO THIS DECISION and left them
+    corrected in place: item 25's images (above), and item 51b's superuser
+    (above). Both were stale before today.
 
 
 63) HOW AN OPEN WORLD IS DIVIDED, AND WHAT A DEVELOPER ACTUALLY SYNCS. 2026-10-09.
@@ -5744,3 +6019,166 @@ no upside. If something seems to need one of them, ask.
     workspace count now have a second dimension. If bulk payloads live in a
     separate depot, that is more files in the depot — and the free tier's
     1,000-file cap applies to the depot as a whole.
+
+
+67) HOW THE PORTAL AND PERFORCE WORK TOGETHER. 2026-10-09.
+
+    ASKED: *"if we went with a division - portal - login - asset store approvals
+    - and perforce game levels lighting etc - how would we get the two to work
+    together"*.
+
+    THE HEADLINE: THEY BARELY NEED TO TALK. THEY MEET AT ONE NUMBER AND ONE NAME,
+    AND EVERYTHING BEYOND THAT IS DUPLICATION — which is the user's own rule
+    (item 65).
+
+    --- THE FOUR TOUCHPOINTS, AND THAT IS THE WHOLE INTERFACE ---
+
+      1. A RELEASE RECORDS A CHANGELIST. Portal-side field: a release is a NAME, A
+         PERFORCE CHANGELIST, who built it and when. The build machine syncs that
+         changelist. THE PORTAL RECORDS THAT IT HAPPENED — it never talks to the
+         build machine.
+
+      2. AN APPROVED ASSET RECORDS THE CHANGELIST THAT IMPORTED IT INTO THE GAME.
+         This is the link that answers "how do we know what created this in
+         Unreal", AND IT BELONGS IN THE PORTAL, because Unreal's own import
+         metadata dies with the machine (item 61).
+
+      3. ACCOUNTS KEPT IN STEP. NOT a technical integration — AN OPERATIONAL ONE.
+         Two systems means TWO PLACES TO REVOKE ACCESS, and if one is forgotten
+         there is a live account for somebody who has left. The portal already has
+         the "accounts not accounted for" check for exactly this reason (it now
+         needs a counterpart list from Perforce). SEE ALSO item 42.
+
+      4. AND THE HUMAN WORKFLOW IN BETWEEN, WHICH IS THE REAL ANSWER:
+
+            Blender -> portal workspace -> tech check -> creative approval
+                                                            |
+                                                     THE GAME STORE
+                                                            |
+                                       somebody imports it into Unreal
+                                                            |
+                              the .uasset is committed to PERFORCE
+                                                            |
+                    the portal records that changelist against the asset
+
+    EVERYTHING CROSSES AT THAT LAST LINE, AND IT CROSSES AS A NUMBER. No files
+    move between the systems, no copies are made. THE PORTAL HOLDS THE SOURCE AND
+    THE PROVENANCE; PERFORCE HOLDS THE IMPORTED RESULT.
+
+    --- LOGIN ---
+
+    KEEP THEM SEPARATE AT FIRST. The portal has its own accounts, Perforce has its
+    own. Two logins is a small annoyance and zero engineering.
+
+    IF ONE IDENTITY IS WANTED LATER, both systems can point at the same directory
+    — PERFORCE SPEAKS LDAP AND SAML, and the portal could too. A change to make
+    when two logins actually hurts, not before.
+
+    --- WHERE NOT TO INTEGRATE ---
+
+    "WHO IS WORKING ON WHAT." Perforce already knows, PER ACTOR, thanks to One File
+    Per Actor — and P4V SHOWS IT. Mirroring that into the portal would be a
+    duplicate that drifts, and it is THE EXACT FAILURE ITEM 64 NAMED.
+
+    POINT AT P4V. CHANGE NOTHING.
+
+    --- THE ONE OPTIONAL NICETY, AND WHY TO DEFER IT ---
+
+    THE CHANGELIST NUMBER IS TYPED BY WHOEVER DID THE IMPORT. That is right, and
+    it follows item 64's rule — STATE IS NEVER TYPED, ASSERTIONS ALWAYS ARE. The
+    portal cannot observe an import, so the importer asserts it.
+
+    THE SLICKER VERSION IS PERFORCE JOBS: approval creates a job, the importer
+    attaches their changelist to it, the portal reads the changelists back. It
+    removes the typing and the link is live.
+
+    BUT IT MEANS THE PORTAL WRITING INTO PERFORCE — a real integration, a
+    dependency, and a second place for a failure to strand an asset. START WITH A
+    TYPED NUMBER and build the job link only if the typing actually annoys people.
+    THAT IS ITEM 65'S RULE APPLIED TO OUR OWN SUGGESTION: BUILD THE THING THAT
+    POINTS, NOT THE THING THAT COUPLES.
+
+    --- WHAT THIS BUYS ---
+
+    THE WHOLE INTERFACE IS A CHANGELIST NUMBER, A RELEASE NAME, AND A DEACTIVATION
+    CHECKLIST. NOTHING IS MIRRORED, NOTHING IS DUPLICATED, AND NEITHER SYSTEM NEEDS
+    THE OTHER TO BE UP — which matters, because Perforce will be down sometimes.
+
+
+68) STEAM, AND WHETHER THE GAME LEAVES THIS REPOSITORY. 2026-10-09.
+
+    ASKED: *"the game will be released via steam is it normal for the testing to
+    be done on a steam repository or what? Does the game leave this repository?
+    what are the implications - which repository are yout alking about"*.
+
+    --- WHICH REPOSITORY, FIRST, BECAUSE THE QUESTION NEEDED IT ---
+
+    `/jobs/LowEx` IS A MONOREPO: website/ (the portal), game/ (the Unreal
+    project), docs/, and source_assets/. That is "this repository", and it is the
+    one the game would leave.
+
+    VERIFIED BEFORE SAYING SO: nothing in the portal reads game/ — not the
+    backend, not the frontend, not the config. AND ONLY 10 FILES UNDER game/ ARE
+    TRACKED. So the move is free today and gets expensive the moment real content
+    lands, which is the same shape as the .gitkeep problem.
+
+    --- STEAM: TWO POPULATIONS, TWO MACHINERIES ---
+
+    Internal testing is NOT done on Steam — uploads are slow, and builds sit on
+    Valve's infrastructure where your own team fetches them like anybody else.
+    External testing is exactly what Steam's tools are for.
+
+        developers             Perforce sync, run the editor (item 66)
+        in-house QA            a build from the build machine
+        EXTERNAL PLAYTESTERS   STEAM PLAYTEST
+        press / influencers    BETA BRANCH or beta keys
+
+      * STEAM PLAYTEST — A SEPARATE APP. Up to 50,000 keys; playtester
+        WISHLISTS ARE PRESERVED; their REVIEWS COUNT NORMALLY at launch; removed
+        from libraries when the game releases. For large or open tests.
+
+      * BETA BRANCHES — THE SAME APP, an alternate build, optionally
+        PASSWORD-PROTECTED. For selective access, phased testing (alpha 1/2/3),
+        full-game testing, and post-release hotfixes.
+
+    TWO TRAPS: NEVER use default release keys for a playtest — they grant the
+    final game. And DEVCOMP / AUTOGRANT KEYS ARE FOR DEVELOPERS AND QA TESTERS
+    OUTSIDE THE ORG, NOT FOR PLAYTESTERS.
+
+    AND YES, RELEASE-CANDIDATE TESTING ON STEAM IS NORMAL. A studio in Valve's
+    own Games-as-a-Service material describes exactly the case here: a paid QA
+    company, the build sent "through Steam beta branch (behind password)", QA run
+    Friday, decision Monday. "RELEASE CANDIDATE" IS THE STEAM QA WORLD'S TERM TOO
+    — item 60, including "the exact release candidate that received the final QA
+    pass" in the release-decision record.
+
+    --- AND IT CHANGES ITEM 26, IN THE PORTAL'S FAVOUR ---
+
+    IF EXTERNAL TESTERS GET BUILDS THROUGH STEAM, VALVE DOES THE BROKERING, NOT
+    THE PORTAL. Steam beta branches take a password; Playtest has its own app and
+    its own keys. So item 26's brokering covers THE PATH STEAM DOES NOT: internal
+    QA, external contractors, and anything before a Steam build exists.
+
+    WHICH MEANS THE DEPENDENCY ACCEPTED IN ITEM 26 — portal down, no downloads —
+    APPLIES TO A SMALLER SET OF BUILDS THAN IT LOOKED LIKE. Good news, and it is
+    worth knowing before somebody reads item 26 as covering the Steam path too.
+
+    --- DOES THE GAME LEAVE? YES, AND THE IMPLICATIONS ---
+
+      1. A PERFORCE DEPOT IS CREATED, and its first changelist is the structure
+         currently in game/ — which item 62's action list already assumes.
+      2. THIS REPOSITORY BECOMES THE PORTAL: website/, docs/, source_assets/.
+         Smaller and coherent.
+      3. NOTHING BREAKS — verified above: the portal never reads game/.
+      4. THE .gitignore RULES ABOUT game/Build/ BECOME MOOT and move to Perforce's
+         ignore rules. (The Build/ note itself stays true — it is about Unreal,
+         not about which repository it sits in.)
+      5. THE GAME PROJECT SECTION BELOW DESCRIBES FILES THAT WILL NO LONGER BE
+         HERE, and needs to say so rather than describe a directory that has
+         gone. Same for any other item that names a game/ path.
+      6. THE GAME'S HISTORY STARTS IN PERFORCE, not in this git history. The
+         .gitkeep commits stay here as an orphaned fragment of the game's story —
+         unavoidable, and worth one sentence rather than a migration nobody needs.
+
+    NOT SCHEDULED. It is recorded as a consequence of the two-system decision, and
+    it should happen before real content lands rather than after.
