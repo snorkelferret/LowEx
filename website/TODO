@@ -7488,3 +7488,150 @@ no upside. If something seems to need one of them, ask.
     history — assettypes01 is dated 2026-09-29 and is more specific about the
     check-out than anything written since. A decision record that never re-reads
     its own inputs is just a longer way of forgetting.
+
+
+79) THE DEVELOPER PIPELINE, END TO END. FOR REVIEW. 2026-10-09.
+
+    ASKED FOR AT THE END OF A LONG SESSION, to be gone through again together:
+    *"Can we go through the whole pipeline for the dev again - uploading - put in
+    game - get the piece of game we need to work on - download it and the assets
+    we want to work on from unreal and the asset store, make sure that we are not
+    downloading something already there - check with perforce or hashes or both -
+    TBD - work on the asstes locally - upload into the workspace and after
+    aproval replace the old asset with the new in the game"*.
+
+    THIS ITEM IS THE AGENDA FOR THAT CONVERSATION. Nothing in it is new; it is
+    the whole thing in one place, with each step marked by what exists.
+
+    IT TOUCHES TWO SPACES, and the seam between them is where most of the
+    unbuilt work sits:
+
+        THE PORTAL   the workspace, the store, the library, the records
+        PERFORCE     the game — the Unreal project
+
+    ============================================================
+    A — MAKING AN ASSET
+    ============================================================
+
+      A1  work locally in Blender / Maya / Nuke
+          NOT THE PORTAL'S BUSINESS, and should not become so.
+
+      A2  log into the portal                                        BUILT
+
+      A3  upload the directory to your workspace                     BUILT
+          THE TYPE QUESTION (item 56) DECIDES WHAT THIS IS. A Blender
+          project is a LOAD-BEARING TREE — the app resolves its own files
+          by relative path — so it is ONE asset and the tree is preserved.
+          Loose files are MANY library items instead. THIS ASK IS NOT
+          BUILT, and it is the front door of the whole thing.
+
+      A4  technical check                                            BUILT
+
+      A5  submit for creative approval                               BUILT
+
+      A6  prod approves — the asset is now in the STORE              BUILT
+
+    ============================================================
+    B — INTO THE GAME
+    ============================================================
+
+      B1  somebody imports the approved asset into Unreal
+          A PERSON, DELIBERATELY. Unreal imports; the portal does not and
+          cannot (items 61, 69).
+
+      B2  commit that to Perforce
+          PERFORCE. The imported .uasset is the game's own copy, in the
+          game's own format — not a copy of the store's file (item 69).
+
+      B3  the portal records WHICH CHANGELIST did it              NOT BUILT
+          One field and a person, item 67. It is the only link between
+          the store and the game, and it is the answer to "what created
+          this in Unreal".
+
+    ============================================================
+    C — GETTING A PIECE OF THE GAME BACK
+    ============================================================
+
+      C1  log into the portal                                        BUILT
+
+      C2  say which bit of the game                               NOT BUILT
+          "The North Forest", meaning their folder, the landscape and
+          the lighting layer. PERFORCE DECIDES WHAT COMES DOWN (the
+          workspace mapping); UNREAL DECIDES WHAT IS LOADED (World
+          Partition, Data Layers, Location Volumes). Two filters, and
+          item 66's trap is that they must agree.
+
+      C3  SEE THE LIST BEFORE DOWNLOADING                         NOT BUILT
+          The staging view, item 59 — and ALREADY SPECCED in
+          docs/assettypes01 §5B as a "JSON manifest: per-file SHA-256,
+          size, and target path".
+
+      C4  SKIP WHAT IS ALREADY LOCAL                        ** TBD **
+          THE USER'S OWN MARKER: *"check with perforce or hashes or
+          both - TBD"*. THE TWO ANSWERS:
+            * PERFORCE — the server already holds what each workspace
+              has, so the portal can produce the list WITHOUT anything
+              running on the developer's machine. Nothing to hash.
+            * HASHES — the portal's store is already SHA-based, and a
+              client could hash the local folder. But only a client can
+              see your disk, and hashing a terabyte is slow.
+          NOT DECIDED, AND IT IS THE FIRST THING TO SETTLE, because it
+          decides whether anything has to run on the dev's machine.
+
+      C5  download the ASSET from the store                       NOT BUILT
+          Item 59's check-out — the half that does not exist. The
+          upload half works; nothing brings anything back.
+
+      C6  download the GAME SUBSET                                NOT BUILT
+          AND UNDECIDED: PERFORCE, or the portal serving it. Item 77
+          records the argument — the user removed the locking premise
+          that had ruled the portal out, and having the portal serve the
+          files would make C4 free, because it would already know who
+          holds what.
+
+    ============================================================
+    D — WORKING
+    ============================================================
+
+      D1  open the .blend in BLENDER
+          No portal involvement.
+
+      D2  see it in context — UNREAL, with the landscape and lighting
+          Needs C6. AND NOTE THE SEPARATION: the thing you EDIT is
+          Blender's; the thing you LOOK AT IT IN is Unreal's.
+
+    ============================================================
+    E — BACK
+    ============================================================
+
+      E1  upload the new version — bigTree_v06                        BUILT
+          `bigTree_v06` parses to asset `bigTree`, version 6. The store
+          knows it is a LATER VERSION OF THE SAME ASSET, not a new one
+          (item 54's naming model). This only works if the developer
+          names it consistently — `bigTreeFinal` would be a new asset and
+          nothing would know it replaces anything.
+
+      E2  technical check                                            BUILT
+
+      E3  creative approval                                          BUILT
+
+      E4  put it into the game, replacing the old one              NOT BUILT
+          AND IT IS LESS THAN IT SOUNDS: a person REIMPORTS over the
+          same asset, and EVERY PLACED TREE UPDATES. You do not delete
+          anything and place it again. What is missing is only the
+          RECORD — that changelist 15407 replaced v3 with v6.
+
+    ============================================================
+    THE OPEN DECISIONS, IN THE ORDER THEY BLOCK THINGS
+    ============================================================
+
+      1. PERFORCE OR HASHES FOR "WHAT HAVE I GOT" (C4). Decides whether a
+         dev's machine runs anything.
+      2. PERFORCE OR THE PORTAL FOR THE GAME'S FILES (C6). Decides whether
+         the portal ever holds the project — item 62's decision, reopened
+         by item 77.
+      3. THE UPLOAD TYPE ASK (A3, item 56). The front door.
+      4. WHO RECOMMENDS A VERSION, and who manages releases (item 78,
+         item 53).
+      5. AND THE THREE THINGS STILL UNAUDITED: the three PDF specs, which
+         cannot be read without a text extractor.
