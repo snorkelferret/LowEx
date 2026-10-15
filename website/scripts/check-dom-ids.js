@@ -43,6 +43,14 @@ const CHECKS = [
         pages: ['devDashboard.html'],
     },
     {
+        // The Game store tab — the consumption side. Three clients on one page
+        // now, and the reason is the same each time: they are three different
+        // SPACES with three different access rules, and one file holding all
+        // three would be the page nobody dares change.
+        client: 'frontend/src/developerStore.js',
+        pages: ['devDashboard.html'],
+    },
+    {
         // Pre-auth: no header, no guard. Its ids live only on this page.
         client: 'frontend/src/register.js',
         pages: ['register.html'],

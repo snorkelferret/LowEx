@@ -93,6 +93,13 @@ app.use('/api/developer/workspace', developerWorkspaceRoutes);
 // stored_files.
 app.use('/api/library', require('./routes/library'));
 
+// THE GAME STORE, READ. The consumption side — find what has been approved,
+// download it, and import a version into a workspace to work on. The THIRD
+// access class: a workspace is the owner's alone, the library is the studio's,
+// and this is readable by any developer, which is what makes the store a studio
+// resource rather than a personal one. See routes/game.js.
+app.use('/api/game', require('./routes/game'));
+
 // Bug reports and suggestions. Reachable from every page, signed in or not —
 // the route applies its own optionalAuth rather than requiring a session,
 // because someone who cannot sign in is the most likely person to want to

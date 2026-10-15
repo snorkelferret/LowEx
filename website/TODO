@@ -7785,3 +7785,52 @@ no upside. If something seems to need one of them, ask.
     (item 58's "images are not assets" and the pipeline's silence on the subject)
     have never been put next to each other, and this is the first time the system
     has had an actual image in it to disagree about.
+
+
+81) THE CONTAINER NAME IS IN THE PATHS, AND ITEM 54 SAYS IT SHOULD NOT BE.
+    Found 2026-10-15, building the store download.
+
+    WHAT WAS SEEN. The manifest of the first downloaded version:
+
+        TestUpload/9e90a994-93ae-438f-b4a4-9d27071d64a0.jpg
+        TestUpload/be4ab03cef89-Cheryl_Rose12100x800.webp
+        TestUpload/artPics/IMG20250811222739.jpg
+
+    THE FOLDER THE FILES WERE UPLOADED IN IS THE FIRST SEGMENT OF EVERY PATH.
+
+    AND ITEM 54 DECIDED THE OPPOSITE, in as many words:
+
+        THE CONTAINER NAME   the folder or zip the files arrived in. TRANSPORT.
+                             It names nothing and is never retained in the
+                             workspace, the store or a listing.
+
+    So either the code does not do what item 54 says, or item 54 describes an
+    intention that was never implemented. CHECKED: the `relative_path` column
+    holds `TestUpload`, so the container IS retained, and the archive faithfully
+    reproduces it — which is the archive doing the right thing with the wrong
+    input.
+
+    --- AND IT IS NOT OBVIOUSLY WRONG, WHICH IS WHY IT IS RECORDED RATHER THAN
+        FIXED ---
+
+    FOR A BLENDER OR NUKE PROJECT, THE TREE IS LOAD-BEARING (item 56): the
+    application resolves its own files by relative path, so the tree must survive
+    intact — and its ROOT is the project directory, which is exactly what was
+    uploaded. Stripping it would break the project.
+
+    FOR A LOOSE COLLECTION, THE FOLDER IS CONVENIENCE AND NOTHING MORE — item 54's
+    own words — and keeping it means every file carries a name nobody chose, from
+    a folder that was merely where somebody happened to keep them.
+
+    SO THE TWO CASES WANT OPPOSITE ANSWERS, AND THE CODE DOES NOT DISTINGUISH
+    THEM. THAT IS ITEM 56 AGAIN: the upload type decides whether a tree is
+    load-bearing, and until it is asked, neither the upload nor the download can
+    know what to keep.
+
+    WHICH MAKES THE UPLOAD TYPE ASK (item 56) A PREREQUISITE FOR GETTING THIS
+    RIGHT, rather than a separate piece of the pipeline. It was already the
+    keystone; this is a second thing standing on it.
+
+    AND ONE PRACTICAL CONSEQUENCE EITHER WAY: whatever is decided, the MANIFEST
+    already says where every file goes, so a developer can see the paths before
+    unpacking and the decision can change without changing the format.
