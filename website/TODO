@@ -1278,9 +1278,23 @@ They MUST be dealt with before any real user data exists.
         the owning developer only, game-store content is readable by any
         authenticated developer, release management NOT DECIDED — see item 53.
       * import into a workspace, writing workspace_assets.repository_asset_id
-        and repository_base_version_id — both exist in the schema and neither
-        has ever been written. That is what would finally make "pick up your
-        own approved work and continue" possible.
+        and repository_base_version_id.
+
+        CORRECTED 2026-10-15: BOTH COLUMNS EXIST, AND ONE OF THEM HAS BEEN
+        WRITTEN FOR A FORTNIGHT. This said "neither has ever been written".
+        repository_asset_id IS written — by the APPROVE route, so it means "this
+        BECAME that" (item 59's finding). The import writes the same column at
+        CHECK-OUT, meaning "this CAME FROM that". IN THE LINKED CASE THEY
+        COINCIDE, which is why one column serves both directions.
+
+        AND repository_base_version_id IS THE ONE THAT HAS NEVER HAD A PURPOSE.
+        The import gives it one: THE VERSION YOU STARTED FROM. Import bigTree v3
+        and it records v3 — so the store version you began at is a FACT rather
+        than something guessed by comparing file sets, which cannot be done
+        reliably anyway once a single file has changed.
+
+        That is what would finally make "pick up approved work and continue"
+        possible.
       * preview for the types that can be previewed: images inline (with the
         usual care — octet-stream, never the stored mime), and models via a
         glTF viewer. See docs/assettypes01 for why only some formats are
