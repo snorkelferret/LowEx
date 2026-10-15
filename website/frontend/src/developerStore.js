@@ -165,7 +165,11 @@ function row(asset) {
         download.title =
             'Choose the folder this belongs in, and fetch only what you do not ' +
             'already have — the difference is worked out by hash';
-        download.innerHTML = '<i class="bi bi-folder-down me-1"></i>Download';
+        // THE ELLIPSIS IS THE CONVENTION FOR "THIS OPENS A DIALOG", and this one
+        // does — a confirmation, then the browser's folder chooser. Without it
+        // the first dialog is a surprise twice over, since the second says
+        // "Upload".
+        download.innerHTML = '<i class="bi bi-folder-down me-1"></i>Download…';
 
         actions.insertBefore(download, zip);
     }
@@ -419,6 +423,35 @@ function confirmReplacements(files) {
 async function downloadAsset(assetId, versionId, name, button) {
     showAlert('storeAlert', '');
     showAlert('storeResult', '');
+
+    // THE FOLDER DIALOG SAYS "UPLOAD", AND THAT WORD IS NOT OURS.
+    //
+    // `<input type="file" webkitdirectory>` is the only way to read a folder in
+    // every browser, and Chromium labels its chooser's button "Upload". So a
+    // developer who clicks Download is asked to upload — which sounds like the
+    // opposite of what they asked for, and like their files are about to leave
+    // the machine.
+    //
+    // NOTHING IS UPLOADED. The folder is read inside this page, the hashes are
+    // computed here, and the only thing that reaches the server is the list of
+    // files that turned out to be missing. That is worth saying BEFORE the
+    // dialog, because the alarm happens the moment it appears and an
+    // explanation afterwards is an explanation of a fright already had.
+    //
+    // SAID RATHER THAN HIDDEN. The alternative is to pick the folder some other
+    // way, and there is no other way that works in every browser — which is the
+    // whole point of this path. So the page admits the dialog is confusing
+    // instead of pretending the browser belongs to us.
+    if (!window.confirm(
+        'Next, your browser will ask you to choose a folder — and the button ' +
+        'on that dialog says "Upload". That word is the browser\'s, not this ' +
+        'page\'s.\n\n' +
+        'Nothing is uploaded. The folder is read here, in the browser, to work ' +
+        'out which files you already have. Only the ones you are missing are ' +
+        'fetched from the server.'
+    )) {
+        return;
+    }
 
     button.disabled = true;
     const original = button.innerHTML;
