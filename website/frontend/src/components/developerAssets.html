@@ -567,12 +567,37 @@
             multiple
           >
 
+          <!-- A FOLDER, WHICH IS WHAT REFERENCE MATERIAL USUALLY ARRIVES IN.
+               Browsers only allow the folder picker through this attribute, and
+               it is the difference between adding forty photographs and adding
+               forty photographs one dialog at a time.
+
+               THE FOLDER NAME IS NOT KEPT. Every file becomes its own item,
+               whatever directory it came from — the library is a shelf of
+               things, not a copy of somebody's filing. Keeping the name as a
+               collection label is item 54's idea and is not built. -->
+          <input
+            type="file"
+            id="libraryFolderInput"
+            class="d-none"
+            webkitdirectory
+            multiple
+          >
+
           <button
             type="button"
             id="librarySelectBtn"
             class="btn btn-outline-secondary btn-sm"
           >
             <i class="bi bi-folder2-open me-1"></i>Choose files
+          </button>
+
+          <button
+            type="button"
+            id="libraryFolderBtn"
+            class="btn btn-outline-secondary btn-sm"
+          >
+            <i class="bi bi-folder me-1"></i>Choose folder
           </button>
 
           <span id="libraryChosen" class="small text-secondary">No files chosen</span>

@@ -148,7 +148,10 @@ function tile(item) {
     name.className = 'library-tile-name small fw-medium';
     name.href = `${API}/${item.id}/content`;
     name.textContent = item.display_name;
-    name.title = item.display_name;
+    // IT DOWNLOADED ALL ALONG AND NOTHING SAID SO. Clicking a file's name to get
+    // the file is a convention worth keeping — but a convention nobody is told
+    // about is not one, so the title says it and the button below says it again.
+    name.title = `Download ${item.display_name}`;
     body.appendChild(name);
 
     const meta = document.createElement('div');
@@ -194,22 +197,38 @@ function tile(item) {
     }
 
     const actions = document.createElement('div');
-    // mt-auto keeps the button on the bottom edge whatever the tile contains.
-    actions.className = 'mt-auto pt-1';
+    // mt-auto keeps the buttons on the bottom edge whatever the tile contains.
+    actions.className = 'mt-auto pt-1 d-flex align-items-center gap-1';
+
+    // THE DOWNLOAD IS THE POINT OF A LIBRARY, so it is the one labelled action.
+    // It was here already — as the item's NAME — and that is why nobody found
+    // it: a filename that happens to be a link reads as a filename.
+    //
+    // A LINK RATHER THAN A BUTTON, because the browser already knows how to
+    // download a file and doing it here means the bytes never pass through this
+    // page's memory. Edit and Remove are icons so the three fit a 150px tile.
+    const download = document.createElement('a');
+    download.className = 'btn btn-sm btn-outline-primary py-0 px-2';
+    download.href = `${API}/${item.id}/content`;
+    download.title = `Download ${item.display_name}`;
+    download.innerHTML = '<i class="bi bi-download me-1"></i>Download';
+    actions.appendChild(download);
 
     const edit = document.createElement('button');
     edit.type = 'button';
-    edit.className = 'btn btn-sm btn-outline-secondary py-0 px-2 me-1';
+    edit.className = 'btn btn-sm btn-outline-secondary py-0 px-1 ms-auto';
     edit.dataset.edit = String(item.id);
-    edit.textContent = 'Edit';
+    edit.title = 'Name this, describe it, and tag what it shows';
+    edit.innerHTML = '<i class="bi bi-pencil"></i><span class="visually-hidden">Edit</span>';
     actions.appendChild(edit);
 
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'btn btn-sm btn-outline-danger py-0 px-2';
+    remove.className = 'btn btn-sm btn-outline-danger py-0 px-1';
     remove.dataset.remove = String(item.id);
     remove.dataset.name = item.display_name;
-    remove.textContent = 'Remove';
+    remove.title = 'Remove this from the library';
+    remove.innerHTML = '<i class="bi bi-trash"></i><span class="visually-hidden">Remove</span>';
     actions.appendChild(remove);
 
     body.appendChild(actions);
@@ -415,9 +434,21 @@ async function load() {
 // Adding
 // ------------------------------------------------------------
 
+// EITHER PICKER. The folder input yields files carrying a webkitRelativePath and
+// the file input does not — and it makes no difference here, because every file
+// becomes its own item either way. The directory is how they arrived, not what
+// they are.
 function chosenFiles() {
-    const input = $('libraryFileInput');
-    return input?.files ? Array.from(input.files) : [];
+    const asArray = (input) => (input?.files ? Array.from(input.files) : []);
+
+    return [...asArray($('libraryFileInput')), ...asArray($('libraryFolderInput'))];
+}
+
+function clearChosen() {
+    for (const id of ['libraryFileInput', 'libraryFolderInput']) {
+        const input = $(id);
+        if (input) input.value = '';
+    }
 }
 
 function onChoose() {
@@ -493,10 +524,9 @@ async function onUpload() {
             showAlert('libraryResult', parts.join('. '), 'success');
         }
 
-        // The picker is emptied so the same files cannot be sent twice by
+        // BOTH pickers are emptied so the same files cannot be sent twice by
         // pressing the button again, which is the mistake the button invites.
-        const input = $('libraryFileInput');
-        if (input) input.value = '';
+        clearChosen();
         onChoose();
 
         await load();
@@ -693,6 +723,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     selectBtn?.addEventListener('click', () => input?.click());
     input?.addEventListener('change', onChoose);
+
+    $('libraryFolderBtn')?.addEventListener('click', () => $('libraryFolderInput')?.click());
+    $('libraryFolderInput')?.addEventListener('change', onChoose);
     uploadBtn?.addEventListener('click', onUpload);
 
     search?.addEventListener('input', () => {
