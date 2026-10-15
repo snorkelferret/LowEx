@@ -1291,6 +1291,34 @@ They MUST be dealt with before any real user data exists.
     staging. That is already implemented, so importing approved work is free —
     which is the point.
 
+    --- THE RETURN HALF, PUT PLAINLY. 2026-10-15. ---
+
+    *"The round trip is not complete - the dev has to be able to search and
+    download stuff from the asset store - and download to local computer"*.
+
+    THE PRODUCER HALF NOW RUNS END TO END — upload, check, submit, approve,
+    stored, provenance recorded, one copy of every byte. NOTHING CONSUMES IT.
+
+    AND IT IS TWO STEPS, NOT ONE, WHICH IS WHY "download" NEEDS SPLITTING:
+
+        THE STORE -> A WORKSPACE     "IMPORT" — this item. Writes
+                                     repository_asset_id and
+                                     repository_base_version_id, NEITHER OF
+                                     WHICH HAS EVER BEEN WRITTEN.
+        THE WORKSPACE -> THE DISK    "DOWNLOAD" — item 59 and docs/assettypes01
+                                     §5B, which specifies it down to the manifest
+                                     format and the security rules with it.
+
+    SO "THE DEV CAN SEARCH AND DOWNLOAD FROM THE STORE" IS BOTH ITEMS, AND
+    NEITHER EXISTS. Neither is hard on its own; what makes it one piece of work
+    is that the second is useless without the first, and the first is useless
+    until somebody wants the files on their machine.
+
+    AND "SEARCH" WAS NOT IN THIS ITEM BEFORE. It said "browsing by type", which
+    is a FILTER — the library already has a name-and-tag search whose shape this
+    should copy rather than reinvent, and the tags on a store asset are a
+    question this item has never asked.
+
     --- THE OTHER HALF: TELL THEM ON THE WAY IN ---
 
     NOT IMPLEMENTED, and it is the sentence this item opens with. The lookup
