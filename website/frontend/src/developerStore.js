@@ -434,25 +434,31 @@ async function downloadAsset(assetId, versionId, name, button) {
     //
     // NOTHING IS UPLOADED. The folder is read inside this page, the hashes are
     // computed here, and the only thing that reaches the server is the list of
-    // files that turned out to be missing. That is worth saying BEFORE the
-    // dialog, because the alarm happens the moment it appears and an
-    // explanation afterwards is an explanation of a fright already had.
+    // files that turned out to be missing.
     //
-    // SAID RATHER THAN HIDDEN. The alternative is to pick the folder some other
-    // way, and there is no other way that works in every browser — which is the
-    // whole point of this path. So the page admits the dialog is confusing
-    // instead of pretending the browser belongs to us.
-    if (!window.confirm(
-        'Next, your browser will ask you to choose a folder — and the button ' +
-        'on that dialog says "Upload". That word is the browser\'s, not this ' +
-        'page\'s.\n\n' +
-        'Nothing is uploaded. The folder is read here, in the browser, to work ' +
-        'out which files you already have. Only the ones you are missing are ' +
-        'fetched from the server.'
-    )) {
-        return;
-    }
-
+    // --- AND A CONFIRMATION HERE BREAKS THE WHOLE THING ---
+    //
+    // THIS FUNCTION USED TO OPEN WITH ONE, explaining the word "Upload" before
+    // the chooser appeared. IT STOPPED THE DOWNLOAD DEAD, and silently: the
+    // page confirmed, the developer agreed, and then NOTHING HAPPENED AT ALL —
+    // no chooser, no error, no message. What the browser logs is
+    //
+    //     File chooser dialog can only be shown with a user activation.
+    //
+    // A file chooser is only allowed while the page still holds the activation
+    // from the click that started it, and putting a modal dialog in between
+    // spends it. The picker then declines to open, `<input>`'s promise never
+    // settles, and the flow waits for a choice nobody was ever asked to make.
+    //
+    // SO THE EXPLANATION MOVED, rather than being dropped: the Game store
+    // panel's own description says it, above the table, before anything is
+    // clicked. The button's tooltip says it. Those are read beforehand, which
+    // is when an explanation about a dialog is any use anyway.
+    //
+    // THE GENERAL RULE, because this cost a working feature once: NOTHING MAY
+    // COME BETWEEN THE CLICK AND THE PICKER. Not a confirmation, not an await,
+    // not a fetch. Whatever wants to be said around it has to be said in the
+    // page before the click, or after the folder has been chosen.
     button.disabled = true;
     const original = button.innerHTML;
     button.textContent = 'Choosing…';
