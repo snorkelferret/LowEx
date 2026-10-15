@@ -140,9 +140,22 @@ function row(asset) {
     zip.dataset.asset = String(asset.id);
     actions.appendChild(zip);
 
-    // AND THE NEGOTIATION, WHERE THE BROWSER CAN DO IT. Only Chromium can read
-    // and write a folder the developer picks; Firefox and Safari have no
-    // equivalent, so the button is not offered rather than offered and broken.
+    // AND THE NEGOTIATION, WHENEVER THE BROWSER CAN DO IT — which is now every
+    // browser worth naming.
+    //
+    // THIS COMMENT USED TO SAY THE OPPOSITE, and it was true when it was
+    // written: the first version of this used the File System Access API, so the
+    // button was offered to Chrome and Edge and withheld from everybody else.
+    // The rewrite removed the API, not the restriction — reading a folder is
+    // `<input webkitdirectory>`, which Chrome, Edge, Firefox 50+ and Safari 11.1+
+    // all have. So what canNegotiate() really tests now is that AND crypto.subtle,
+    // and the second half is the load-bearing one: it needs a secure context, and
+    // over plain http: on anything but localhost it is absent.
+    //
+    // WHICH IS STILL A REASON TO CHECK RATHER THAN ASSUME. A negotiation that
+    // cannot hash would call every file missing and re-fetch the lot — worse
+    // than not offering it — so the button is offered on what the browser can
+    // actually do, and the zip beside it is the answer for everything else.
     if (canNegotiate()) {
         const download = document.createElement('button');
         download.type = 'button';
