@@ -7834,3 +7834,51 @@ no upside. If something seems to need one of them, ask.
     AND ONE PRACTICAL CONSEQUENCE EITHER WAY: whatever is decided, the MANIFEST
     already says where every file goes, so a developer can see the paths before
     unpacking and the decision can change without changing the format.
+
+
+82) THE UPLOAD HAS THE SAME BUG, AND ITS CONSEQUENCE IS WORSE. Found 2026-10-15.
+
+    WHAT WAS FOUND, chasing how a developer could have a workspace asset in the
+    bin at all. THE FIX FOR THE IMPORT IS IN (item 81's neighbour); THIS IS THE
+    ROUTE THAT DOES NOT HAVE IT YET.
+
+    THE SHARED MISTAKE: **A SOFT-DELETED ROW STILL HOLDS ITS NAME.** The UNIQUE
+    constraint is on `(workspace_id, name)` and does not mention `is_active`, so
+    an asset in the bin is still holding the name it was deleted under.
+
+    WHAT THE UPLOAD DOES ABOUT IT: IT FINDS THE DELETED ROW AND ADDS A VERSION TO
+    IT — AND NEVER SETS is_active BACK TO 1.
+
+        workspaceAssetByName   SELECT ... WHERE workspace_id = ? AND name = ?
+                               (no is_active filter — so it finds the bin row)
+        if (!asset) { INSERT }  (so it does not insert)
+        else { COALESCE metadata }
+                               (and never restores)
+
+    SO: A DEVELOPER UPLOADS A NEW VERSION OF SOMETHING THEY DELETED, THE UPLOAD
+    SUCCEEDS, THE FILES ARE STORED AND CHARGED TO THEIR QUOTA — AND NOTHING
+    APPEARS, because the asset it was added to is still invisible.
+
+    THAT IS SILENT LOSS, and it is worse than the import's error. The import at
+    least FAILED LOUDLY with a 500; this one reports success and the work is
+    nowhere. It is the same class of failure as the alpha mask and the .gitkeep
+    directory: correct-looking, and invisible until somebody goes looking.
+
+    --- AND IT IS NOT KNOWN HOW EASILY IT IS REACHED, WHICH IS THE POINT ---
+
+    It needs a name to be BOTH in the bin AND uploaded to again, and the bin is
+    swept on a retention window — so it is reachable for as long as the bin holds
+    the row, and unreachable after. NOBODY HAS HIT IT, and it was found by
+    reading rather than by doing.
+
+    --- WHAT TO DO ---
+
+    THE SAME CHOICE AS THE IMPORT, and it should be made the same way:
+    RESTORE THE ROW AND ADD THE VERSION. The developer has just uploaded work
+    under that name; they plainly want it. The bin's own Restore sets is_active
+    back, so the action exists — the upload simply never takes it.
+
+    AND THE GENERAL RULE, since this is now twice: ANY LOOKUP THAT DECIDES
+    WHETHER TO INSERT MUST SEE THE ROWS THAT WOULD COLLIDE WITH THE INSERT. A
+    filter that hides them turns a constraint violation into either a crash or,
+    worse, a silent one.

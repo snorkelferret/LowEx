@@ -317,16 +317,22 @@ async function importAsset(assetId, versionId, name, button) {
             throw new Error(data.error || 'Could not import it.');
         }
 
-        // TWO OUTCOMES, AND THEY ARE NOT THE SAME NEWS. "Imported" means it is
-        // now in the workspace; "already" means it was there and nothing
-        // happened — which is not a failure and should not be reported as one.
-        showAlert(
-            'storeResult',
-            data.status === 'already'
-                ? data.message
-                : `Imported. "${name}" is now in your workspace — see the Upload tab.`,
-            'success'
-        );
+        // THREE OUTCOMES, AND THEY ARE NOT THE SAME NEWS. "Imported" means it
+        // is now in the workspace; "already" means it was there and nothing
+        // happened; "restored" means it was IN THE BIN and has come back —
+        // which a developer needs to be told, because an asset reappearing
+        // without explanation is exactly the kind of thing that makes somebody
+        // distrust a page.
+        const messages = {
+            already: data.message,
+            restored:
+                `"${name}" was in your bin, so it has been RESTORED and the ` +
+                'current version imported on top of it. Its earlier versions are ' +
+                'back too.',
+            imported: `Imported. "${name}" is now in your workspace — see the Upload tab.`
+        };
+
+        showAlert('storeResult', messages[data.status] || messages.imported, 'success');
 
     } catch (err) {
         showAlert('storeAlert', err.message, 'danger');

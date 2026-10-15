@@ -143,10 +143,29 @@ const createWorkspace = db.prepare(`
     INSERT INTO developer_workspaces (developer_id) VALUES (?)
 `);
 
+// ANY ROW WITH THAT NAME, ACTIVE OR NOT.
+//
+// THE UNIQUE CONSTRAINT IS ON (workspace_id, name) AND DOES NOT CARE ABOUT
+// is_active — SO A SOFT-DELETED ASSET STILL HOLDS ITS NAME. A lookup that
+// filtered the deleted rows out MISSED THE ROW IT WAS ABOUT TO COLLIDE WITH,
+// which is exactly what happened: "UNIQUE constraint failed" with no visible row
+// to explain it.
 const workspaceAssetByName = db.prepare(`
-    SELECT id, name, repository_asset_id
+    SELECT id, name, repository_asset_id, is_active
     FROM workspace_assets
-    WHERE workspace_id = ? AND name = ? AND is_active = 1
+    WHERE workspace_id = ? AND name = ?
+`);
+
+const restoreWorkspaceAsset = db.prepare(`
+    UPDATE workspace_assets
+    SET is_active = 1, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+`);
+
+const restoreWorkspaceVersions = db.prepare(`
+    UPDATE workspace_versions
+    SET is_active = 1, deleted_at = NULL
+    WHERE workspace_asset_id = ?
 `);
 
 const insertWorkspaceAsset = db.prepare(`
@@ -464,8 +483,53 @@ router.post(
                 // the library".
                 // ------------------------------------------------
 
-                if (existing && existing.repository_asset_id === assetId) {
+                if (existing?.is_active && existing.repository_asset_id === assetId) {
                     return { already: true, workspace_asset_id: existing.id };
+                }
+
+                // ------------------------------------------------
+                // IN THE BIN, AND IT CAME FROM HERE.
+                //
+                // RESTORE RATHER THAN INSERT, because the row holds the
+                // name whether it is deleted or not — and restoring is the
+                // RIGHT ANSWER rather than a workaround: it is the same
+                // asset, imported from the same place, and the link back
+                // to the store is already on the row. The library does the
+                // same when something removed is uploaded again.
+                //
+                // ITS VERSIONS COME BACK WITH IT, which is what the bin's
+                // own Restore does. The current store version is then
+                // added on top as a new version.
+                // ------------------------------------------------
+
+                if (existing && !existing.is_active && existing.repository_asset_id === assetId) {
+                    restoreWorkspaceAsset.run(existing.id);
+                    restoreWorkspaceVersions.run(existing.id);
+
+                    const restoredLatest = latestWorkspaceVersion.get(existing.id);
+                    const restoredNumber = (restoredLatest?.n || 0) + 1;
+
+                    const restoredVersion = insertWorkspaceVersion.run(
+                        existing.id,
+                        restoredNumber,
+                        developerId,
+                        `Imported from the game store: ${asset.name} v${version.version_number}`
+                    );
+
+                    insertWorkspaceVersionFile.run(restoredVersion.lastInsertRowid, versionId);
+
+                    audit.record(developerId, 'workspace.import_from_store', asset.name, {
+                        workspace_asset_id: existing.id,
+                        repository_asset_id: assetId,
+                        repository_base_version_id: versionId,
+                        restored_from_bin: true
+                    });
+
+                    return {
+                        restored: true,
+                        workspace_asset_id: existing.id,
+                        workspace_version_id: restoredVersion.lastInsertRowid
+                    };
                 }
 
                 // ------------------------------------------------
@@ -480,9 +544,13 @@ router.post(
 
                 if (existing) {
                     const err = new Error(
-                        `You already have a workspace asset called "${asset.name}", ` +
-                        'and it did not come from this one. Rename it, or import ' +
-                        'this under a different name.'
+                        existing.is_active
+                            ? `You already have a workspace asset called "${asset.name}", ` +
+                              'and it did not come from this one. Rename it, or import ' +
+                              'this under a different name.'
+                            : `You have a DELETED workspace asset called "${asset.name}", ` +
+                              'and it did not come from this one. Restore or remove it from ' +
+                              'your bin first — importing would otherwise adopt it.'
                     );
                     err.status = 409;
                     throw err;
@@ -542,7 +610,9 @@ router.post(
             }
 
             return res.status(201).json({
-                status: 'imported',
+                // 'restored' when the row was in the bin and came back, which is
+                // a different thing to report than a straight import.
+                status: result.restored ? 'restored' : 'imported',
                 workspace_asset_id: result.workspace_asset_id,
                 workspace_version_id: result.workspace_version_id,
                 from: {
