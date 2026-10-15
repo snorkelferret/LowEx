@@ -8042,3 +8042,61 @@ no upside. If something seems to need one of them, ask.
     negotiation, the archive and the manifest are built and verified, and they
     work for whatever role the route admits. This item is only about who that
     is.
+
+84) TWO WAYS TO DO THE SAME THING — AN AUDIT. ASKED FOR 2026-10-15.
+    Not started.
+
+    THE RULE, in the owner's words: "make sure that the code is not being
+    duplicated — i.e. two or more ways to do the same thing." It is the same
+    rule item 55 states for uploads, and the one item 82 was found by breaking
+    twice over.
+
+    --- COUNTED, SO THE SIZE IS KNOWN BEFORE ANYBODY STARTS ---
+
+    Frontend helpers defined more than once, by name:
+
+        showAlert    defined in 8 files
+        render       defined in 11 files
+        init         defined in 5 files
+        row          defined in 4 files
+        formatWhen   defined in 3 files
+        cell         defined in 3 files
+
+    THE NAMES ARE NOT ALL THE SAME THING, and the count is not the finding.
+    `render` and `init` are generic — each file's is its own and probably
+    should stay. `showAlert` IS the same function in several of them: take a
+    message and a Bootstrap variant, set an alert div's text and class.
+    `formatWhen` and `cell` look the same way, and both are small enough to be
+    certain about by reading.
+
+    SO THE WORK IS SEPARATING TWO CASES — functions that are genuinely the same
+    and belong in one place, and functions that merely share a name. Merging on
+    the name alone would be a worse mess than the duplication.
+
+    --- AND THERE IS A PRECEDENT, SO THIS IS NOT A CODEBASE THAT CANNOT ---
+
+    shared/formatBytes.mjs is authored once and imported by the frontend, the
+    backend and the tests. That is the shape to copy, and it already exists.
+
+    --- ONE THAT IS DEFINITELY WRONG, FOUND WHILE LOOKING ---
+
+    CLIENT_URL IS DEFINED TWICE IN .env, at lines 6 and 9. Whichever the loader
+    takes wins, and nothing says which — an answer that is right by accident,
+    which is the failure mode this whole file keeps recording.
+
+    AND TWO FILES CARRY THEIR OWN COPY OF ITS VALUE:
+
+        backend/routes/inviteDevs.js:42   process.env.CLIENT_URL || 'http://localhost:5173'
+        backend/lib/invites.js:114        clientUrl || 'http://localhost:5173'
+
+    Those are fallbacks rather than hardcoding, so they are the mild version of
+    the problem — but they are a second place that decides where the portal
+    lives, and a third and fourth once the .env copies are counted.
+
+    --- WHY IT IS WORTH DOING ---
+
+    EVERY DUPLICATE IS A PLACE TWO COPIES CAN DRIFT APART. Item 82 is that
+    failure exactly: the upload and the import asked the same question, got it
+    wrong the same way, and had to be fixed twice — and the second one was
+    worse, because it reported success while losing the work. A shared helper
+    cannot disagree with itself.

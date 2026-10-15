@@ -340,56 +340,270 @@ async function load() {
 // Downloading — the negotiation
 // ------------------------------------------------------------
 
-// WHAT WAS FOUND, BEFORE ANYTHING IS FETCHED. The point of the negotiation is
-// that the developer sees the working-out rather than a progress bar: how much
-// of this they already have, and what is actually going to cross the wire.
-function reportToPage({ phase, plan, summary, assetName }) {
+// ============================================================
+// THE DOWNLOAD EXPLAINS ITSELF, AND THE DEVELOPER DECIDES
+// ============================================================
+//
+// EVERY STAGE IS SHOWN WHILE IT IS TRUE, rather than an outcome announced at
+// the end. What is about to happen, what is being worked out, what was found,
+// and what is going to be fetched — with the chance to stop it.
+//
+// WHICH IS ALSO THE ONLY WAY IT CAN BE EXPLAINED. The obvious place for a
+// confirmation about the folder chooser would be a dialog before it, and a
+// dialog before it IS A BUG: the chooser may only be shown while the page still
+// holds the activation from the click that started it, and a modal spends it.
+// The page says it in ordinary content instead, and the chooser is opened by a
+// second, fresh click on a button in that content.
+
+const planBox = () => $('storePlan');
+
+function clearPlan() {
+    const box = planBox();
+    if (!box) return;
+
+    box.className = 'd-none';
+    box.textContent = '';
+}
+
+// The panel, filled by the callback, shown in the given Bootstrap alert colour.
+function fillPlan(className, build) {
+    const box = planBox();
+    if (!box) return null;
+
+    box.className = `alert alert-${className} py-2 px-3 small`;
+    box.textContent = '';
+    build(box);
+
+    return box;
+}
+
+// A BUTTON THE FLOW WAITS FOR.
+//
+// `value` is what the click resolves to. The listener is `once`, so a second
+// click on a button that has already answered cannot answer twice — and every
+// button in a group is disabled together, so the decision is made once.
+function pressAny(box, entries) {
+    if (!box) return Promise.resolve(entries[0]?.value);
+
+    return new Promise(resolve => {
+        const buttons = entries.map(({ label, className, value }) => {
+            const button = document.createElement('button');
+
+            button.type = 'button';
+            button.className = `btn btn-sm ${className}`;
+            button.textContent = label;
+
+            button.addEventListener('click', () => {
+                for (const other of buttons) other.disabled = true;
+                resolve(value);
+            }, { once: true });
+
+            box.appendChild(button);
+
+            return button;
+        });
+    });
+}
+
+// The files, by name and size, because "42 files" is not something anybody can
+// check and a list is. Capped, because a version can hold thousands and the
+// count above it already says how many.
+function fileList(files, className) {
+    const list = document.createElement('ul');
+    list.className = `list-unstyled mb-2 font-monospace small ${className || ''}`;
+    list.style.maxHeight = '13rem';
+    list.style.overflowY = 'auto';
+
+    for (const file of files.slice(0, 300)) {
+        const item = document.createElement('li');
+        item.className = 'text-truncate';
+        item.textContent = `${file.target}  ·  ${formatBytes(file.size)}`;
+        list.appendChild(item);
+    }
+
+    if (files.length > 300) {
+        const item = document.createElement('li');
+        item.className = 'text-secondary';
+        item.textContent = `…and ${files.length - 300} more, in the zip`;
+        list.appendChild(item);
+    }
+
+    return list;
+}
+
+function paragraph(box, text, className) {
+    const p = document.createElement('p');
+    p.className = className || 'mb-2';
+    p.textContent = text;
+    box.appendChild(p);
+
+    return p;
+}
+
+async function reportToPage({ phase, plan, summary, assetName, done, total, count, bytes, what }) {
+
+    // ------------------------------------------------------------
+    // Before anything: what is about to happen, and the button that starts it
+    // ------------------------------------------------------------
+    if (phase === 'choose') {
+        const box = fillPlan('info', b => {
+            paragraph(b, `Downloading ${assetName}.`,
+                'mb-1 fw-semibold');
+
+            paragraph(b,
+                'Next, your browser asks which folder these files belong in — and ' +
+                'the button on that dialog says "Upload". THAT WORD IS THE ' +
+                'BROWSER\'S, NOT THIS PAGE\'S: reading a folder is the one thing a ' +
+                'browser only knows how to do with its upload control, so every ' +
+                'site\'s folder picker says it.',
+                'mb-2');
+
+            paragraph(b,
+                'No file leaves your machine. The folder is read here, in this ' +
+                'browser, and the only thing sent to the server is a list of ' +
+                'hashes — sixty-four characters for each file you are missing. ' +
+                'You will see that list before anything is fetched, and you can ' +
+                'stop it then.',
+                'mb-2 text-secondary');
+        });
+
+        return pressAny(box, [
+            { label: 'Choose folder…', className: 'btn-primary', value: true }
+        ]);
+    }
+
+    if (phase === 'working') {
+        fillPlan('secondary', b => paragraph(b, `Reading ${what}…`));
+        return;
+    }
+
+    // ------------------------------------------------------------
+    // The slow part, counted, because silence looks like a hang
+    // ------------------------------------------------------------
+    if (phase === 'hashing') {
+        // NOTHING TO HASH IS THE COMMON CASE ON A SECOND RUN, and there is
+        // nothing to report: the count would be 0 of 0.
+        if (total === 0) return;
+
+        fillPlan('secondary', b => {
+            paragraph(b,
+                `Working out what you already have — ${done} of ${total} files read.`,
+                'mb-2');
+
+            const outer = document.createElement('div');
+            outer.className = 'progress';
+            outer.style.height = '0.4rem';
+
+            const inner = document.createElement('div');
+            inner.className = 'progress-bar';
+            inner.style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+
+            outer.appendChild(inner);
+            b.appendChild(outer);
+        });
+
+        return;
+    }
+
+    // ------------------------------------------------------------
+    // What it found, listed, and the decision
+    // ------------------------------------------------------------
+    if (phase === 'planned') {
+        const nothingToDo = plan.write.length === 0 && plan.replace.length === 0;
+
+        if (nothingToDo) {
+            fillPlan('success', b => paragraph(b,
+                `${assetName}: you already have every file in this version — ` +
+                `all ${plan.keep.length} of them. Nothing to fetch.`));
+
+            // NOT A CANCELLATION. Nothing was refused; there was simply nothing
+            // to do, and saying "cancelled" would be a lie about who decided.
+            return { proceed: true, includeReplacements: false };
+        }
+
+        const box = fillPlan('info', b => {
+            paragraph(b,
+                `${assetName}: ${plan.write.length} file` +
+                `${plan.write.length === 1 ? '' : 's'} to download ` +
+                `(${formatBytes(plan.writeBytes)}).`,
+                'mb-1 fw-semibold');
+
+            if (plan.keep.length) {
+                paragraph(b,
+                    `${plan.keep.length} file${plan.keep.length === 1 ? '' : 's'} ` +
+                    'you already have, up to date — not listed, not sent, not fetched.',
+                    'mb-2 text-secondary');
+            }
+
+            if (plan.write.length) {
+                paragraph(b, 'To download:', 'mb-1 text-secondary');
+                b.appendChild(fileList(plan.write));
+            }
+
+            // LISTED APART, AND OFFERED SEPARATELY. These are the destructive
+            // ones — the file at that path exists and is different — and they
+            // get their own button below so downloading the missing ones does
+            // not quietly overwrite anything.
+            if (plan.replace.length) {
+                paragraph(b,
+                    `${plan.replace.length} of these already exist with DIFFERENT ` +
+                    'contents:',
+                    'mb-1 fw-semibold text-warning');
+                b.appendChild(fileList(plan.replace, 'text-warning'));
+            }
+
+            paragraph(b,
+                'Sending the hashes of the files above is the only thing that ' +
+                'goes to the server. No file contents leave this machine, either ' +
+                'way — you are choosing how much comes back.',
+                'mb-2 text-secondary');
+        });
+
+        const entries = [];
+
+        if (plan.write.length) {
+            entries.push({
+                label: `Download ${plan.write.length} file${plan.write.length === 1 ? '' : 's'}`,
+                className: 'btn-primary me-2',
+                value: { proceed: true, includeReplacements: false }
+            });
+        }
+
+        if (plan.replace.length) {
+            entries.push({
+                label: `Download and replace ${plan.replace.length}`,
+                className: 'btn-warning me-2',
+                value: { proceed: true, includeReplacements: true }
+            });
+        }
+
+        entries.push({ label: 'Cancel', className: 'btn-outline-secondary', value: { proceed: false } });
+
+        return pressAny(box, entries);
+    }
+
+    // ------------------------------------------------------------
+    // Fetching, then how it ended
+    // ------------------------------------------------------------
+    if (phase === 'fetching') {
+        fillPlan('secondary', b => paragraph(b,
+            `Fetching ${count} file${count === 1 ? '' : 's'} (${formatBytes(bytes)})…`));
+        return;
+    }
+
     if (phase === 'cancelled') {
+        clearPlan();
         showAlert('storeResult', 'Cancelled — nothing was fetched.', 'secondary');
         return;
     }
 
-    if (phase === 'planned') {
-        const bits = [];
-
-        if (plan.keep.length) {
-            bits.push(`${plan.keep.length} file${plan.keep.length === 1 ? '' : 's'} you already have`);
-        }
-
-        if (plan.write.length) {
-            bits.push(
-                `${plan.write.length} to fetch (${formatBytes(plan.writeBytes)})`
-            );
-        }
-
-        if (plan.replace.length) {
-            bits.push(`${plan.replace.length} that would be REPLACED`);
-        }
-
-        if (plan.write.length === 0 && plan.replace.length === 0) {
-            showAlert('storeResult', 'You already have every file in this version. Nothing to fetch.', 'success');
-            return;
-        }
-
-        // AND WHAT IS ABOUT TO BE SENT, AT THE MOMENT IT IS SENT. The browser's
-        // folder dialog said "Upload" before any of this, which leaves the
-        // obvious question — uploading WHAT? — and this is the answer, given
-        // while the request is going out rather than in a paragraph above the
-        // table that somebody has already scrolled past.
-        showAlert(
-            'storeResult',
-            `Checked: ${bits.join(', ')}. Sending their hashes — ` +
-            'no file contents leave this machine.',
-            'info'
-        );
-    }
-
     if (phase === 'done') {
-        // NOTHING TO FETCH MEANS NO ZIP EXISTS, and this fires AFTER 'planned'
+        clearPlan();
+
+        // NOTHING TO FETCH MEANS NO ZIP EXISTS, and this fires AFTER the plan
         // has already explained why. Falling through would say "a zip with 0
-        // files" and then tell the developer to unzip it — sending them to their
-        // downloads folder for a file that was never made, to complete a version
-        // that needs nothing.
+        // files" and then tell the developer to unzip it — sending them to
+        // their downloads folder for a file that was never made.
         if (summary.written === 0 && summary.failed === 0) {
             showAlert(
                 'storeResult',
@@ -420,60 +634,32 @@ function reportToPage({ phase, plan, summary, assetName }) {
     }
 }
 
-// LISTED BY NAME, NEVER SILENTLY. These files exist and differ, so writing them
-// destroys something the developer has.
-function confirmReplacements(files) {
-    const shown = files.slice(0, 5).map(f => f.target).join('\n  ');
-
-    return window.confirm(
-        `${files.length} file(s) already exist with DIFFERENT contents:\n\n  ${shown}` +
-        (files.length > 5 ? `\n  …and ${files.length - 5} more` : '') +
-        '\n\nReplace them with the version from the store?'
-    );
-}
-
+// ============================================================
+// WHY THIS CALLS SOMETHING THAT TALKS BACK
+// ============================================================
+//
+// `downloadVersion` reports every stage and WAITS at two of them, and
+// reportToPage answers both. The first is the explanation and the button that
+// opens the folder chooser — which cannot be a dialog, because a file chooser
+// may only be shown while the page still holds the activation from the click
+// that started it, and a modal spends it. Doing it with a `window.confirm()`
+// here stopped the download dead, silently, with
+//
+//     File chooser dialog can only be shown with a user activation.
+//
+// in the console and nothing at all on the screen. The explanation is ordinary
+// page content instead, and the chooser is opened by a second, fresh click.
+//
+// THE SECOND IS THE DECISION: the list of what would be fetched, and the chance
+// to stop it. Nothing crosses the wire until the developer has seen it.
 async function downloadAsset(assetId, versionId, name, button) {
     showAlert('storeAlert', '');
     showAlert('storeResult', '');
+    clearPlan();
 
-    // THE FOLDER DIALOG SAYS "UPLOAD", AND THAT WORD IS NOT OURS.
-    //
-    // `<input type="file" webkitdirectory>` is the only way to read a folder in
-    // every browser, and Chromium labels its chooser's button "Upload". So a
-    // developer who clicks Download is asked to upload — which sounds like the
-    // opposite of what they asked for, and like their files are about to leave
-    // the machine.
-    //
-    // NOTHING IS UPLOADED. The folder is read inside this page, the hashes are
-    // computed here, and the only thing that reaches the server is the list of
-    // files that turned out to be missing.
-    //
-    // --- AND A CONFIRMATION HERE BREAKS THE WHOLE THING ---
-    //
-    // THIS FUNCTION USED TO OPEN WITH ONE, explaining the word "Upload" before
-    // the chooser appeared. IT STOPPED THE DOWNLOAD DEAD, and silently: the
-    // page confirmed, the developer agreed, and then NOTHING HAPPENED AT ALL —
-    // no chooser, no error, no message. What the browser logs is
-    //
-    //     File chooser dialog can only be shown with a user activation.
-    //
-    // A file chooser is only allowed while the page still holds the activation
-    // from the click that started it, and putting a modal dialog in between
-    // spends it. The picker then declines to open, `<input>`'s promise never
-    // settles, and the flow waits for a choice nobody was ever asked to make.
-    //
-    // SO THE EXPLANATION MOVED, rather than being dropped: the Game store
-    // panel's own description says it, above the table, before anything is
-    // clicked. The button's tooltip says it. Those are read beforehand, which
-    // is when an explanation about a dialog is any use anyway.
-    //
-    // THE GENERAL RULE, because this cost a working feature once: NOTHING MAY
-    // COME BETWEEN THE CLICK AND THE PICKER. Not a confirmation, not an await,
-    // not a fetch. Whatever wants to be said around it has to be said in the
-    // page before the click, or after the folder has been chosen.
     button.disabled = true;
     const original = button.innerHTML;
-    button.textContent = 'Choosing…';
+    button.textContent = 'Downloading…';
 
     try {
         await downloadVersion({
@@ -481,8 +667,7 @@ async function downloadAsset(assetId, versionId, name, button) {
             versionId,
             assetName: name,
             fetchJson,
-            onReport: reportToPage,
-            confirmReplacements
+            onReport: reportToPage
         });
 
         // The history has a new entry, so the page reloads what it knows.

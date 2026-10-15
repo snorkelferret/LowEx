@@ -153,10 +153,28 @@ function saveBlob(blob, filename) {
  * @param {string} opts.assetName
  * @param {function} opts.fetchJson   async (url, options) => parsed JSON, or the
  *                                    raw Response when asked
- * @param {function} opts.onReport    what was found, before anything is fetched
- * @param {function} opts.confirmReplacements
  *
- * @returns {{ written, kept, replaced, failed }}
+ * @param {function} opts.onReport    EVERY STAGE, AS IT HAPPENS, and the two
+ *                                    places the page decides something. Called
+ *                                    with:
+ *
+ *      {phase:'choose'}                       show what is about to happen, and
+ *                                             a button that starts it. AWAITED —
+ *                                             resolves when the developer
+ *                                             presses it.
+ *      {phase:'working', what}                a step with nothing to count
+ *      {phase:'hashing', done, total}         the slow part, counted
+ *      {phase:'planned', plan, assetName}     the list of what would be fetched.
+ *                                             AWAITED — resolves to
+ *                                             {proceed, includeReplacements}
+ *      {phase:'fetching', count, bytes}       the request is going out
+ *      {phase:'done'|'cancelled', ...}        how it ended
+ *
+ *                                    AWAITING IT IS THE POINT: the page can hold
+ *                                    the download until a human has looked at
+ *                                    what it is going to do.
+ *
+ * @returns {{ written, kept, replaced, failed, cancelled? }}
  */
 export async function downloadVersion({
     assetId,
@@ -164,8 +182,7 @@ export async function downloadVersion({
     assetName,
     fetchJson,
     apiBase = '/api/game',
-    onReport = () => {},
-    confirmReplacements = () => false
+    onReport = async () => {}
 }) {
     if (!canNegotiate()) {
         throw new Error(
@@ -174,14 +191,39 @@ export async function downloadVersion({
         );
     }
 
-    // FIRST, BECAUSE IT IS THE DEVELOPER'S CHOICE AND NOTHING IS FETCHED BEFORE
-    // IT. The folder they pick is the one these files belong in.
+    // ============================================================
+    // FIRST: SAY WHAT IS ABOUT TO HAPPEN, AND LET THEM START IT
+    // ============================================================
+    //
+    // THE BROWSER'S FOLDER CHOOSER IS LABELLED "UPLOAD", and no page can change
+    // that. The natural place to explain it is a confirmation right here — AND
+    // THAT CANNOT BE DONE. A file chooser may only be shown while the page
+    // still holds the activation from the click that started it, and a modal
+    // dialog in between SPENDS IT: the chooser then refuses to open, the
+    // input's promise never settles, and the whole thing waits forever for a
+    // choice nobody was ever shown.
+    //
+    // SO THE PAGE SAYS IT AS ORDINARY CONTENT, and the chooser is opened by a
+    // SECOND, FRESH CLICK on a button in that content. The explanation is read
+    // before the dialog appears, and the activation is not in question because
+    // the click that opens the chooser is the last thing that happened. The
+    // callback returns a promise that settles when they press it.
+    //
+    // THE RULE THIS ENCODES: nothing may come between a click and the chooser
+    // it opens. Not a dialog, not an await, not a fetch. Say things in the page
+    // before the click, or after the folder has been chosen.
+    await onReport({ phase: 'choose', assetName });
+
+    // THE DEVELOPER'S CHOICE, AND NOTHING IS FETCHED BEFORE IT. The folder they
+    // pick is the one these files belong in.
     const picked = await pickFolder();
 
     if (picked.length === 0) {
-        onReport({ phase: 'cancelled' });
+        await onReport({ phase: 'cancelled' });
         return { written: 0, kept: 0, replaced: 0, failed: 0, cancelled: true };
     }
+
+    await onReport({ phase: 'working', what: 'the version, from the server' });
 
     const manifest = await fetchJson(`${apiBase}/${assetId}/versions/${versionId}/manifest`);
     const files = manifest.files || [];
@@ -213,28 +255,65 @@ export async function downloadVersion({
     // differ, and reading it would be work for an answer we have.
     const wantedSize = new Map(wanted.map(f => [f.path, f.size]));
 
-    for (const [path, entry] of local) {
-        if (wantedSize.get(path) === entry.size) {
-            entry.sha256 = await hashOf(entry.file);
+    const candidates = [...local.entries()].filter(([path, entry]) =>
+        wantedSize.get(path) === entry.size
+    );
+
+    // COUNTED OFF, BECAUSE THIS IS THE SLOW PART. Hashing a real project takes
+    // seconds to minutes, and a page that says nothing for that long looks
+    // broken — which is the failure this whole flow was rebuilt to stop.
+    let hashed = 0;
+
+    await onReport({ phase: 'hashing', done: 0, total: candidates.length });
+
+    // REPORTED OFTEN ENOUGH TO MOVE, RARELY ENOUGH NOT TO THRASH THE PAGE.
+    const step = Math.max(1, Math.floor(candidates.length / 50));
+
+    for (const [, entry] of candidates) {
+        entry.sha256 = await hashOf(entry.file);
+        hashed += 1;
+
+        if (hashed % step === 0 || hashed === candidates.length) {
+            await onReport({ phase: 'hashing', done: hashed, total: candidates.length });
         }
     }
 
     const plan = planDownload(wanted, local);
 
-    onReport({ phase: 'planned', plan });
+    // ============================================================
+    // THE LIST, AND THE DECISION — WHICH IS THE DEVELOPER'S
+    // ============================================================
+    //
+    // WHAT IS ABOUT TO CROSS THE WIRE, EVERY FILE NAMED, AND THE CHANCE TO STOP
+    // IT. Nothing is fetched until they say so, and the files that would
+    // REPLACE something are listed apart from the ones that are simply missing,
+    // because replacing somebody's work is the one destructive thing here — the
+    // worse for being delivered in a zip they unzip later, over the top of it.
+    const decision = await onReport({ phase: 'planned', plan, assetName }) || {};
 
-    // NAMED BEFORE ANYTHING IS REPLACED. Never silently — and worse in a zip,
-    // because the developer unzips it later and does not see what it lands on.
-    const replace = plan.replace.length > 0 && confirmReplacements(plan.replace)
-        ? plan.replace
-        : [];
+    if (!decision.proceed) {
+        await onReport({ phase: 'cancelled' });
+        return { written: 0, kept: plan.keep.length, replaced: 0, failed: 0, cancelled: true };
+    }
 
+    const replace = decision.includeReplacements ? plan.replace : [];
     const toFetch = [...plan.write, ...replace];
 
     if (toFetch.length === 0) {
-        onReport({ phase: 'done', plan, summary: { written: 0, kept: plan.keep.length, replaced: 0, failed: 0 }, assetName });
+        await onReport({
+            phase: 'done',
+            plan,
+            assetName,
+            summary: { written: 0, kept: plan.keep.length, replaced: 0, failed: 0 }
+        });
         return { written: 0, kept: plan.keep.length, replaced: 0, failed: 0 };
     }
+
+    await onReport({
+        phase: 'fetching',
+        count: toFetch.length,
+        bytes: toFetch.reduce((sum, f) => sum + (f.size || 0), 0)
+    });
 
     // THE ZIP, AND ONLY THE DIFFERENCE IN IT. The entries are relative to the
     // folder the developer picked, so "unzip here" is the whole instruction.
@@ -289,7 +368,7 @@ export async function downloadVersion({
         console.error('Could not record the download:', err);
     }
 
-    onReport({ phase: 'done', plan, summary, assetName });
+    await onReport({ phase: 'done', plan, summary, assetName });
 
     return summary;
 }
