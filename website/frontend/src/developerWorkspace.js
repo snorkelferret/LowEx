@@ -913,14 +913,42 @@ async function uploadAsset() {
     }
 
 
-    if (nameCheck.code === 'no_name' || nameCheck.verdict === 'block') {
+    // NO FOLDER, SO THE DEVELOPER CHOOSES — AND 'no_name' IS NOT A REFUSAL.
+    //
+    // 'no_name' MEANS "THERE IS NO FOLDER TO TAKE A NAME FROM, SO ASK". It is
+    // the picker's case, not an error: the picker rendered above is where the
+    // name comes from instead.
+    //
+    // AND THE CHECK RESULT IS STALE BY DESIGN. It was asked about the FILES and
+    // it answered about the files; typing a name into the picker does not re-run
+    // it, so the code stays 'no_name' however good the name is. WHAT IS GUARDED
+    // HERE IS THEREFORE THE CHOICE, NOT THE CHECK.
+    //
+    // THIS USED TO REFUSE WHENEVER THE CODE WAS 'no_name', which refused the one
+    // case the picker exists for — A LOOSE FILE WITH NO FOLDER — and answered it
+    // with the SERVER's message telling the developer to select a folder they do
+    // not have. An image does not have to be in a folder; that was designed,
+    // built, and then made unreachable here.
+    if (nameCheck.code === 'no_name') {
+
+        if (!assetChoice) {
+
+            showUploadStatus(
+                'Choose an existing asset, or type a new name, before uploading.',
+                'danger'
+            );
+
+            $('pickAssetSelect')?.focus();
+
+            return;
+        }
+
+    } else if (nameCheck.verdict === 'block') {
 
         showUploadStatus(
             nameCheck.reason || 'That name cannot be used.',
             'danger'
         );
-
-        $('pickAssetSelect')?.focus();
 
         return;
     }
