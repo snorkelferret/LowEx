@@ -163,8 +163,10 @@ function row(asset) {
         download.dataset.download = String(asset.id);
         download.dataset.name = asset.name;
         download.title =
-            'Choose the folder this belongs in, and fetch only what you do not ' +
-            'already have — the difference is worked out by hash';
+            'Choose the folder this belongs in. It is read here, in your ' +
+            'browser, and the only thing sent to the server is the list of ' +
+            'hashes you are missing — so only those files come back. No file ' +
+            'contents leave your machine.';
         // THE ELLIPSIS IS THE CONVENTION FOR "THIS OPENS A DIALOG", and this one
         // does — a confirmation, then the browser's folder chooser. Without it
         // the first dialog is a surprise twice over, since the second says
@@ -369,7 +371,17 @@ function reportToPage({ phase, plan, summary, assetName }) {
             return;
         }
 
-        showAlert('storeResult', `Checked: ${bits.join(', ')}.`, 'info');
+        // AND WHAT IS ABOUT TO BE SENT, AT THE MOMENT IT IS SENT. The browser's
+        // folder dialog said "Upload" before any of this, which leaves the
+        // obvious question — uploading WHAT? — and this is the answer, given
+        // while the request is going out rather than in a paragraph above the
+        // table that somebody has already scrolled past.
+        showAlert(
+            'storeResult',
+            `Checked: ${bits.join(', ')}. Sending their hashes — ` +
+            'no file contents leave this machine.',
+            'info'
+        );
     }
 
     if (phase === 'done') {

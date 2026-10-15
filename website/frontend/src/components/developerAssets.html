@@ -685,11 +685,19 @@
             workspace to work on; <strong>Download</strong> gives you the files,
             with a manifest saying what they are.
             <br>
-            Download asks which folder these belong in, and the button on your
-            browser's folder dialog says <em>Upload</em> — that is the browser's
-            word and not this page's. <strong>Nothing is uploaded.</strong> The
-            folder is read in your browser to see which files you already have,
-            and only the missing ones are fetched.
+            Download asks which folder these belong in, and the button on that
+            folder dialog says <em>Upload</em>. <strong>That word belongs to the
+            browser, not to this page</strong> — reading a folder is the one
+            thing a browser only knows how to do with its upload control, so
+            every site's folder picker says it, whatever the site is doing.
+            <br>
+            <strong>No file ever leaves your machine.</strong> Your folder is read
+            <em>here, in this browser</em>, to see which files you already have.
+            The only thing sent to the server is <strong>a list of hashes</strong>
+            — sixty-four characters for each file you are missing, and nothing
+            else. That list is what tells the server which files to put in the
+            zip. A version of a thousand files you already have sends a thousand
+            short lines of text and no content at all.
           </p>
         </div>
 
