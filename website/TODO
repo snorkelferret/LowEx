@@ -7652,3 +7652,94 @@ no upside. If something seems to need one of them, ask.
          item 53).
       5. AND THE THREE THINGS STILL UNAUDITED: the three PDF specs, which
          cannot be read without a text extractor.
+
+
+80) RECONCILE THE THREE PDF SPECS AGAINST THE TODO. Deferred 2026-10-15.
+
+    WHAT: docs/OpenWorld Asset Library.pdf, docs/OpenWorld Asset Repository &
+    Development System.pdf, docs/OpenWorld Asset System.pdf — the ORIGINAL specs,
+    dated Aug 10, now in the repository (they were excluded by a docs/*.pdf rule
+    until 2026-10-15, which is why nobody had read them).
+
+    HOW: AS A COMPARISON, NOT AS A SOURCE. THEY PREDATE THE GAME BEING NAMED,
+    THEY PREDATE PERFORCE, AND THEY PREDATE NEARLY EVERY DECISION IN THIS FILE.
+    So the useful output is not "what the specs say" but WHERE THEY DISAGREE WITH
+    THIS FILE — and this file wins by default, UNLESS THE SPEC'S REASONING IS
+    BETTER, which is exactly what happened with recommended_version_id (item 78):
+    the TODO had inherited a wrong argument and the spec said so.
+
+    AND THE RISK IS THE OTHER WAY: READING AN OLD DESIGN AND QUIETLY TREATING IT
+    AS CURRENT. That is the mistake that produced item 78 in the first place.
+
+    THEY ARE NOW READABLE — poppler_utils was added to shell.nix so `pdftotext`
+    exists. Note the attribute is `pkgs."poppler-utils"`, hyphenated and quoted.
+
+    --- THE TWO THINGS ALREADY SEEN, TO CHECK RATHER THAN ADOPT ---
+
+      1. "PUBLISHED" IS A STAGE THIS SYSTEM DOES NOT HAVE. The spec's flow is
+         CREATE -> PRIVATE -> PUBLISHED -> SUBMIT FOR GAME -> TECHNICAL TEST ->
+         DIRECTOR APPROVAL -> GAME APPROVED, with the rule stated in bold:
+         "Publishing an asset does not put it in the game."
+
+         A PUBLISHED version is FIXED, VISIBLE TO COLLEAGUES, downloadable,
+         discussable, and USABLE AS A STARTING POINT — and explicitly NOT
+         approved. "If they want to change it, they create their own version."
+
+         THIS SYSTEM JUMPS FROM THE PRIVATE WORKSPACE STRAIGHT TO SUBMIT FOR
+         APPROVAL. Whether the middle step was decided against, or never
+         considered, is NOT KNOWN. It is a genuine question: publishing for
+         feedback without implying approval is a different thing from submitting
+         for the game, and the spec says "there is no requirement to submit every
+         published asset for game approval".
+
+      2. THE NAME COLLIDES. The spec's "Asset Library" holds EVERYTHING —
+         "from a photograph used as reference to a finished Unreal asset". THIS
+         FILE'S LIBRARY (item 57) IS SOURCE MATERIAL ONLY, and item 58 says an
+         image is never a game asset. TWO DIFFERENT THINGS CALLED THE LIBRARY,
+         and the spec's is the broader one. Worth knowing before anybody reads
+         the PDF and "fixes" the library to match it.
+
+    --- AND ONE THING THE SPEC SAYS THAT THIS FILE ALREADY AGREES WITH ---
+
+      * "Developers continue to do their actual work on their own computers. The
+        Asset Library is where useful versions are uploaded when they need to be
+        ... The system does not require every change to be uploaded."
+        That is the round trip's premise, stated in Aug, and it holds.
+
+      * "Your private versions are visible to: You - Admin - Superuser."
+        Superuser is gone (item 51); admin is the equivalent now. Stale in the
+        detail, right in the shape.
+
+
+80b) AND THE STORE IS INVISIBLE, NOW CONFIRMED THE HARD WAY. 2026-10-15.
+
+    THIS ITEM ALREADY EXISTED — item 25 is "browse the game store, to reuse
+    approved assets", and the developer page even carries the stub tab for it
+    ("Game store", data-todo="25"). Recorded here because it stopped being a
+    design question and became an experience:
+
+        "The version is now in the game asset store. But there should be a
+         mechanism to view the assets."
+
+    THE FIRST ASSET EVER APPROVED INTO THE STORE ARRIVED SOMEWHERE NOBODY COULD
+    LOOK AT IT. The approval worked, the files are there, the provenance is
+    right — and the only way to know any of that is to read the database. The
+    developer's own page shows their WORKSPACE and not the store, and no page
+    anywhere shows the store's contents to anybody.
+
+    SO THE CONSUMPTION SIDE IS THE WHOLE OF WHAT REMAINS OF THE ROUND TRIP. The
+    producer side now runs end to end: upload, check, submit, approve, stored,
+    provenance recorded, one copy of every byte. Nothing consumes it.
+
+    --- AND ONE OBSERVATION FROM THE SAME RUN, NOT A COMPLAINT ---
+
+    THE ASSET THAT WENT THROUGH WAS A FOLDER OF LOOSE IMAGES. Item 58 says an
+    image is not a game asset and belongs in the library; item 57 says the same.
+    Nothing in the pipeline ENFORCES that — an image uploaded as a workspace asset
+    is checked, submitted, approved and stored like anything else.
+
+    WHICH MAY BE CORRECT: a texture IS a game asset, and the store's job is not
+    to police what a developer calls a unit of game content. But the two rules
+    (item 58's "images are not assets" and the pipeline's silence on the subject)
+    have never been put next to each other, and this is the first time the system
+    has had an actual image in it to disagree about.
