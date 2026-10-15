@@ -196,8 +196,17 @@ function buildVersionArchive(files, { assetName, versionNumber } = {}) {
     }
 
     const manifest = {
-        asset: assetName ?? null,
-        version: versionNumber ?? null,
+        // NAMED IN FULL, BECAUSE `asset` AND `version` ARE AMBIGUOUS AND COLLIDED.
+        // An API response wrapping this manifest also has an `asset` and a
+        // `version` — objects, with ids and names in them — and spreading the
+        // manifest over them silently replaced both with a string and a number,
+        // so `manifest.asset.name` was undefined and nothing said why.
+        //
+        // `asset_name` and `version_number` cannot mean two things. AND THE
+        // FORMAT IS BETTER FOR IT: "asset": "bigTree" never said whether it was
+        // a name or a thing.
+        asset_name: assetName ?? null,
+        version_number: versionNumber ?? null,
         generated_at: new Date().toISOString(),
         // WHAT THE RECEIVER SHOULD END UP WITH. The paths are relative to the
         // project root the developer unpacks into, which is what §5B means by

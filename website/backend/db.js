@@ -1455,6 +1455,20 @@ const initDb = () => {
     );
   `);
 
+  // THE AUDIT LOG IS READ BY A FEATURE, NOT ONLY BY AN AUDITOR.
+  //
+  // A developer's History shows what they have DOWNLOADED (TODO 33), and that
+  // record is an audit entry — a download is an event, and the log is where
+  // events live. So this stops being a write-only table and wants an index for
+  // the read: one user's entries of one action, newest first.
+  //
+  // (actor_id, action) in that order, because the query always fixes both.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS
+      idx_audit_logs_actor_action
+      ON audit_logs(actor_id, action);
+  `);
+
 
   /*
    * ----------------------------------------------------------

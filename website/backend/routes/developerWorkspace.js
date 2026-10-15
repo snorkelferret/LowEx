@@ -331,6 +331,49 @@ router.get(
 );
 
 
+// WHAT THIS DEVELOPER HAS DOWNLOADED, newest first.
+//
+// AN ASSERTION RATHER THAN AN OBSERVATION — the client says what it wrote,
+// because the server cannot see a developer's disk. So it is the same class as
+// the changelist an importer records: a fact about something that happened
+// elsewhere, typed by the person it happened to.
+//
+// IT READS THE AUDIT LOG, which until now was write-only from the application's
+// point of view. A download IS an event, and the log is the record of events,
+// so there is no second table to keep in step.
+function readDownloads(developerId) {
+    const rows = db.prepare(`
+        SELECT id, target, details, created_at
+        FROM audit_logs
+        WHERE actor_id = ?
+          AND action = 'store.download'
+        ORDER BY id DESC
+        LIMIT 50
+    `).all(developerId);
+
+    return rows.map(row => {
+        let details = {};
+
+        try {
+            details = JSON.parse(row.details || '{}');
+        } catch {
+            // A malformed details column is not worth failing a page over.
+            details = {};
+        }
+
+        return {
+            id: row.id,
+            asset_name: row.target,
+            version_number: details.version_number ?? null,
+            files_written: details.files_written ?? 0,
+            files_unchanged: details.files_unchanged ?? 0,
+            files_failed: details.files_failed ?? 0,
+            target_folder: details.target_folder ?? null,
+            created_at: row.created_at
+        };
+    });
+}
+
 // ============================================================
 // GET /api/developer/workspace/assets/history
 // ============================================================
@@ -382,7 +425,8 @@ router.get(
             if (!workspace) {
                 return res.json({
                     totals: { assets: 0, versions: 0, in_game_store: 0 },
-                    assets: []
+                    assets: [],
+                    downloads: readDownloads(developerId)
                 });
             }
 
@@ -462,7 +506,16 @@ router.get(
             // `notes` object of UI wording; nothing read it, and copy that
             // lives in the API is copy nobody edits when the screen changes.
             // The words belong where they are shown.
-            return res.json({ totals, assets });
+            return res.json({
+                totals,
+                assets,
+                // WHAT THEY HAVE TAKEN, not only what they have made. A download
+                // is something a developer did and wants to look back at, and it
+                // leaves no row anywhere else — it copies nothing, so the store
+                // has no record of it and the workspace has none either. The
+                // audit log is where it lives.
+                downloads: readDownloads(developerId)
+            });
 
         } catch (err) {
             console.error('Failed to load asset history:', err);

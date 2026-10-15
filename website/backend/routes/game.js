@@ -135,6 +135,20 @@ const filesOf = db.prepare(`
     ORDER BY f.relative_path, f.filename
 `);
 
+// ONE FILE, BY HASH, WITHIN A VERSION — the access check and the lookup in one.
+const fileInVersion = db.prepare(`
+    SELECT
+        f.filename,
+        f.relative_path,
+        sf.sha256,
+        sf.file_size,
+        sf.storage_key
+    FROM asset_version_files f
+    JOIN stored_files sf ON sf.id = f.stored_file_id
+    WHERE f.asset_version_id = ?
+      AND sf.sha256 = ?
+`);
+
 const workspaceOf = db.prepare(`
     SELECT id FROM developer_workspaces WHERE developer_id = ?
 `);
@@ -386,14 +400,6 @@ router.get(
                 `attachment; filename="${safeName}_v${version.version_number}.zip"`
             );
 
-            // The manifest is also offered on its own, so a script can ask what
-            // is in an archive without downloading it — which is the first half
-            // of the hash negotiation the spec defers to later.
-            if (req.query.manifest === 'only') {
-                res.type('application/json');
-                return res.json(manifest);
-            }
-
             stream.on('error', (err) => {
                 console.error('The archive stream failed:', err);
                 res.destroy(err);
@@ -411,6 +417,255 @@ router.get(
             }
 
             return res.destroy(err);
+        }
+    }
+);
+
+// ============================================================
+// GET /api/game/:assetId/versions/:versionId/manifest
+// ============================================================
+//
+// WHAT IS IN A VERSION, WITHOUT FETCHING ANY OF IT.
+//
+// THIS IS THE WHOLE NEGOTIATION PROTOCOL, and it is one endpoint. Every file
+// carries its SHA-256, so a client that has hashed its own folder can work out
+// for itself what it is missing, what differs, and what it already has —
+// CONTENT ADDRESSING MEANS THE MANIFEST IS SUFFICIENT. There is no `have`/`want`
+// endpoint because none is needed: the answer is arithmetic the client can do.
+//
+// WHICH ALSO MEANS THE SERVER LEARNS NOTHING ABOUT THE DEVELOPER'S DISK. It is
+// asked what a version contains, and nothing else.
+// ============================================================
+
+router.get(
+    '/:assetId/versions/:versionId/manifest',
+    authenticateToken,
+    requireRole('developer', 'admin'),
+
+    async (req, res) => {
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        try {
+            const asset = oneAsset.get(assetId);
+            const version = versionForDownload.get(versionId, assetId);
+
+            if (!asset || !version) {
+                return res.status(404).json({
+                    error: 'That version is not in the game store'
+                });
+            }
+
+            const rows = filesOf.all(versionId);
+
+            const files = rows.map(row => ({
+                absolutePath: blobPath(row.storage_key),
+                relative_path: row.relative_path,
+                filename: row.filename,
+                sha256: row.sha256,
+                file_size: row.file_size
+            }));
+
+            const corrupt = files.filter(f => !f.absolutePath);
+
+            if (corrupt.length > 0) {
+                console.error(
+                    `Manifest refused: ${corrupt.length} file(s) in version ${versionId} have a malformed storage_key`
+                );
+
+                return res.status(500).json({
+                    error: 'The store could not be read for this version. See check:store.'
+                });
+            }
+
+            // The same builder the archive uses, so the manifest a negotiator
+            // reads and the manifest inside the zip CANNOT disagree — they are
+            // one function.
+            const { manifest, refused } = buildVersionArchive(files, {
+                assetName: asset.name,
+                versionNumber: version.version_number
+            });
+
+            return res.json({
+                asset: { id: asset.id, name: asset.name },
+                version: {
+                    id: version.id,
+                    version_number: version.version_number
+                },
+                ...manifest,
+                refused
+            });
+
+        } catch (err) {
+            console.error('Could not build a manifest:', err);
+
+            return res.status(500).json({
+                error: 'Could not read that version'
+            });
+        }
+    }
+);
+
+// ============================================================
+// GET /api/game/:assetId/versions/:versionId/files/:sha256
+// ============================================================
+//
+// ONE FILE, BY ITS HASH. What a negotiating client fetches for the files it
+// does not have.
+//
+// ============================================================
+// AND WHY IT IS SCOPED TO A VERSION RATHER THAN BEING /blobs/:sha256
+// ============================================================
+//
+// stored_files HOLDS EVERYTHING — including content in somebody's PRIVATE
+// WORKSPACE. A route that served a blob by hash alone would hand any
+// authenticated developer any file in the system, given a hash they could
+// obtain from... anywhere it appeared. THE HASH IS THE CONTENT, NOT THE
+// PERMISSION.
+//
+// SO THE CALLER HAS TO NAME A VERSION THEY MAY SEE, AND THE FILE HAS TO BE IN
+// IT. That is the access check, and it is the only one needed: if you can read
+// the version you can have its files, and nothing else.
+// ============================================================
+
+router.get(
+    '/:assetId/versions/:versionId/files/:sha256',
+    authenticateToken,
+    requireRole('developer', 'admin'),
+
+    async (req, res) => {
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+        const sha256 = String(req.params.sha256 || '').toLowerCase();
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        // A SHA-256 and nothing else. Anything that is not one could not be in
+        // the store, so it is a bad request rather than a miss.
+        if (!/^[0-9a-f]{64}$/.test(sha256)) {
+            return res.status(400).json({ error: 'Not a SHA-256' });
+        }
+
+        try {
+            const version = versionForDownload.get(versionId, assetId);
+
+            if (!version) {
+                return res.status(404).json({
+                    error: 'That version is not in the game store'
+                });
+            }
+
+            const row = fileInVersion.get(versionId, sha256);
+
+            if (!row) {
+                return res.status(404).json({
+                    error: 'That file is not in this version'
+                });
+            }
+
+            const absolutePath = blobPath(row.storage_key);
+
+            if (!absolutePath || !fs.existsSync(absolutePath)) {
+                return res.status(404).json({
+                    error: 'The stored file is missing from the store'
+                });
+            }
+
+            // application/octet-stream, NEVER the stored mime_type — the same
+            // decision every other content route makes, and for the same reason:
+            // a browser that trusts a claimed type is how a file becomes a
+            // script.
+            res.type('application/octet-stream');
+            res.setHeader('Content-Length', String(row.file_size));
+
+            return fs.createReadStream(absolutePath).pipe(res);
+
+        } catch (err) {
+            console.error('Could not serve a store file:', err);
+
+            return res.status(500).json({
+                error: 'Could not serve that file'
+            });
+        }
+    }
+);
+
+// ============================================================
+// POST /api/game/:assetId/versions/:versionId/downloaded
+// ============================================================
+//
+// THE DEVELOPER SAYS WHAT THEY TOOK, so that it is in their history.
+//
+// AN ASSERTION, AND THEREFORE TYPED — the same rule as the changelist an
+// importer records (item 64). The server cannot see the developer's disk, so it
+// cannot know whether a download finished, and a manifest fetched is not a
+// download made. The client says what it wrote; this writes it down.
+//
+// AND IT DOES NOT INFLATE THE QUOTA OR THE STORE'S FIGURES. A download copies
+// nothing and creates no rows in stored_files — it is a note about an event,
+// not a thing.
+// ============================================================
+
+router.post(
+    '/:assetId/versions/:versionId/downloaded',
+    authenticateToken,
+    requireRole('developer', 'admin'),
+
+    async (req, res) => {
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+        const developerId = req.user?.id;
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        if (!developerId) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        const number = (value) => (Number.isInteger(value) && value >= 0 ? value : 0);
+
+        try {
+            const asset = oneAsset.get(assetId);
+            const version = versionForDownload.get(versionId, assetId);
+
+            if (!asset || !version) {
+                return res.status(404).json({
+                    error: 'That version is not in the game store'
+                });
+            }
+
+            audit.record(developerId, 'store.download', asset.name, {
+                repository_asset_id: assetId,
+                repository_version_id: versionId,
+                version_number: version.version_number,
+                files_written: number(req.body?.files_written),
+                files_unchanged: number(req.body?.files_unchanged),
+                files_failed: number(req.body?.files_failed),
+                // The folder the files went under, which is the developer's
+                // choice and not the store's — see item 81.
+                target_folder: req.body?.target_folder
+                    ? String(req.body.target_folder).slice(0, 200)
+                    : null
+            });
+
+            return res.status(201).json({ status: 'recorded' });
+
+        } catch (err) {
+            console.error('Could not record a download:', err);
+
+            return res.status(500).json({
+                error: 'Could not record that'
+            });
         }
     }
 );
