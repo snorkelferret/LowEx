@@ -8100,3 +8100,115 @@ no upside. If something seems to need one of them, ask.
     wrong the same way, and had to be fixed twice — and the second one was
     worse, because it reported success while losing the work. A shared helper
     cannot disagree with itself.
+
+85) THE ROUND TRIP — WHERE IT STANDS, AND WHAT IS LEFT. 2026-10-15.
+    To be picked up next session, at the owner's request.
+
+    THE ROUND TRIP, as the owner put it (item 79): upload → check → submit →
+    approve → in the store → find it → download → work on it → upload →
+    approve → REPLACES the old one in the game.
+
+    ============================================================
+    WHAT IS VERIFIED
+    ============================================================
+
+      UPLOAD INTO THE WORKSPACE       done by val, 2026-10-15.
+      TECHNICAL CHECK                 done in the same session.
+      SUBMIT FOR APPROVAL             done.
+      APPROVE AS prod                 done — approval 2, decided by user 14.
+                                      Wrote repository_asset_id 3 and
+                                      repository_version_id 2.
+      IN THE GAME STORE               asset 3 "TestUpload", version 1, 3 files.
+      SEARCH AND BROWSE               done.
+      DOWNLOAD TO THE LOCAL MACHINE   VERIFIED END TO END in a real browser,
+                                      both directions:
+                                        · nothing present → the list of 3 files,
+                                          a 211-BYTE body of three hashes, and
+                                          TestUpload_3files.zip on disk;
+                                        · everything present → "you already have
+                                          every file in this version. Nothing
+                                          was fetched." — no request, no zip.
+                                      Two store.download rows exist, so it has
+                                      also been done by hand.
+
+    ============================================================
+    WHAT IS NOT — AND IT IS THE PART THAT CLOSES THE LOOP
+    ============================================================
+
+      IMPORT                          ATTEMPTED, AND CORRECTLY REFUSED.
+                                      At 16:47:28 UTC val imported TestUpload and
+                                      was told "already there" — the asset it
+                                      would have created has the same name and
+                                      came from the same store asset. That is
+                                      the right answer, and it is NOT the round
+                                      trip closing: nothing came DOWN into a
+                                      workspace that did not have it.
+
+      THE LINK BACK TO THE STORE      NEVER EXERCISED. Every look at
+                                      repository_base_version_id in the database
+                                      is empty:
+
+                                          workspace_assets.id 20
+                                            repository_asset_id        3
+                                            repository_base_version_id  (empty)
+
+                                      THAT COLUMN IS THE WHOLE MECHANISM that
+                                      stops a second round creating a SECOND
+                                      asset with the same name — item 59's
+                                      failure, "two bigTrees and nobody can tell
+                                      them apart". The import route's own
+                                      comment says it: "prevented by those two
+                                      columns and nothing else." It has never
+                                      been written on this data, because the one
+                                      asset in the round trip was UPLOADED and
+                                      then approved, never imported.
+
+      A NEW VERSION REPLACING THE OLD  NOT EXERCISED, and it rests entirely on
+                                      the column above.
+
+    ============================================================
+    WHAT TO DO NEXT SESSION
+    ============================================================
+
+    1. IMPORT SOMETHING THE WORKSPACE DOES NOT HAVE. The import leg has only
+       ever been answered "already there", so the branch that CREATES a workspace
+       asset from a store version has never run. Check it writes
+       repository_asset_id AND repository_base_version_id — the second is the
+       one nothing has ever set.
+
+    2. UPLOAD A CHANGED VERSION ONTO IT, submit, approve as prod.
+
+    3. ASSERT THE ROUND TRIP CLOSED. The store should still hold ONE asset with
+       that name, now with TWO versions, the second the newer one. If there are
+       two assets with the same name, the base-version link did not do its job —
+       and that is item 59 exactly.
+
+    4. CHECK THE HISTORY says what was done, since it is the developer's only
+       record of the trip.
+
+    ============================================================
+    AND HOW THE BROWSER HALF WAS TESTED, WHICH IS WORTH KEEPING
+    ============================================================
+
+    THE DOWNLOAD WAS DRIVEN IN A REAL BROWSER over the DevTools protocol: sign
+    in through the actual form — BOTH steps, because every account comes back
+    requires2FA and the page says to use 000000 when no authenticator is set
+    up — open the Game store, click with a real user gesture, and then read the
+    DOM, the console, the requests and the downloads.
+
+    IT FOUND A BUG READING COULD NOT. A window.confirm() before the folder
+    chooser spends the user activation the chooser needs, so the download died
+    silently: no dialog, no error, no message. See the note at the top of
+    frontend/src/developerStore.js.
+
+    AND IT CANNOT DO EVERYTHING. A headless browser cannot be made to pick a
+    folder — CDP will not populate a `<input webkitdirectory>` and Chrome treats
+    the attempt as a dismissal — so the folder's contents were supplied at that
+    one point, with the real bytes and the real change event. Everything either
+    side of it was the application's own code.
+
+    THE HARNESS LIVES IN /tmp AND WILL BE GONE. If the browser half is tested
+    again — and it should be, for the upload and approval legs too — it wants to
+    live in the repository rather than in /tmp. NOT DONE, DELIBERATELY: where
+    and how this project tests the browser is a decision nobody has made, and
+    adding a runner is that decision, not a tidy-up.
