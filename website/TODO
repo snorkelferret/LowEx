@@ -7904,3 +7904,141 @@ no upside. If something seems to need one of them, ask.
     THE TWO FIXES ARE DELIBERATELY THE SAME SHAPE, in two files, because the two
     routes asked the same question and got it wrong the same way. If a third
     route ever looks up a workspace asset by name, it wants the same answer.
+
+83) CAN 'prod' READ THE GAME STORE AND THE LIBRARY? PROBABLY YES, FOR THE READ
+    SIDE ONLY. DECIDE LATER.
+    Raised 2026-10-15, walking the download flow.
+
+    WHAT WAS SEEN. A session authenticated as prod, asking the game store for a
+    version's archive:
+
+        403  {"error":"Unauthorized: insufficient permissions."}
+
+    WHICH IS requireRole DOING EXACTLY WHAT IT SAYS. Every route in
+    backend/routes/game.js and every route in backend/routes/library.js is gated
+    identically —
+
+        requireRole('developer', 'admin')
+
+    — and prod is not in that list. THE REFUSAL IS CORRECT AS WRITTEN. This item
+    is about whether the list is right, not about a fault in the gate.
+
+    ============================================================
+    THE LADDER IS NOT THE REASON, AND THAT IS THE PART THAT MISLEADS
+    ============================================================
+
+    prod RANKS ABOVE DEVELOPER. roles.js has user 0, developer 1, prod 2,
+    admin 3. So "prod cannot do what a developer can" reads like a bug the first
+    time it is hit.
+
+    IT IS NOT. requireRole checks MEMBERSHIP of the list it was handed, never
+    rank — a route that says developer and admin means those two strings and
+    nothing else. roles.js says why that is deliberate:
+
+        'prod' IS NOT A SENIORITY AND INHERITS NOTHING. Its rank is here for the
+        few questions that genuinely are about order — who sorts above whom in a
+        list — and NOT as a way to grant it powers. It has no workspace, no
+        admin powers, and cannot deactivate or invite anyone. Everything it may
+        do comes from the capability map in backend/lib/capabilities.js.
+
+    SO THIS IS A CAPABILITY TO GRANT ON PURPOSE, which is why it was recorded
+    rather than quietly widened when the 403 turned up. A rank that silently
+    confers powers is the thing that comment exists to prevent.
+
+    --- AND THE MAP IT NAMES DOES NOT EXIST ---
+
+    THERE IS NO backend/lib/capabilities.js. backend/lib holds fourteen files
+    and that is not one of them. prod's capabilities, as the code actually
+    stands, are the three explicit gates and nothing else:
+
+        GET  /api/developer/creative-approvals                  requireRole('prod')
+        POST /api/developer/creative-approvals/:id/approve      requireRole('prod')
+        POST /api/developer/creative-approvals/:id/reject       requireRole('prod')
+        GET  /prod                                              requireRole('prod')
+
+    So either the comment should name what is really there, or the file it
+    promises should be written. This is the small end of item 78 — a reference
+    to a mechanism that is not in the repository — and it is recorded here
+    because it is the file that would answer THIS item's question.
+
+    ============================================================
+    WHAT prod DOES TODAY, WHICH IS THE ARGUMENT FOR YES
+    ============================================================
+
+    prod IS THE PRODUCTION REVIEWER. A creative approval IS a developer's
+    workspace version awaiting a decision — creative_approvals carries
+    workspace_asset_id and workspace_version_id — and approving it is the act
+    that PUTS THAT VERSION INTO THE GAME STORE, because the decision writes
+    repository_asset_id and repository_version_id. Item 51 rebuilt the queue
+    around exactly that.
+
+    SO prod DECIDES WHAT ENTERS THE STORE, AND CANNOT SEE WHAT IS IN IT.
+
+    That is the whole case, and it is a strong one: reviewing is reading, and
+    the person deciding on a submission is the person most likely to want to
+    compare it against what is already published.
+
+    ============================================================
+    WHY IT IS STILL A DECISION AND NOT A ONE-LINE FIX
+    ============================================================
+
+    GRANTING IT IS NOT AN EDIT TO ONE LIST. The two spaces ask the same question
+    and would have to answer it together:
+
+        routes/game.js      8 routes, all requireRole('developer','admin')
+        routes/library.js   6 routes, all requireRole('developer','admin')
+
+    AND THEY ARE NOT ALL THE SAME KIND OF ROUTE. THE READ SIDE IS WHAT A
+    REVIEWER NEEDS:
+
+        GET  /                                     list and search
+        GET  /:assetId                             one asset
+        GET  /:assetId/versions/:versionId/manifest
+        GET  /:assetId/versions/:versionId/files/:sha256
+        GET  /:assetId/versions/:versionId/download            the whole version
+        POST /:assetId/versions/:versionId/archive             the difference
+        POST /:assetId/versions/:versionId/downloaded          the record of a read
+
+    AND THE WRITE SIDE IS NOT:
+
+        POST /:assetId/versions/:versionId/import   writes repository_asset_id
+                                                    onto a WORKSPACE asset — and
+                                                    prod HAS NO WORKSPACE, so
+                                                    this is meaningless for prod
+                                                    rather than merely unwanted
+        the library's upload, update and remove     authoring, which prod does not do
+
+    --- AND THE METHOD IS NOT THE LINE, WHICH IS THE TRAP ---
+
+    THE OBVIOUS LAZY RULE IS "GRANT THE GETs", AND IT IS WRONG IN BOTH
+    DIRECTIONS:
+
+      * POST .../archive IS A READ. It is a POST only because the list of
+        SHA-256s does not fit in a URL — the method is a transport decision and
+        not a permission statement. Granting the GETs and stopping would refuse
+        prod the one route the negotiation actually uses.
+      * POST .../downloaded IS PART OF READING, being the record that a read
+        happened.
+
+    SO THE ANSWER, WHEN IT IS MADE, WANTS TO BE A NAMED CAPABILITY — "may read
+    the store" — rather than 'prod' added by hand to two lists of route
+    handlers. Otherwise the next route somebody writes is gated by habit, and
+    the answer drifts without anybody deciding it.
+
+    ============================================================
+    AND IT SHOULD BE DECIDED ONCE, FOR BOTH SPACES
+    ============================================================
+
+    THE LIBRARY IS REFERENCE MATERIAL AND THE STORE IS THE GAME, and a reviewer
+    has a reason to read both. If only one is widened the difference becomes a
+    question somebody re-opens — the shape item 78 is about. Whatever is
+    decided, decide it for both, or say in so many words why they differ.
+
+    ============================================================
+    WHAT IS NOT IN QUESTION
+    ============================================================
+
+    THE DOWNLOAD ITSELF. None of this is about how a version is fetched: the
+    negotiation, the archive and the manifest are built and verified, and they
+    work for whatever role the route admits. This item is only about who that
+    is.
