@@ -123,3 +123,25 @@ website/logiNNotes.txt
 # that is read rather than built from. Scoped to docs/ rather than a blanket
 # *.pdf so a PDF that genuinely belongs in the tree is not silently excluded.
 docs/*.pdf
+
+
+# ==========================================
+# Scratch
+# ==========================================
+
+# A WORKING directory, not a fixture directory. What lives here is whatever
+# somebody is trying out right now — a folder of images to push through the
+# library, a project to see what the upload makes of it.
+#
+# NOTHING IN THE PROJECT READS IT. Every check script builds its own scratch
+# database and tests rules in memory; the tests that need a file make one rather
+# than reading one from disk. So there is no test run that this could break by
+# being absent.
+#
+# SO IT IS IGNORED, because `git add -A` picking up three test photographs is a
+# mistake nobody notices until they are in the history.
+#
+# AND IF FIXTURES ARE EVER WANTED — files whose whole point is NOT changing —
+# they belong somewhere tracked and named for what they are. `tmp` says
+# disposable, and a fixture is the opposite.
+tmp/
