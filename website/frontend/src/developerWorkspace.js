@@ -2221,15 +2221,24 @@ function renderHistoryVersion(asset, version) {
         row.appendChild(comment);
     }
 
-    // Where the finished work went. There is no download here yet — see TODO:
-    // the manifest endpoint exists but nothing client-side calls it, and a
-    // link that does nothing is worse than saying so.
+    // WHERE THE FINISHED WORK WENT — AND WHERE TO GET IT BACK.
+    //
+    // THIS LINE USED TO SAY "download is not built yet", AND THAT STOPPED BEING
+    // TRUE. The store got a download, and this went on telling developers that a
+    // working thing did not exist — which is the same failure as the deleted
+    // asset holding its name, in prose instead of in a query.
+    //
+    // AND IT POINTS AT THE GAME STORE RATHER THAN OFFERING A LINK HERE, because
+    // ONCE A VERSION IS APPROVED THE FILES BELONG TO THE GAME. The store's copy
+    // is the one the game owns; this workspace row is the developer's record of
+    // having made it. A download button here would suggest the workspace still
+    // owns something it does not.
     if (version.in_game_store) {
         const line = document.createElement('p');
         line.className = 'small text-info mb-0';
         line.textContent =
-            'This version is in the game store. The files belong to the game ' +
-            'now — download is not built yet.';
+            'This version is in the game store — the files belong to the game ' +
+            'now. Download the approved copy from the Game store tab.';
         row.appendChild(line);
     }
 

@@ -55,19 +55,21 @@
       </button>
     </li>
 
-    <!-- NOT BUILT. These carry no data-bs-toggle, deliberately: a stub must not
-         switch to an empty pane, because an empty pane looks like a broken
-         page. Clicking one says what it is and where the work is recorded. -->
-    <li class="nav-item" role="presentation">
-      <button
-        class="nav-link"
-        type="button"
-        data-not-built="developer.download"
-        data-todo="33"
-      >
-        <i class="bi bi-download me-1"></i>Download
-      </button>
-    </li>
+    <!-- THE "Download" TAB WAS HERE, AND IS GONE — 2026-10-15.
+         It was a stub saying "not built", and it became a lie: downloading works
+         from the Game store and from the Library, and a tab announcing that it
+         does not is worse than no tab at all. Somebody looking for a way to get
+         a file found a page telling them there was none.
+
+         AND IT SHOULD NOT COME BACK AS A TAB. DOWNLOAD IS AN ACTION ON A THING,
+         not a place: it belongs on a library tile, on a store row, and — when
+         the workspace half is built — on a version in the workspace. A page
+         listing everything downloadable would be a third copy of the library and
+         the store, which is the duplication this project keeps refusing.
+
+         The workspace download is still missing, and it is item 33's last piece
+         and item 59's second half. When it is built it goes ON the version, not
+         in a tab. -->
 
     <li class="nav-item" role="presentation">
       <button
