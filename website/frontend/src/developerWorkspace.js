@@ -1577,6 +1577,38 @@ function renderVersionState(version) {
 // apart.
 // ---------------------------------------------------------------------------
 
+// THE CALL ITSELF, WITH NO OPINION ABOUT BUTTONS.
+//
+// SPLIT OUT SO SUBMITTING CAN REUSE IT RATHER THAN REIMPLEMENT IT. A submission
+// runs the check first when it has to, and two copies of "POST the check and
+// read the status" is how two paths end up disagreeing about what a pass is.
+//
+// `reload` because the two callers want different things: the standalone check
+// reloads to put the results on screen, and a submission does not, because it is
+// about to reload anyway and a reload in between would throw away the button it
+// is holding.
+async function performTechnicalCheck(asset, version, { reload = true } = {}) {
+    const response = await apiFetch(
+        `${API_URL}/assets/${asset.id}/versions/${version.id}/technical-check`,
+        { method: 'POST', credentials: 'include' }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(data.error || 'The technical check could not be run.');
+    }
+
+    // Reloads the workspace, which is what puts the new badges and the new
+    // results on screen — the same rendering path as any other refresh, rather
+    // than a second one that could disagree with it.
+    if (reload) await loadDeveloperWorkspace();
+
+    // 'passed' or 'failed'. THE SERVER DECIDES, and nothing here re-reads the
+    // results to work it out a second way.
+    return data.status;
+}
+
 async function runTechnicalCheck(asset, version, button, block) {
     const originalLabel = button.textContent;
 
@@ -1588,21 +1620,7 @@ async function runTechnicalCheck(asset, version, button, block) {
     block?.querySelector('.check-error')?.remove();
 
     try {
-        const response = await apiFetch(
-            `${API_URL}/assets/${asset.id}/versions/${version.id}/technical-check`,
-            { method: 'POST', credentials: 'include' }
-        );
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            throw new Error(data.error || 'The technical check could not be run.');
-        }
-
-        // Reloads the workspace, which is what puts the new badges and the new
-        // results on screen — the same rendering path as any other refresh,
-        // rather than a second one that could disagree with it.
-        await loadDeveloperWorkspace();
+        await performTechnicalCheck(asset, version);
 
     } catch (err) {
         console.error('Technical check failed:', err);
@@ -1614,6 +1632,92 @@ async function runTechnicalCheck(asset, version, button, block) {
             const message = document.createElement('div');
             message.className = 'check-error alert alert-danger py-2 small mt-2 mb-0';
             message.textContent = `Could not run the check: ${err.message}`;
+            block.appendChild(message);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Submitting a version for creative approval
+//
+// THE CHECK IS INSIDE IT, AND ONLY WHEN IT IS NEEDED.
+//
+// The server refuses a submission without a passing check on that exact version.
+// A button that only submitted would therefore be a button that sometimes does
+// nothing but complain about a step the developer would have taken next anyway —
+// so the missing check is run on the way, and A CHECK THAT FAILS NEVER REACHES
+// THE SUBMISSION AT ALL. The results are what the developer needs at that point,
+// so the reload brings them on screen and nothing is sent.
+//
+// AND THE CHECK REMAINS ITS OWN BUTTON. Running it on its own, reading the
+// results, fixing something and running it again, and only then submitting, is
+// the normal way to use it — this shares the code rather than replacing it.
+// ---------------------------------------------------------------------------
+
+async function submitForApproval(asset, version, button, block) {
+    const originalLabel = button.textContent;
+
+    const ok = window.confirm(
+        `Submit "${asset.name}" version ${version.version_number} for creative ` +
+        'approval?\n\n' +
+        'The version is LOCKED while it is reviewed, so nothing about it can ' +
+        'change underneath the reviewer — including re-running the check. ' +
+        'Ownership passes to the game if it is approved.'
+    );
+
+    if (!ok) return;
+
+    button.disabled = true;
+
+    block?.querySelector('.submit-error')?.remove();
+
+    try {
+        if (version.latest_check?.status !== 'passed') {
+            button.textContent = 'Checking…';
+
+            const status = await performTechnicalCheck(asset, version, { reload: false });
+
+            if (status !== 'passed') {
+                // Reload so the failures are on screen — the normal rendering
+                // path, not a message written here. Nothing is submitted.
+                await loadDeveloperWorkspace();
+                return;
+            }
+        }
+
+        button.textContent = 'Submitting…';
+
+        const response = await apiFetch(
+            `${API_URL}/assets/${asset.id}/versions/${version.id}/creative-approval`,
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                // No comment. The reviewer's queue shows the VERSION NOTE
+                // already — the developer's own words about what changed — and
+                // asking again at the last moment is a field that gets skipped.
+                body: JSON.stringify({ request_comment: '' })
+            }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'The submission could not be sent.');
+        }
+
+        await loadDeveloperWorkspace();
+
+    } catch (err) {
+        console.error('Could not submit for approval:', err);
+
+        button.disabled = false;
+        button.textContent = originalLabel;
+
+        if (block) {
+            const message = document.createElement('div');
+            message.className = 'submit-error alert alert-danger py-2 small mt-2 mb-0';
+            message.textContent = `Could not submit: ${err.message}`;
             block.appendChild(message);
         }
     }
@@ -1857,6 +1961,40 @@ function renderWorkspaceAssets(assets) {
                 }
 
                 versionMeta.appendChild(checkButton);
+
+                // SUBMIT FOR APPROVAL, beside the check it may run.
+                //
+                // THREE STATES, AND EACH SAYS WHICH IT IS. A control that is
+                // simply absent leaves a developer hunting for it — which is
+                // exactly what happened before this existed.
+                const submitButton = document.createElement('button');
+                submitButton.type = 'button';
+                submitButton.className = 'btn btn-sm btn-outline-success py-0 px-2 ms-1';
+                submitButton.textContent = 'Submit for approval';
+
+                if (version.repository_version_id) {
+                    // Already approved, so it already belongs to the game. There
+                    // is nothing to submit.
+                    submitButton.textContent = 'In the game store';
+                    submitButton.disabled = true;
+                    submitButton.title =
+                        'This version has been approved and already belongs to the game.';
+
+                } else if (versionUnderReview) {
+                    submitButton.disabled = true;
+                    submitButton.title =
+                        'Already submitted, and waiting on a decision.';
+
+                } else {
+                    submitButton.title =
+                        'Run the technical check if it has not passed, then send ' +
+                        'this version for review';
+                    submitButton.addEventListener('click', () => {
+                        submitForApproval(asset, version, submitButton, versionBlock);
+                    });
+                }
+
+                versionMeta.appendChild(submitButton);
 
                 const deleteVersionButton = document.createElement('button');
                 deleteVersionButton.type = 'button';

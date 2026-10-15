@@ -1045,10 +1045,27 @@ They MUST be dealt with before any real user data exists.
    read — the manifest endpoint and the per-file content endpoint. An approver
    is no longer blind.
 
-   What remains:
-     - no UI to request an approval, approve or reject. The endpoints exist and
-       are discoverable, but all three actions still require calling the API by
-       hand.
+   What remained, and NO LONGER REMAINS — corrected 2026-10-15:
+
+     - "no UI to request an approval, approve or reject. The endpoints exist and
+        are discoverable, but all three actions still require calling the API by
+        hand."
+
+     THAT WAS WRONG ON TWO OF THE THREE WHEN IT WAS WRITTEN. Approving and
+     rejecting HAVE had a UI since the prod page was built — prodPanel.js posts
+     to /creative-approvals/:id/approve and /reject. This line went on saying all
+     three required the API by hand while two of them had buttons.
+
+     AND THE THIRD IS NOW BUILT TOO: a Submit for approval button on the version
+     row, with the technical check inside it — run on the way if it has not
+     passed, and a FAILED check never reaching the submission at all. The check
+     remains its own button; the two share one implementation so they cannot come
+     to disagree about what a pass is.
+
+     SO THIS ITEM IS CLOSED. And it is worth keeping the correction rather than
+     deleting the line: A RECORD THAT SAYS "no UI for any of it" IS WHY THE
+     DEVELOPER WENT LOOKING FOR A BUTTON THAT DID NOT EXIST, and then could not
+     tell whether it was missing or hidden.
      - no client. The manifest is designed to be consumed by something that
        syncs a working copy by hash — a small CLI that reads the manifest and
        fetches only the files whose sha256 differs locally. Nothing does that
