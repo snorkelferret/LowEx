@@ -2433,6 +2433,73 @@ function renderHistoryAsset(asset) {
     return item;
 }
 
+// WHAT THEY HAVE TAKEN AS WELL AS WHAT THEY HAVE MADE.
+//
+// A download leaves no row anywhere — it copies nothing, so the store has no
+// record of it and the workspace has none either. Until this, "what have I done"
+// had an answer that stopped at the edge of the developer's own work.
+function renderDownloadHistory(downloads) {
+    const section = document.createElement('div');
+    section.className = 'mt-4';
+
+    const heading = document.createElement('h3');
+    heading.className = 'h6 mb-1';
+    heading.textContent = 'Taken from the game store';
+    section.appendChild(heading);
+
+    const note = document.createElement('p');
+    note.className = 'small text-secondary mb-2';
+    note.textContent =
+        'Approved work you have downloaded — not your own, and not in your ' +
+        'workspace. The record is here because nothing else keeps one.';
+    section.appendChild(note);
+
+    for (const item of downloads) {
+        const row = document.createElement('div');
+        row.className = 'd-flex flex-wrap justify-content-between gap-2 border-bottom py-2';
+
+        const what = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'fw-medium';
+        name.textContent = item.version_number
+            ? `${item.asset_name} v${item.version_number}`
+            : item.asset_name;
+        what.appendChild(name);
+
+        const counts = [];
+        if (item.files_written) counts.push(`${item.files_written} file${item.files_written === 1 ? '' : 's'} fetched`);
+        if (item.files_unchanged) counts.push(`${item.files_unchanged} already there`);
+        if (item.files_failed) counts.push(`${item.files_failed} failed`);
+
+        if (counts.length) {
+            const detail = document.createElement('div');
+            detail.className = 'small text-secondary';
+            detail.textContent = counts.join(' · ');
+            what.appendChild(detail);
+        }
+
+        row.appendChild(what);
+
+        const where = document.createElement('div');
+        where.className = 'small text-secondary text-end';
+
+        if (item.target_folder) {
+            const folder = document.createElement('div');
+            folder.textContent = `into ${item.target_folder}`;
+            where.appendChild(folder);
+        }
+
+        const when = document.createElement('div');
+        when.textContent = formatWorkspaceDate(item.created_at);
+        where.appendChild(when);
+
+        row.appendChild(where);
+        section.appendChild(row);
+    }
+
+    return section;
+}
+
 function renderAssetHistory(data) {
     const list = $('historyList');
     if (!list) return;
@@ -2440,19 +2507,29 @@ function renderAssetHistory(data) {
     renderHistoryTotals(data.totals);
 
     list.innerHTML = '';
+    list.className = '';
 
-    if (!data.assets || data.assets.length === 0) {
+    const assets = data.assets || [];
+    const downloads = data.downloads || [];
+
+    // NEITHER, rather than no assets — a developer who has only ever downloaded
+    // somebody else's work has a history, and being told they have not uploaded
+    // anything would be true and useless.
+    if (assets.length === 0 && downloads.length === 0) {
         list.className = 'text-secondary';
         list.textContent =
-            'You have not uploaded anything yet. Work you upload will be ' +
-            'recorded here, including versions no longer in your workspace.';
+            'Nothing yet. Work you upload will be recorded here, including ' +
+            'versions no longer in your workspace — and so will anything you ' +
+            'download from the game store.';
         return;
     }
 
-    list.className = '';
-
-    for (const asset of data.assets) {
+    for (const asset of assets) {
         list.appendChild(renderHistoryAsset(asset));
+    }
+
+    if (downloads.length > 0) {
+        list.appendChild(renderDownloadHistory(downloads));
     }
 }
 

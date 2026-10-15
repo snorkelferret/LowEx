@@ -29,6 +29,25 @@
 import { $ } from './utils.js';
 import { apiFetch } from './api.js';
 import { formatBytes } from '../../shared/formatBytes.mjs';
+// The negotiation: what is already on the developer's machine decides what is
+// fetched, and only the difference crosses the wire.
+import { downloadVersion, canNegotiate } from './storeDownload.js';
+
+// apiFetch adds the session cookie and signs out on 401. This adds the two
+// things every call here needs on top: the error shape the server uses, and a
+// way to ask for the raw Response instead of parsed JSON.
+async function fetchJson(url, { raw = false, ...options } = {}) {
+    const response = await apiFetch(url, { credentials: 'include', ...options });
+
+    if (raw) return response;
+
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'The server refused that request.');
+    }
+
+    return response.json();
+}
 
 const API = '/api/game';
 
@@ -107,20 +126,36 @@ function row(asset) {
     const actions = document.createElement('td');
     actions.className = 'text-end text-nowrap';
 
-    // A LINK, NOT A BUTTON WITH A FETCH. The browser already knows how to
-    // download a file, and letting it do so means the archive streams straight
-    // to disk rather than through memory in this page.
-    const download = document.createElement('a');
-    download.className = 'btn btn-sm btn-outline-secondary py-0 px-2 me-1';
-    download.href = `${API}/${asset.id}/versions/${asset.latest_version_number}/download`;
-    download.title =
+    // THE ZIP, ALWAYS. It works in every browser, it is what §5B specifies, and
+    // it is the fallback the negotiation degrades to.
+    const zip = document.createElement('a');
+    zip.className = 'btn btn-sm btn-outline-secondary py-0 px-1';
+    zip.href = `${API}/${asset.id}/versions/${asset.latest_version_number}/download`;
+    zip.title =
         'Download the latest version as a zip, with a manifest of every file';
-    download.innerHTML = '<i class="bi bi-download"></i> Download';
+    zip.innerHTML = '<i class="bi bi-file-zip"></i><span class="visually-hidden">Download as a zip</span>';
 
     // The link needs a version ID rather than a number, so it is corrected once
     // the asset's versions are known — see loadVersionIds().
-    download.dataset.asset = String(asset.id);
-    actions.appendChild(download);
+    zip.dataset.asset = String(asset.id);
+    actions.appendChild(zip);
+
+    // AND THE NEGOTIATION, WHERE THE BROWSER CAN DO IT. Only Chromium can read
+    // and write a folder the developer picks; Firefox and Safari have no
+    // equivalent, so the button is not offered rather than offered and broken.
+    if (canNegotiate()) {
+        const download = document.createElement('button');
+        download.type = 'button';
+        download.className = 'btn btn-sm btn-outline-primary py-0 px-2 me-1';
+        download.dataset.download = String(asset.id);
+        download.dataset.name = asset.name;
+        download.title =
+            'Choose a folder and fetch only what you do not already have — ' +
+            'the difference is worked out by hash, and nothing is downloaded twice';
+        download.innerHTML = '<i class="bi bi-folder-down me-1"></i>Download';
+
+        actions.insertBefore(download, zip);
+    }
 
     const importButton = document.createElement('button');
     importButton.type = 'button';
@@ -283,6 +318,125 @@ async function load() {
 }
 
 // ------------------------------------------------------------
+// Downloading — the negotiation
+// ------------------------------------------------------------
+
+// WHAT WAS FOUND, BEFORE ANYTHING IS FETCHED. The point of the negotiation is
+// that the developer sees the working-out rather than a progress bar: how much
+// of this they already have, and what is actually going to cross the wire.
+function reportToPage({ phase, plan, summary, assetName }) {
+    if (phase === 'planned') {
+        const bits = [];
+
+        if (plan.keep.length) {
+            bits.push(`${plan.keep.length} file${plan.keep.length === 1 ? '' : 's'} you already have`);
+        }
+
+        if (plan.write.length) {
+            bits.push(
+                `${plan.write.length} to fetch (${formatBytes(plan.writeBytes)})`
+            );
+        }
+
+        if (plan.replace.length) {
+            bits.push(`${plan.replace.length} that would be REPLACED`);
+        }
+
+        if (plan.write.length === 0 && plan.replace.length === 0) {
+            showAlert('storeResult', 'You already have every file in this version. Nothing to fetch.', 'success');
+            return;
+        }
+
+        showAlert('storeResult', `Checked: ${bits.join(', ')}.`, 'info');
+    }
+
+    if (phase === 'done') {
+        const bits = [`${summary.written} file${summary.written === 1 ? '' : 's'} written`];
+
+        if (summary.kept) bits.push(`${summary.kept} already there`);
+        if (summary.replaced) bits.push(`${summary.replaced} replaced`);
+        if (summary.failed) bits.push(`${summary.failed} FAILED — see the console`);
+
+        showAlert(
+            'storeResult',
+            `${assetName}: ${bits.join(', ')}. ` +
+            (summary.targetFolder ? `Written under "${summary.targetFolder}".` : ''),
+            summary.failed ? 'warning' : 'success'
+        );
+    }
+}
+
+// LISTED BY NAME, NEVER SILENTLY. These files exist and differ, so writing them
+// destroys something the developer has.
+function confirmReplacements(files) {
+    const shown = files.slice(0, 5).map(f => f.target).join('\n  ');
+
+    return window.confirm(
+        `${files.length} file(s) already exist with DIFFERENT contents:\n\n  ${shown}` +
+        (files.length > 5 ? `\n  …and ${files.length - 5} more` : '') +
+        '\n\nReplace them with the version from the store?'
+    );
+}
+
+// THE FOLDER THEY WERE UPLOADED IN, WHICH MAY BE RENAMED.
+//
+// Item 54 calls that folder transport and says it is never retained; the code
+// retains it (item 81), so the manifest's paths carry it and this is where a
+// developer says otherwise. Cancelling keeps the default rather than aborting —
+// the answer to "what shall I call this" is never "stop the download".
+function chooseRootFolder(root) {
+    if (!root) return null;
+
+    const answer = window.prompt(
+        `The files were uploaded in a folder called "${root}".\n\n` +
+        'What should it be called on your machine? The structure inside it is kept.',
+        root
+    );
+
+    if (answer === null) return root;
+
+    return answer.trim() || root;
+}
+
+async function downloadAsset(assetId, versionId, name, button) {
+    showAlert('storeAlert', '');
+    showAlert('storeResult', '');
+
+    button.disabled = true;
+    const original = button.innerHTML;
+    button.textContent = 'Choosing…';
+
+    try {
+        await downloadVersion({
+            assetId,
+            versionId,
+            assetName: name,
+            fetchJson,
+            onReport: reportToPage,
+            confirmReplacements,
+            chooseRootFolder
+        });
+
+        // The history has a new entry, so the page reloads what it knows.
+        await load();
+
+    } catch (err) {
+        // The folder picker being cancelled is not an error — it is somebody
+        // changing their mind, and a red box for it would be wrong.
+        if (err?.name === 'AbortError') {
+            showAlert('storeResult', 'Cancelled — nothing was fetched.', 'secondary');
+        } else {
+            console.error('Could not download:', err);
+            showAlert('storeAlert', err.message, 'danger');
+        }
+
+    } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+    }
+}
+
+// ------------------------------------------------------------
 // Importing
 // ------------------------------------------------------------
 
@@ -362,6 +516,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // One delegated listener, so a reload cannot leave listeners on rows that
     // no longer exist.
     list?.addEventListener('click', async (event) => {
+        const downloadButton = event.target.closest('button[data-download]');
+
+        if (downloadButton) {
+            const id = Number(downloadButton.dataset.download);
+            const link = list.querySelector(`a[data-asset="${id}"]`);
+            const version = Number(link?.dataset.version);
+
+            if (!Number.isInteger(version)) {
+                showAlert('storeAlert', 'Still working out which version to fetch. Try again in a moment.', 'warning');
+                return;
+            }
+
+            downloadAsset(id, version, downloadButton.dataset.name, downloadButton);
+            return;
+        }
+
         const button = event.target.closest('button[data-import]');
         if (!button) return;
 
