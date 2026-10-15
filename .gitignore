@@ -124,6 +124,29 @@ website/logiNNotes.txt
 # *.pdf so a PDF that genuinely belongs in the tree is not silently excluded.
 docs/*.pdf
 
+# EXCEPT THE THREE THAT ARE SPECIFICATIONS. Added 2026-10-15.
+#
+# The rule above is right for REFERENCE documents. It was wrong for these: they
+# are the ORIGINAL SPECIFICATIONS of the system being built, and docs/assettypes01
+# §5B shows how much they still hold that nothing has re-read — it specifies the
+# check-out down to the manifest format, in more detail than anything written
+# since it.
+#
+# SO THEY WERE KEPT OUT OF THE ONLY PLACE THAT OUTLIVES THIS MACHINE. A
+# specification that exists on one laptop cannot be read from a clone, cannot be
+# audited by anybody else, and is gone when the disk is.
+#
+# AND THEY COULD NOT BE AUDITED FROM HERE EITHER, WHICH IS HOW THIS WAS FOUND:
+# there is no text extractor on this machine and the streams are font and image
+# data, so a decompression yields noise. The only way to read them is to open
+# them. 808 KB between them.
+#
+# ORDER MATTERS — a negation has to come after the pattern it undoes, which is
+# why these sit here rather than in a section of their own.
+!docs/OpenWorld Asset Library.pdf
+!docs/OpenWorld Asset Repository & Development System.pdf
+!docs/OpenWorld Asset System.pdf
+
 
 # ==========================================
 # Scratch
