@@ -77,33 +77,19 @@ export function rootFolderOf(paths) {
     return firsts.size === 1 ? [...firsts][0] : null;
 }
 
-/**
- * The same path, under a different root folder.
- *
- * Returns the path unchanged when there is nothing to rename, or when the path
- * is not under the old root — so this cannot silently move a file that was never
- * in that folder.
- */
-export function withRoot(path, from, to) {
-    if (!from || !to || from === to) return path;
-
-    const segments = String(path).split('/').filter(Boolean);
-
-    if (segments.length < 2 || segments[0] !== from) return path;
-
-    return [to, ...segments.slice(1)].join('/');
-}
-
 // ---------------------------------------------------------------------------
 
 /**
  * What to fetch, what to leave alone, and what would be replaced.
  *
+ * BOTH SIDES ARRIVE ALREADY REDUCED TO THE STRUCTURE BENEATH THEIR CONTAINER —
+ * the caller strips the leading folder from each, because the manifest's paths
+ * begin with the folder the files were uploaded in and the developer's begin
+ * with the name they gave it. This compares what is left, which is the tree, and
+ * the tree is the part that matters.
+ *
  * @param {ManifestFile[]} manifest   what the version contains
- * @param {Map<string, LocalFile>} local  what is on disk, keyed by path
- * @param {Object} opts
- * @param {string} opts.fromRoot      the root the manifest's paths carry
- * @param {string} opts.toRoot        the root to write under, if renamed
+ * @param {Map<string, LocalFile>} local  what is on disk, keyed by the same
  *
  * @returns {{
  *   write: Array,      files to fetch, with their final paths
@@ -113,13 +99,13 @@ export function withRoot(path, from, to) {
  *   writeBytes: number
  * }}
  */
-export function planDownload(manifest, local, { fromRoot = null, toRoot = null } = {}) {
+export function planDownload(manifest, local) {
     const write = [];
     const keep = [];
     const replace = [];
 
     for (const file of manifest) {
-        const target = withRoot(file.path, fromRoot, toRoot);
+        const target = file.path;
         const here = local.get(target);
 
         // NOT THERE — the ordinary case, and the reason most of a first download

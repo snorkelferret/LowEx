@@ -150,8 +150,8 @@ function row(asset) {
         download.dataset.download = String(asset.id);
         download.dataset.name = asset.name;
         download.title =
-            'Choose a folder and fetch only what you do not already have — ' +
-            'the difference is worked out by hash, and nothing is downloaded twice';
+            'Choose the folder this belongs in, and fetch only what you do not ' +
+            'already have — the difference is worked out by hash';
         download.innerHTML = '<i class="bi bi-folder-down me-1"></i>Download';
 
         actions.insertBefore(download, zip);
@@ -325,6 +325,11 @@ async function load() {
 // that the developer sees the working-out rather than a progress bar: how much
 // of this they already have, and what is actually going to cross the wire.
 function reportToPage({ phase, plan, summary, assetName }) {
+    if (phase === 'cancelled') {
+        showAlert('storeResult', 'Cancelled — nothing was fetched.', 'secondary');
+        return;
+    }
+
     if (phase === 'planned') {
         const bits = [];
 
@@ -351,16 +356,36 @@ function reportToPage({ phase, plan, summary, assetName }) {
     }
 
     if (phase === 'done') {
-        const bits = [`${summary.written} file${summary.written === 1 ? '' : 's'} written`];
+        // NOTHING TO FETCH MEANS NO ZIP EXISTS, and this fires AFTER 'planned'
+        // has already explained why. Falling through would say "a zip with 0
+        // files" and then tell the developer to unzip it — sending them to their
+        // downloads folder for a file that was never made, to complete a version
+        // that needs nothing.
+        if (summary.written === 0 && summary.failed === 0) {
+            showAlert(
+                'storeResult',
+                `${assetName}: you already have every file in this version. Nothing was fetched.`,
+                'success'
+            );
+            return;
+        }
 
-        if (summary.kept) bits.push(`${summary.kept} already there`);
-        if (summary.replaced) bits.push(`${summary.replaced} replaced`);
+        // A ZIP RATHER THAN FILES WRITTEN, because that is what happens: the
+        // browser downloads it and the developer unzips it over the folder they
+        // chose. Saying "written" would be a lie the first time they looked in
+        // the folder and found nothing.
+        const bits = [
+            `a zip with ${summary.written} file${summary.written === 1 ? '' : 's'}`
+        ];
+
+        if (summary.kept) bits.push(`${summary.kept} you already had, left out`);
+        if (summary.replaced) bits.push(`${summary.replaced} to be replaced`);
         if (summary.failed) bits.push(`${summary.failed} FAILED — see the console`);
 
         showAlert(
             'storeResult',
             `${assetName}: ${bits.join(', ')}. ` +
-            (summary.targetFolder ? `Written under "${summary.targetFolder}".` : ''),
+            'Unzip it into the folder you chose and the version is complete.',
             summary.failed ? 'warning' : 'success'
         );
     }
@@ -378,26 +403,6 @@ function confirmReplacements(files) {
     );
 }
 
-// THE FOLDER THEY WERE UPLOADED IN, WHICH MAY BE RENAMED.
-//
-// Item 54 calls that folder transport and says it is never retained; the code
-// retains it (item 81), so the manifest's paths carry it and this is where a
-// developer says otherwise. Cancelling keeps the default rather than aborting —
-// the answer to "what shall I call this" is never "stop the download".
-function chooseRootFolder(root) {
-    if (!root) return null;
-
-    const answer = window.prompt(
-        `The files were uploaded in a folder called "${root}".\n\n` +
-        'What should it be called on your machine? The structure inside it is kept.',
-        root
-    );
-
-    if (answer === null) return root;
-
-    return answer.trim() || root;
-}
-
 async function downloadAsset(assetId, versionId, name, button) {
     showAlert('storeAlert', '');
     showAlert('storeResult', '');
@@ -413,22 +418,15 @@ async function downloadAsset(assetId, versionId, name, button) {
             assetName: name,
             fetchJson,
             onReport: reportToPage,
-            confirmReplacements,
-            chooseRootFolder
+            confirmReplacements
         });
 
         // The history has a new entry, so the page reloads what it knows.
         await load();
 
     } catch (err) {
-        // The folder picker being cancelled is not an error — it is somebody
-        // changing their mind, and a red box for it would be wrong.
-        if (err?.name === 'AbortError') {
-            showAlert('storeResult', 'Cancelled — nothing was fetched.', 'secondary');
-        } else {
-            console.error('Could not download:', err);
-            showAlert('storeAlert', err.message, 'danger');
-        }
+        console.error('Could not download:', err);
+        showAlert('storeAlert', err.message, 'danger');
 
     } finally {
         button.disabled = false;

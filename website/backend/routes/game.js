@@ -511,6 +511,180 @@ router.get(
 );
 
 // ============================================================
+// POST /api/game/:assetId/versions/:versionId/archive
+// ============================================================
+//
+// ONLY THE FILES ASKED FOR, as a zip. What a negotiating client downloads.
+//
+// ============================================================
+// WHY THIS IS A POST AND NOT A QUERY STRING
+// ============================================================
+//
+// The list is a set of SHA-256s — sixty-four characters each — and a version can
+// hold hundreds. Four hundred of them is twenty-seven kilobytes of URL, which no
+// server accepts and no proxy passes. IT IS A BODY, SO IT IS A POST.
+//
+// ============================================================
+// AND WHY IT FILTERS RATHER THAN TRUSTING
+// ============================================================
+//
+// The caller says which hashes it wants, and EVERY ONE IS CHECKED AGAINST THIS
+// VERSION. A client cannot ask for a file that is not in the version it named —
+// which is the same access rule as the single-file route, for the same reason:
+// stored_files holds everything, including content in somebody's private
+// workspace, and the hash is the content rather than the permission.
+//
+// Unknown hashes are IGNORED rather than refused. A client working from a
+// manifest it fetched a moment ago may be slightly out of date, and refusing the
+// whole download over one stale hash would be a worse answer than sending the
+// rest — but it is reported back so nothing is silently missing.
+// ============================================================
+
+router.post(
+    '/:assetId/versions/:versionId/archive',
+    authenticateToken,
+    requireRole('developer', 'admin'),
+
+    async (req, res) => {
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        const requested = Array.isArray(req.body?.only) ? req.body.only : null;
+
+        if (!requested) {
+            return res.status(400).json({
+                error: 'Send { only: [sha256, ...] } — the files to include.'
+            });
+        }
+
+        const wanted = new Set(
+            requested
+                .map(v => String(v || '').toLowerCase())
+                .filter(v => /^[0-9a-f]{64}$/.test(v))
+        );
+
+        try {
+            const asset = oneAsset.get(assetId);
+            const version = versionForDownload.get(versionId, assetId);
+
+            if (!asset || !version) {
+                return res.status(404).json({
+                    error: 'That version is not in the game store'
+                });
+            }
+
+            // EVERY ROW OF THE VERSION, then filtered — so the filter is against
+            // what the version actually holds and never against what the caller
+            // asked for.
+            const rows = filesOf.all(versionId);
+
+            const files = rows
+                .filter(row => wanted.has(String(row.sha256).toLowerCase()))
+                .map(row => ({
+                    absolutePath: blobPath(row.storage_key),
+                    relative_path: row.relative_path,
+                    filename: row.filename,
+                    sha256: row.sha256,
+                    file_size: row.file_size
+                }));
+
+            const corrupt = files.filter(f => !f.absolutePath);
+
+            if (corrupt.length > 0) {
+                console.error(
+                    `Archive refused: ${corrupt.length} file(s) in version ${versionId} have a malformed storage_key`
+                );
+
+                return res.status(500).json({
+                    error: 'The store could not be read for this version. See check:store.'
+                });
+            }
+
+            const known = new Set(rows.map(r => String(r.sha256).toLowerCase()));
+            const unknown = [...wanted].filter(h => !known.has(h));
+
+            if (unknown.length > 0) {
+                // Reported, not refused — see the note above. A client that has
+                // gone stale still gets everything it can.
+                console.warn(
+                    `Archive for version ${versionId}: ${unknown.length} requested hash(es) are not in it`
+                );
+            }
+
+            // ASKING FOR NOTHING IS A MALFORMED REQUEST, NOT A MISSING ONE.
+            // This reached 404 with the message below, which was untrue twice
+            // over: what was asked for was an empty set, so there is no version
+            // the files could have failed to be in. Either the list arrived
+            // empty or nothing in it was a SHA-256, and both are the caller's
+            // mistake to fix rather than a resource to go looking for.
+            if (wanted.size === 0) {
+                return res.status(400).json({
+                    error: 'None of those are SHA-256 hashes — send at least one.'
+                });
+            }
+
+            if (files.length === 0) {
+                return res.status(404).json({
+                    error: 'None of those files are in this version',
+                    unknown: unknown.length
+                });
+            }
+
+            // THE CONTAINER FOLDER COMES OFF, because the caller has just told
+            // us which folder these files belong in — see the note in
+            // assetArchive.js. The entries are relative to that folder, so
+            // "unzip here" is the whole instruction.
+            const allNames = rows.map(r => [r.relative_path, r.filename]
+                .filter(Boolean).map(String).join('/'));
+
+            const roots = new Set(
+                allNames.filter(n => n.includes('/')).map(n => n.split('/')[0])
+            );
+
+            const stripRoot = roots.size === 1 ? [...roots][0] : null;
+
+            const { stream, manifest } = buildVersionArchive(files, {
+                assetName: asset.name,
+                versionNumber: version.version_number,
+                stripRoot
+            });
+
+            const safeName = String(asset.name).replace(/[^A-Za-z0-9._-]+/g, '_');
+
+            // THE COUNT IS IN THE FILENAME, because "which zip is this" matters
+            // when a developer has several in their downloads folder.
+            res.type('application/zip');
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename="${safeName}_v${version.version_number}_${files.length}of${rows.length}.zip"`
+            );
+
+            stream.on('error', (err) => {
+                console.error('The partial archive stream failed:', err);
+                res.destroy(err);
+            });
+
+            return stream.pipe(res);
+
+        } catch (err) {
+            console.error('Could not build a partial archive:', err);
+
+            if (!res.headersSent) {
+                return res.status(500).json({
+                    error: 'Could not build that download'
+                });
+            }
+
+            return res.destroy(err);
+        }
+    }
+);
+
+// ============================================================
 // GET /api/game/:assetId/versions/:versionId/files/:sha256
 // ============================================================
 //

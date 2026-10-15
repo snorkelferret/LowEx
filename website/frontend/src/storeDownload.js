@@ -3,37 +3,43 @@
 // FETCHING A VERSION ONTO THE DEVELOPER'S MACHINE, NEGOTIATING BY HASH.
 //
 // ============================================================
-// THIS FILE CAN ONLY WORK IN CHROMIUM, AND THAT IS NOT A PREFERENCE
+// ONE PATH, EVERY BROWSER — WHICH IS WHAT IT SHOULD ALWAYS HAVE BEEN
 // ============================================================
 //
-// Reading and writing a folder the developer chose needs the File System Access
-// API. Chrome and Edge have it. FIREFOX AND SAFARI HAVE NO EQUIVALENT, so on
-// those the browser cannot see the disk, cannot hash anything, and there is
-// nothing to negotiate with. The caller checks for it and offers the zip
-// instead — see `canNegotiate()`.
+// THE FIRST VERSION OF THIS FILE USED THE FILE SYSTEM ACCESS API, which only
+// Chromium has, so the negotiation was offered to Chrome and Edge and withheld
+// from everybody else. That was wrong, and it was wrong for a reason worth
+// writing down: THE NEGOTIATION ONLY NEEDS TO *READ* A FOLDER, AND EVERY BROWSER
+// CAN. Only WRITING INTO one is Chromium-only, and writing is the part that is
+// not needed here.
 //
-// THE ALTERNATIVE FOR THOSE BROWSERS IS THE SMALL CLI the spec anticipates
-// ("a small CLI later lets an artist sync by hash"). IT WOULD USE THE SAME
-// ENDPOINTS: the manifest, and one file by hash. Nothing here is web-specific
-// except the two places that touch the disk.
+//   * READING a folder  `<input type="file" webkitdirectory>` — Chrome, Edge,
+//                        Firefox 50+, Safari 11.1+. Effectively everywhere.
+//   * WRITING into one  `showDirectoryPicker` — CHROMIUM ONLY. Firefox has a
+//                        negative position and Safari opposes it outright.
+//
+// SO THE OUTPUT IS A ZIP, WHICH EVERY BROWSER CAN DOWNLOAD, and the folder
+// writing is gone. The developer picks the folder these files belong in, the
+// page hashes it, and what comes back is A ZIP CONTAINING ONLY WHAT THEY LACK —
+// unzipped over that folder, it completes it.
 //
 // ============================================================
 // THE SERVER IS TOLD NOTHING ABOUT THE DEVELOPER'S DISK
 // ============================================================
 //
 // The comparison happens HERE. The manifest comes down whole, the hashes are
-// computed locally, and only the files that are actually missing are fetched.
-// The server is asked "what does this version contain" and nothing else — it
-// never learns what the developer has.
+// computed locally, and only the missing hashes are sent — the server is asked
+// for the files it was told about and learns nothing else.
 //
 // ============================================================
 // AND NOTHING IS OVERWRITTEN WITHOUT BEING NAMED FIRST
 // ============================================================
 //
 // `planDownload` separates files that are ABSENT from files that are PRESENT AND
-// DIFFERENT. The first are written; the second are shown to the developer by
-// name and written only if they say so. Silently replacing somebody's work is
-// the worst thing this file could do.
+// DIFFERENT. The first go in the zip; the second are shown to the developer by
+// name and included only if they say so. Silently replacing somebody's work is
+// the worst thing this file could do — and it is worse in a zip, because the
+// developer unzips it later and does not see what it lands on.
 
 import { planDownload, rootFolderOf } from './downloadPlan.mjs';
 
@@ -42,11 +48,12 @@ import { planDownload, rootFolderOf } from './downloadPlan.mjs';
 // ---------------------------------------------------------------------------
 
 export function canNegotiate() {
-    return typeof window !== 'undefined'
-        && typeof window.showDirectoryPicker === 'function'
-        // The hashing needs crypto.subtle, which needs a secure context. On
-        // plain http: that is NOT localhost it is absent, and a download that
-        // half-works is worse than one that is not offered.
+    return typeof document !== 'undefined'
+        && 'webkitdirectory' in document.createElement('input')
+        // Hashing needs crypto.subtle, which needs a secure context. Over plain
+        // http: on anything but localhost it is absent, and a negotiation that
+        // cannot hash would call every file missing and download all of it —
+        // which is worse than not offering it.
         && typeof crypto !== 'undefined'
         && Boolean(crypto.subtle);
 }
@@ -55,74 +62,82 @@ export function canNegotiate() {
 // Reading the folder the developer chose
 // ---------------------------------------------------------------------------
 
-/**
- * Every file under a directory handle, keyed by its path relative to it.
- *
- * SIZE ONLY, AND THE HASH STARTS NULL. Hashing is the slow part — a developer's
- * project can be gigabytes — so it happens in a second pass, and only for files
- * that could possibly match.
- */
-async function readTree(dirHandle, prefix = '') {
-    const found = new Map();
+// EVERY BROWSER'S FOLDER PICKER. There is no handle and no permission prompt —
+// the developer picks a folder and the page is handed its files, which is all
+// the negotiation needs.
+function pickFolder() {
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
 
-    for await (const [name, handle] of dirHandle.entries()) {
-        const path = prefix ? `${prefix}/${name}` : name;
+        input.type = 'file';
+        input.webkitdirectory = true;
+        input.multiple = true;
+        input.style.display = 'none';
 
-        if (handle.kind === 'file') {
-            const file = await handle.getFile();
-            found.set(path, { size: file.size, sha256: null, handle });
+        document.body.appendChild(input);
 
-        } else if (handle.kind === 'directory') {
-            for (const [p, entry] of await readTree(handle, path)) {
-                found.set(p, entry);
-            }
-        }
-    }
+        const finish = (files) => {
+            input.remove();
+            resolve(files);
+        };
 
-    return found;
+        input.addEventListener('change', () => finish(Array.from(input.files || [])));
+
+        // Some browsers fire 'cancel' when the picker is dismissed; others fire
+        // nothing at all, and the promise simply never settles. That is a
+        // better outcome than it sounds — the caller is awaiting a choice the
+        // developer has not made.
+        input.addEventListener('cancel', () => finish([]));
+
+        input.click();
+    });
 }
 
 const HEX = (buffer) =>
     [...new Uint8Array(buffer)].map(b => b.toString(16).padStart(2, '0')).join('');
 
-async function hashOf(handle) {
-    const file = await handle.getFile();
+async function hashOf(file) {
     return HEX(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
 }
 
 // ---------------------------------------------------------------------------
-// Writing
+// Paths
 // ---------------------------------------------------------------------------
 
-/**
- * Write one file at `path` under `rootHandle`, creating the directories it needs.
- *
- * EVERY SEGMENT IS REFUSED IF IT IS '.' OR '..'. The paths come from the server,
- * which built them from `relative_path`, which originated client-side — so they
- * are checked here rather than trusted, the same way the archive checks them
- * before writing entry names. This one WRITES, so the check matters more.
- */
-async function writeFile(rootHandle, path, blob) {
+// THE FIRST SEGMENT, REMOVED. Both sides of the comparison have one and neither
+// is the other: the manifest's paths begin with the folder the files were
+// uploaded in, and the picked folder's files begin with the name the developer
+// gave it. WHAT MATTERS IS THE STRUCTURE INSIDE — the tree is load-bearing and
+// the container is transport (item 54).
+function stripRoot(path, root) {
+    if (!root) return path;
+
     const segments = String(path).split('/').filter(Boolean);
-    const filename = segments.pop();
 
-    if (!filename) throw new Error(`refusing to write an empty path: ${path}`);
+    return segments.length > 1 && segments[0] === root
+        ? segments.slice(1).join('/')
+        : path;
+}
 
-    if (segments.some(s => s === '.' || s === '..')) {
-        throw new Error(`refusing a path that climbs out: ${path}`);
-    }
+// ---------------------------------------------------------------------------
+// Saving the zip
+// ---------------------------------------------------------------------------
 
-    let dir = rootHandle;
+function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
 
-    for (const segment of segments) {
-        dir = await dir.getDirectoryHandle(segment, { create: true });
-    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
 
-    const handle = await dir.getFileHandle(filename, { create: true });
-    const writable = await handle.createWritable();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-    await writable.write(blob);
-    await writable.close();
+    // Revoked LATER rather than at once: some browsers cancel a download whose
+    // object URL is revoked in the same tick.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 // ---------------------------------------------------------------------------
@@ -132,22 +147,16 @@ async function writeFile(rootHandle, path, blob) {
 /**
  * Negotiate, then fetch only what is missing.
  *
- * THE ORDER MATTERS AND IS NOT ARBITRARY:
+ * @param {Object} opts
+ * @param {number} opts.assetId
+ * @param {number} opts.versionId
+ * @param {string} opts.assetName
+ * @param {function} opts.fetchJson   async (url, options) => parsed JSON, or the
+ *                                    raw Response when asked
+ * @param {function} opts.onReport    what was found, before anything is fetched
+ * @param {function} opts.confirmReplacements
  *
- *   1  pick a folder      — MUST be first: a browser will not show the picker
- *                           once an await has broken the click's gesture chain
- *   2  fetch the manifest
- *   3  read the tree      — sizes only, which is fast
- *   4  ask which folder name to write under — BEFORE hashing, because the
- *                           comparison is made against the TARGET paths, and
- *                           hashing the wrong files is work for nothing
- *   5  hash what could match — sizes first, so only candidates are read
- *   6  plan               — pure, and the only place that decides anything
- *   7  report, then confirm replacements
- *   8  write what is missing
- *   9  record it, so it is in the developer's history
- *
- * @returns {{ written, kept, replaced, failed, targetFolder }}
+ * @returns {{ written, kept, replaced, failed }}
  */
 export async function downloadVersion({
     assetId,
@@ -156,101 +165,114 @@ export async function downloadVersion({
     fetchJson,
     apiBase = '/api/game',
     onReport = () => {},
-    confirmReplacements = () => false,
-    chooseRootFolder = (root) => root
+    confirmReplacements = () => false
 }) {
     if (!canNegotiate()) {
         throw new Error(
-            'This browser cannot write to a folder. Chrome or Edge can; ' +
-            'Firefox and Safari cannot — use the zip instead.'
+            'This browser cannot read a folder, so there is nothing to compare ' +
+            'against. Use the zip instead.'
         );
     }
 
-    const rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    // FIRST, BECAUSE IT IS THE DEVELOPER'S CHOICE AND NOTHING IS FETCHED BEFORE
+    // IT. The folder they pick is the one these files belong in.
+    const picked = await pickFolder();
+
+    if (picked.length === 0) {
+        onReport({ phase: 'cancelled' });
+        return { written: 0, kept: 0, replaced: 0, failed: 0, cancelled: true };
+    }
 
     const manifest = await fetchJson(`${apiBase}/${assetId}/versions/${versionId}/manifest`);
     const files = manifest.files || [];
 
-    if (files.length === 0) {
-        throw new Error('That version has no files in it.');
+    if (files.length === 0) throw new Error('That version has no files in it.');
+
+    const manifestRoot = rootFolderOf(files.map(f => f.path));
+    const pickedRoot = rootFolderOf(picked.map(f => f.webkitRelativePath));
+
+    // BOTH SIDES REDUCED TO THE STRUCTURE BENEATH THEIR CONTAINER, so a folder
+    // called anything at all can be compared against a version.
+    const wanted = files.map(f => ({
+        path: stripRoot(f.path, manifestRoot),
+        sha256: f.sha256,
+        size: f.size
+    }));
+
+    const local = new Map();
+
+    for (const file of picked) {
+        local.set(stripRoot(file.webkitRelativePath, pickedRoot), {
+            size: file.size,
+            sha256: null,
+            file
+        });
     }
 
-    const fromRoot = rootFolderOf(files.map(f => f.path));
-    const local = await readTree(rootHandle);
-
-    // WHERE THE FILES GO, WHICH IS THE DEVELOPER'S CHOICE. The manifest's paths
-    // carry the folder they were uploaded in — item 54 calls that transport, and
-    // item 81 records that the code keeps it anyway. So it is offered, defaulted
-    // to what the server says.
-    const toRoot = chooseRootFolder(fromRoot) || fromRoot;
-
-    // THE TARGET PATH OF EVERY FILE, resolved once, so the hash pass and the
-    // plan cannot disagree about where something is meant to land.
-    const targetOf = (path) => {
-        if (!fromRoot || !toRoot || toRoot === fromRoot) return path;
-
-        const segments = String(path).split('/').filter(Boolean);
-
-        return segments.length > 1 && segments[0] === fromRoot
-            ? [toRoot, ...segments.slice(1)].join('/')
-            : path;
-    };
-
-    // HASH ONLY THE CANDIDATES: a file whose size differs is already known to
+    // HASH ONLY THE CANDIDATES. A file whose size differs is already known to
     // differ, and reading it would be work for an answer we have.
-    const wantedSize = new Map(files.map(f => [targetOf(f.path), f.size]));
+    const wantedSize = new Map(wanted.map(f => [f.path, f.size]));
 
     for (const [path, entry] of local) {
-        const wanted = wantedSize.get(path);
-        if (wanted !== undefined && wanted === entry.size) {
-            entry.sha256 = await hashOf(entry.handle);
+        if (wantedSize.get(path) === entry.size) {
+            entry.sha256 = await hashOf(entry.file);
         }
     }
 
-    let plan = planDownload(files, local, { fromRoot, toRoot });
+    const plan = planDownload(wanted, local);
 
-    onReport({ phase: 'planned', plan, fromRoot, toRoot });
+    onReport({ phase: 'planned', plan });
 
-    // NAMED BEFORE ANYTHING IS REPLACED. Never silently.
-    let replace = plan.replace;
+    // NAMED BEFORE ANYTHING IS REPLACED. Never silently — and worse in a zip,
+    // because the developer unzips it later and does not see what it lands on.
+    const replace = plan.replace.length > 0 && confirmReplacements(plan.replace)
+        ? plan.replace
+        : [];
 
-    if (replace.length > 0 && !confirmReplacements(replace)) {
-        replace = [];
+    const toFetch = [...plan.write, ...replace];
+
+    if (toFetch.length === 0) {
+        onReport({ phase: 'done', plan, summary: { written: 0, kept: plan.keep.length, replaced: 0, failed: 0 }, assetName });
+        return { written: 0, kept: plan.keep.length, replaced: 0, failed: 0 };
     }
 
-    let written = 0;
+    // THE ZIP, AND ONLY THE DIFFERENCE IN IT. The entries are relative to the
+    // folder the developer picked, so "unzip here" is the whole instruction.
     let failed = 0;
 
-    for (const file of [...plan.write, ...replace]) {
-        try {
-            const response = await fetchJson(
-                `${apiBase}/${assetId}/versions/${versionId}/files/${file.sha256}`,
-                { raw: true }
-            );
+    try {
+        const response = await fetchJson(`${apiBase}/${assetId}/versions/${versionId}/archive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ only: toFetch.map(f => f.sha256) }),
+            raw: true
+        });
 
-            if (!response.ok) throw new Error(`the server said ${response.status}`);
-
-            await writeFile(rootHandle, file.target, await response.blob());
-            written++;
-
-        } catch (err) {
-            console.error(`Could not write ${file.target}:`, err);
-            failed++;
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || `The server said ${response.status}`);
         }
+
+        saveBlob(
+            await response.blob(),
+            `${String(assetName).replace(/[^A-Za-z0-9._-]+/g, '_')}_${toFetch.length}files.zip`
+        );
+
+    } catch (err) {
+        console.error('Could not fetch the difference:', err);
+        failed = toFetch.length;
     }
 
     const summary = {
-        written,
+        written: failed ? 0 : toFetch.length,
         kept: plan.keep.length,
-        replaced: replace.length,
-        failed,
-        targetFolder: toRoot
+        replaced: failed ? 0 : replace.length,
+        failed
     };
 
     // WHAT THE DEVELOPER TOOK IS RECORDED, so it is in their history. An
     // assertion — the server cannot see this disk — which is why it is typed
-    // rather than observed, and why it is reported AFTER the writing rather than
-    // before it.
+    // rather than observed, and why it is reported AFTER the download.
     try {
         await fetchJson(`${apiBase}/${assetId}/versions/${versionId}/downloaded`, {
             method: 'POST',
@@ -259,7 +281,7 @@ export async function downloadVersion({
                 files_written: summary.written,
                 files_unchanged: summary.kept,
                 files_failed: summary.failed,
-                target_folder: summary.targetFolder
+                target_folder: pickedRoot || null
             })
         });
     } catch (err) {

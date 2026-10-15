@@ -64,14 +64,27 @@ const zlib = require('zlib');
  * that meant something else, and quietly rewriting it would put a file
  * somewhere other than where the schema says it goes. The caller refuses.
  */
-function entryNameFor(relativePath, filename) {
+function entryNameFor(relativePath, filename, stripRoot = null) {
     const parts = [relativePath, filename]
         .filter(part => part !== null && part !== undefined && String(part) !== '')
         .map(part => String(part).replace(/\\/g, '/'));
 
     if (parts.length === 0) return null;
 
-    const segments = parts.join('/').split('/').filter(s => s !== '');
+    let segments = parts.join('/').split('/').filter(s => s !== '');
+
+    // THE CONTAINER FOLDER, REMOVED WHEN THE CALLER KNOWS WHERE THESE ARE GOING.
+    //
+    // The full archive keeps it — a zip is a standalone thing and unzipping it
+    // into a parent should produce the folder. A PARTIAL archive does not,
+    // because the developer has just chosen the folder these belong in: entries
+    // relative to it are what "unzip here" means.
+    //
+    // ONLY THE FIRST SEGMENT, and only if it IS the root. The rest is the tree,
+    // and the tree is load-bearing (item 56).
+    if (stripRoot && segments.length > 1 && segments[0] === stripRoot) {
+        segments = segments.slice(1);
+    }
 
     // Anything that could climb out, or that is absolute, or that is a drive
     // letter, is refused rather than repaired.
@@ -169,7 +182,7 @@ function endOfCentralDirectory(count, size, offset) {
  * path cannot be made safe is a fact about that version, not a reason to fail
  * the request — but it must not be silently dropped either.
  */
-function buildVersionArchive(files, { assetName, versionNumber } = {}) {
+function buildVersionArchive(files, { assetName, versionNumber, stripRoot = null } = {}) {
     const refused = [];
     const entries = [];
     let offset = 0;
@@ -181,7 +194,7 @@ function buildVersionArchive(files, { assetName, versionNumber } = {}) {
     const planned = [];
 
     for (const file of files) {
-        const name = entryNameFor(file.relative_path, file.filename);
+        const name = entryNameFor(file.relative_path, file.filename, stripRoot);
 
         if (!name) {
             refused.push({
