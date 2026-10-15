@@ -2668,6 +2668,61 @@ router.post(
 
 
                         // --------------------------------------------
+                        // A DELETED ASSET STILL HOLDS ITS NAME. BRING IT BACK.
+                        //
+                        // THE UNIQUE CONSTRAINT IS ON (workspace_id, name) AND
+                        // DOES NOT MENTION is_active, so an asset in the bin is
+                        // still holding the name it was deleted under. THIS
+                        // LOOKUP FINDS IT — and used to carry on as though it
+                        // had not, adding the new version to a row that is
+                        // INVISIBLE.
+                        //
+                        // WHICH MEANT THE UPLOAD SUCCEEDED, THE FILES WERE
+                        // STORED AND CHARGED TO THE DEVELOPER'S QUOTA, AND
+                        // NOTHING APPEARED. Silent loss, and the worst shape of
+                        // failure there is: it reports success.
+                        //
+                        // SO IT IS RESTORED, for the reason the import is
+                        // restored (routes/game.js): the developer has just
+                        // uploaded work under that name, so they plainly want
+                        // it, and the row is the thing that holds the name.
+                        // THE VERSIONS COME BACK TOO, which is what the bin's
+                        // own Restore does — an asset returning without its
+                        // history would be stranger than one returning with it.
+                        // --------------------------------------------
+
+                        if (asset && !asset.is_active) {
+
+                            db.prepare(`
+                                UPDATE workspace_assets
+                                SET is_active = 1,
+                                    deleted_at = NULL,
+                                    updated_at = CURRENT_TIMESTAMP
+                                WHERE id = ?
+                            `).run(asset.id);
+
+                            db.prepare(`
+                                UPDATE workspace_versions
+                                SET is_active = 1,
+                                    deleted_at = NULL
+                                WHERE workspace_asset_id = ?
+                            `).run(asset.id);
+
+                            asset.is_active = 1;
+
+                            audit.record(
+                                developerId,
+                                'workspace_asset.restore',
+                                asset.name,
+                                {
+                                    workspace_asset_id: asset.id,
+                                    reason: 'uploaded to again'
+                                }
+                            );
+                        }
+
+
+                        // --------------------------------------------
                         // Create asset if it doesn't exist.
                         // --------------------------------------------
 

@@ -7836,7 +7836,7 @@ no upside. If something seems to need one of them, ask.
     unpacking and the decision can change without changing the format.
 
 
-82) THE UPLOAD HAS THE SAME BUG, AND ITS CONSEQUENCE IS WORSE. Found 2026-10-15.
+82) THE UPLOAD HAD THE SAME BUG. FIXED 2026-10-15.
 
     WHAT WAS FOUND, chasing how a developer could have a workspace asset in the
     bin at all. THE FIX FOR THE IMPORT IS IN (item 81's neighbour); THIS IS THE
@@ -7882,3 +7882,25 @@ no upside. If something seems to need one of them, ask.
     WHETHER TO INSERT MUST SEE THE ROWS THAT WOULD COLLIDE WITH THE INSERT. A
     filter that hides them turns a constraint violation into either a crash or,
     worse, a silent one.
+
+    ============================================================
+    FIXED THE SAME DAY
+    ============================================================
+
+    THE UPLOAD NOW RESTORES THE ROW, for the reason the import does: the
+    developer has just uploaded work under that name, so they plainly want it,
+    and the row is the thing that holds the name. Its versions come back with it,
+    and the new version is added on top. The restore is audited as
+    `workspace_asset.restore` with the reason `uploaded to again`, so a restore
+    by upload is distinguishable from one done in the bin.
+
+    VERIFIED AGAINST THE CASE: upload, delete it into the bin, upload again.
+    Before, the second upload reported success and the work was invisible. Now
+    the asset is visible, BOTH VERSIONS ARE VISIBLE, and the audit log says why.
+    The identical file twice still costs one blob, because it always did — the
+    one-copy rule was never in question here, only the visibility of the row the
+    version was attached to.
+
+    THE TWO FIXES ARE DELIBERATELY THE SAME SHAPE, in two files, because the two
+    routes asked the same question and got it wrong the same way. If a third
+    route ever looks up a workspace asset by name, it wants the same answer.
