@@ -8406,3 +8406,115 @@ no upside. If something seems to need one of them, ask.
 
     NOTHING IS CHANGED YET. This item is the correction to the model, written
     down before anything is built on top of it.
+
+    ============================================================
+    SETTLED WITH THE OWNER, 2026-10-16
+    ============================================================
+
+    HE ANSWERED ALL FOUR. Where an answer differs from the spec, THE ANSWER
+    WINS — the spec describes intent, it does not constrain.
+
+    --- 1. THE TECH CHECK RUNS AT UPLOAD, NOT AT SUBMIT ---
+
+        "Anything that is uploaded must pass a tech check before it is put in
+         the asset store - our unique SHA store"
+
+    SO THE GATE MOVES ONE STAGE FORWARD FROM THE SPEC. The spec tests at
+    SUBMIT FOR GAME, against a named build; the owner tests at UPLOAD, before
+    anything enters the store at all. NOTHING ENTERS THE STORE UNTESTED.
+
+    WHICH ALSO RESOLVES THE BUILD QUESTION RATHER THAN POSTPONING IT: a check
+    at upload cannot name a game build, because the asset is not going into a
+    game yet. The build matters at SUBMIT FOR GAME, and THAT is where the
+    spec's "tested against Build 203" rule belongs. THE TWO ARE NOT IN
+    CONFLICT — two different tests at two different stages, and only the
+    second is about a build. Worth saying plainly because it looked like a
+    contradiction an hour ago.
+
+    --- 2. 'prod' IS THE DIRECTOR ---
+
+        "Prod could be this director - production decides game asset approvals"
+
+    THE ROLE EXISTS AND ALREADY DECIDES CREATIVE APPROVALS. Nothing is
+    renamed. The spec's DIRECTOR REVIEW is the creative_approvals queue and
+    'prod' is who decides it.
+
+    AND THE SPEC'S SPLIT HOLDS: "Both decisions are recorded separately." The
+    technical result is technical_check_runs; the artistic decision is the
+    approval. Two records, two stages, and neither implies the other — which
+    is the point of the spec's "artistically excellent but technically not
+    ready".
+
+    --- 3. THREE GAME VERSIONS ---
+
+        "The game will have a production version a candidate dev version and
+         an experimental version - possibly"
+
+    PRODUCTION · CANDIDATE DEV · EXPERIMENTAL. The spec's Production,
+    Development and Experimental, with the middle one named as a candidate.
+
+    "POSSIBLY" IS DOING WORK IN THAT SENTENCE, and this belongs with item 60,
+    which is about game versions and release candidates. NOT SETTLED HERE.
+
+    AN ASSET MAY BE IN ONE, SEVERAL, OR NONE OF THEM — which is the mechanism
+    asset_recommended_versions already exists for and nothing writes.
+
+    --- 4. A WORKSPACE UPLOAD IS A STORE ASSET WITH AN OWNER ---
+
+        "The workspace uploads go to the asset store but they have an owner -
+         the dev - unlike the other assets - so these are special assets that
+         can only be read by the dev who uploaded them and also deleted"
+
+    THIS IS THE SPEC'S PRIVATE STAGE, and the owner is right that it has been
+    through before: ITEM 78 FOUND THE GAP. He is also right that the answer was
+    never written down, only the gap — which is how the same ground gets
+    covered twice.
+
+    SO A WORKSPACE UPLOAD IS NOT A DIFFERENT KIND OF THING IN A DIFFERENT
+    PLACE. It is an asset in the one store, with an owner, at the PRIVATE
+    stage:
+
+        only the OWNER may read it
+        only the OWNER may delete it
+        nobody else sees it at all until it is published
+
+    --- AND ONE DIFFERENCE FROM THE SPEC, FOR THE OWNER TO SETTLE ---
+
+    The spec says a private version is visible to "You · Admin · Superuser".
+    The owner says "only ... the dev who uploaded them". Superuser is gone
+    (item 51), so it is admin the question is about. AN ADMIN WHO CANNOT SEE
+    ANYTHING PRIVATE CANNOT HELP ANYBODY WHO HAS LOST SOMETHING, and the admin
+    panel exists. NOT SETTLED — one line from the owner decides it.
+
+    ============================================================
+    THE SHAPE THAT FALLS OUT OF THE FOUR
+    ============================================================
+
+    ONE STORE, AND EVERYTHING IN IT HAS PASSED A TECH CHECK. Every asset in it
+    carries:
+
+        an OWNER         who uploaded it
+        a STAGE          private → published → submitted → tested → approved
+        GAME VERSIONS    production, candidate dev, experimental — one,
+                         several, or none
+
+    THE GAME'S CONTENT IS THE SUBSET APPROVED INTO A GAME VERSION. That is
+    what the game store shows. The workspace is the PRIVATE END OF THE SAME
+    THING, not a separate place holding separate files.
+
+    ============================================================
+    WHAT THIS DOES NOT DO
+    ============================================================
+
+    NOTHING IS BUILT. These four answers settle the MODEL. Moving three spaces
+    into one, and adding stages, ownership and game versions, has not started.
+
+    IT ALSO MEANS ITEMS 57 AND 58 ARE NOW KNOWN TO BE WRONG RATHER THAN MERELY
+    IN DOUBT, and any code relying on "the library is source material only, and
+    an image is never a game asset" is relying on a mistake.
+
+    AND THIS ITEM OVERLAPS ITEM 78, which had already found both the missing
+    PUBLISHED stage and the two different things called the library. Item 78 is
+    the audit; this is the decision. READ THEM TOGETHER, and do not let them
+    become two accounts of the same thing — which is precisely what item 84 is
+    about.
