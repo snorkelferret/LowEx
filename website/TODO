@@ -8518,3 +8518,44 @@ no upside. If something seems to need one of them, ask.
     the audit; this is the decision. READ THEM TOGETHER, and do not let them
     become two accounts of the same thing — which is precisely what item 84 is
     about.
+
+    ============================================================
+    AND THE ANSWER TO THE PRIVATE QUESTION, 2026-10-16
+    ============================================================
+
+    PRIVATE IS THE OWNER'S ALONE. Admins do not get a read path; they get in by
+    IMPERSONATION, which the owner describes as "login as", "done in
+    exceptional circumstances".
+
+    SO THE SPEC'S "You · Admin · Superuser" IS SUPERSEDED TWICE OVER: superuser
+    is gone (item 51), and admin is IN by impersonation rather than by default
+    visibility.
+
+    --- AND IMPERSONATION IS NOT BUILT, WHICH THE OWNER BELIEVED IT WAS ---
+
+    He said it "has been there for a long time". What has been there a long
+    time is the RULE, which is argued at length in three files — and the rule
+    is right. The MECHANISM is not there at all:
+
+      * sessions.is_impersonated and sessions.impersonated_by exist and are
+        NEVER READ OR WRITTEN. They are schema, and nothing else.
+      * Only three places mint a session token — backend/server.js:211,
+        backend/server.js:404, backend/routes/auth.js:50 — and all three mint
+        for the person who just authenticated. No route takes a user id to act
+        as.
+      * backend/generated/manual.html already says "impersonation is not built
+        yet" and lists it as item 5.
+      * ITS ENTRY POINT is `signInAsBtn`, recorded in this file as "deferred by
+        decision" — and it lived on the SUPERUSER dashboard, which was deleted
+        on 2026-10-06. The entry point went with the role it was put on.
+
+    SO TODAY AN ADMIN CANNOT SEE A DEVELOPER'S PRIVATE WORK AT ALL. That was
+    survivable while the private side was a workspace nobody had been promised
+    anything about. It stops being survivable the moment private is the
+    OWNER-ONLY stage of the one asset store — because then a developer who
+    loses something, or leaves, or uploads something they should not have, has
+    no route to help and no route to investigation.
+
+    IMPERSONATION IS THEREFORE A PREREQUISITE OF THE PRIVATE STAGE, not a
+    separate feature. Marked, time-bounded and audit-logged, as the rule
+    already says in three places.

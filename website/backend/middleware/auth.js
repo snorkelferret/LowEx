@@ -124,7 +124,9 @@ function requireRole(...allowedRoles) {
 }
 
 function requireAdmin(req, res, next) {
-  // Superusers automatically pass admin checks
+  // Admin, and only admin. There is no role above it — 'superuser' was
+  // removed on 2026-10-06 — so this is a plain equality rather than a
+  // ladder check, and a role added above admin would need it changed here.
   if (req.user?.role === 'admin') {
     return next();
   }

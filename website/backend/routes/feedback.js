@@ -164,7 +164,7 @@ router.post('/', optionalAuth, (req, res) => {
 // GET /api/feedback
 // ============================================================
 //
-// Admin and superuser only. Reports can contain anything — a fragment of a
+// Admin only. Reports can contain anything — a fragment of a
 // customer's data pasted into a bug report is the usual way — so they are not
 // readable by whoever happens to be signed in.
 //
@@ -246,7 +246,7 @@ router.get(
 // POST /api/feedback/:id/resolve
 // ============================================================
 //
-// Marks a report done. Admin and superuser only, audit-logged.
+// Marks a report done. Admin only, audit-logged.
 //
 // The note is optional but the status change is not: a report that is resolved
 // with no record of what was done is only marginally better than one that was

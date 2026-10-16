@@ -80,8 +80,8 @@ app.use('/api/auth', require('./routes/auth'));
 // should not answer to a cookie, and the rest are operations that belong on the
 // machine.
 //
-// What remains web-reachable is the ADMIN set, which a superuser also passes —
-// requireAdmin accepts admin and superuser alike.
+// What remains web-reachable is the ADMIN set, and requireAdmin accepts the
+// role 'admin' and nothing else. There is no longer a role above it.
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/inviteDevs', inviteDevRoutes);
 app.use('/api/developer/workspace', developerWorkspaceRoutes);

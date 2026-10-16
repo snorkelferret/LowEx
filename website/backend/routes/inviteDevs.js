@@ -46,7 +46,7 @@ const linkFor = (token) => inviteLinkFor(CLIENT_URL, token);
 
 /**
  * GET /api/inviteDevs/list
- * Admin/superuser. Every invitation, newest first, with a derived status that
+ * Admin only. Every invitation, newest first, with a derived status that
  * distinguishes expired from pending.
  */
 router.get('/list', authenticateToken, requireAdmin, (req, res) => {
@@ -413,7 +413,7 @@ router.post('/request-reissue', async (req, res) => {
 
 /**
  * POST /api/inviteDevs/:id/revoke
- * Admin/superuser. Withdraws a pending invitation.
+ * Admin only. Withdraws a pending invitation.
  *
  * Only the INVITATION is revoked here. Revoking an account that already exists
  * is a different operation — `users.is_active = 0` — and that already takes
@@ -473,7 +473,7 @@ router.post('/:id/revoke', authenticateToken, requireAdmin, (req, res) => {
 
 /**
  * POST /api/inviteDevs/:id/reissue
- * Admin/superuser. Reissues a pending invitation, chosen from the list.
+ * Admin only. Reissues a pending invitation, chosen from the list.
  *
  * This is the ADMIN-side counterpart to /request-reissue. That one is
  * unauthenticated because whoever asks holds a link and has no account yet, so
