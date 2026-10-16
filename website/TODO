@@ -8212,3 +8212,197 @@ no upside. If something seems to need one of them, ask.
     live in the repository rather than in /tmp. NOT DONE, DELIBERATELY: where
     and how this project tests the browser is a decision nobody has made, and
     adding a runner is that decision, not a tidy-up.
+
+86) THE LIBRARY IS NOT A THIRD SPACE. IT IS THE WHOLE SYSTEM, AND THE GAME IS
+    A SUBSET OF IT. RAISED 2026-10-15 BY THE OWNER, WHO SAID TO CHECK THE SPEC.
+    The spec agrees with him and this file did not.
+
+    ============================================================
+    WHAT THE SPEC SAYS — docs/OpenWorld Asset Library.pdf
+    ============================================================
+
+    "The OpenWorld Asset Library is the central place for storing, discovering
+    and sharing the things we create for the game."
+
+    "It can contain anything from a photograph used as reference to a finished
+    Unreal asset."
+
+    AND THE JOURNEY, in the spec's own diagram:
+
+        CREATE → PRIVATE → PUBLISHED → SUBMIT FOR GAME → TECHNICAL TEST
+               → DIRECTOR REVIEW → GAME APPROVED → CURRENT GAME VERSION
+
+    WITH SHARE and DISCUSS hanging off PUBLISHED, and REJECT looping back to
+    REVISE.
+
+    AND THE SENTENCE THE WHOLE THING RESTS ON:
+
+        "The most important rule is: Publishing an asset does not put it in the
+         game."
+
+    ============================================================
+    THE FIVE STAGES, AS THE SPEC DESCRIBES THEM
+    ============================================================
+
+      🔒 PRIVATE      "your working area". Upload work in progress, replace
+                      files, experiment, delete versions. Visible to
+                      "You · Admin · Superuser. Other developers cannot see
+                      them."
+
+      🌍 PUBLISHED    "a fixed version". Others may view it, download it, use it
+                      as reference, discuss it, or "use it as the starting point
+                      for their own work". "They cannot overwrite your published
+                      version. If they want to change it, they create their own
+                      version."
+
+                      AND PUBLISHED IS NOT APPROVED: "There is no requirement to
+                      submit every published asset for game approval."
+
+      🚦 SUBMIT FOR GAME   "The owner decides when a particular version is ready
+                      to be considered for the game. Only then does the approval
+                      process begin."
+
+      🧪 TECHNICAL TEST    "Before an asset can enter the controlled game, it
+                      must be tested against the appropriate official game
+                      build." ... "The system records the exact asset and exact
+                      game build that were tested. You cannot simply type:
+                      'Tested against Development.' The system knows exactly
+                      which build was used."
+
+      🎨 DIRECTOR APPROVAL "Technical correctness is only half of the process.
+                      The Director decides whether the asset is artistically
+                      suitable." An asset may be "Technically correct but
+                      artistically rejected" or "Artistically excellent but
+                      technically not ready". "Both decisions are recorded
+                      separately."
+
+    AND TWO MORE THINGS THAT ARE NOT BUILT AT ALL:
+
+      BRANCHES AND BUILDS.  Production (stable), Development (current),
+                      Experimental, "Additional branches can be created when
+                      required. Each branch has official builds." A test is
+                      against ONE BUILD: "A developer who tested against Build
+                      203 cannot submit that test when Build 204 is the required
+                      current build. The system will require the developer to
+                      obtain the appropriate build and test again."
+
+      THE GAME'S VERSION IS NOT THE LATEST VERSION.  The spec's example has Old
+                      Factory at v5 published while "Current game version: v3".
+                      "The game therefore explicitly records which version is
+                      currently being used."
+
+    AND: "An asset can belong to more than one category" — the spec's own
+    example is "Oak tree photograph — Reference · Vegetation · Trees ·
+    Environment" — and "An asset can have multiple tags and classifications."
+
+    ============================================================
+    WHAT IS BUILT, AND WHERE IT DIVERGES
+    ============================================================
+
+      SPEC STAGE          WHAT EXISTS TODAY
+      ------------------  -------------------------------------------------
+      PRIVATE             the WORKSPACE. Private-ish, but there is no notion
+                          of a version that only you can see versus one
+                          colleagues can: a workspace is invisible to
+                          everybody else entirely.
+      PUBLISHED           NOTHING. This is the stage the whole design hangs
+                          on and it has no implementation. There is no way to
+                          make a version visible to colleagues without also
+                          submitting it for the game.
+      SUBMIT FOR GAME     creative_approvals, submitted by the developer.
+      TECHNICAL TEST      technical_check_runs / _results. Real, and tied to a
+                          workspace version — BUT NOT TO A GAME BUILD, which is
+                          the one thing the spec is emphatic about.
+      DIRECTOR APPROVAL   creative_approvals decided by the role named 'prod'.
+                          The spec says DIRECTOR, and calls it an artistic
+                          decision recorded SEPARATELY from the technical one.
+      GAME APPROVED       an asset_version appearing in the store.
+      CURRENT GAME        asset_recommended_versions EXISTS —
+      VERSION             asset_id + version_id, one row per asset — and is
+                          EMPTY. It is precisely the spec's "the game explicitly
+                          records which version is currently being used", and
+                          nothing writes it.
+      BRANCHES / BUILDS   NOTHING. No branch, no build, no commit.
+      CATEGORIES          ONE column, `category`, single-valued. The spec wants
+                          several per asset.
+      NOTIFICATIONS       backend/lib/notify.js exists, aimed at admins. The
+                          spec wants the OWNER told when a test passes or fails
+                          and when the director decides.
+
+    ============================================================
+    WHICH MAKES ITEMS 57 AND 58 WRONG, AND THEY ARE MINE
+    ============================================================
+
+    ITEM 57 built the library as "the third space", alongside the workspace and
+    the store. THE SPEC MAKES IT THE FIRST SPACE: the store from which
+    everything is taken, of which the game's content is a subset.
+
+    ITEM 58 says "an image is not a game asset", which is true about the GAME
+    and was used to argue the library must therefore be somewhere else. The
+    spec's answer is the other way round: the library holds BOTH — "anything
+    from a photograph used as reference to a finished Unreal asset" — and the
+    question of what is in the game is asked LATER, at submit.
+
+    SO THE SHAPE IS NOT THREE SPACES. IT IS ONE LIBRARY, with two things
+    recorded about its contents:
+
+        the STAGE a version has reached   (private → published → submitted →
+                                           tested → approved)
+        the GAME VERSIONS it is in        (one, several, or none)
+
+    The workspace and the store are then VIEWS of that one thing rather than
+    separate places with separate copies.
+
+    ============================================================
+    WHAT THE OWNER ASKED FOR, AND HOW IT SITS AGAINST THE SPEC
+    ============================================================
+
+      "devs can upload stuff to the library"        the spec says so.
+      "remove the approval by production"           the spec agrees that
+                                                    PUBLISHING needs no
+                                                    approval. Approval is only
+                                                    for entering the GAME, and
+                                                    it is the DIRECTOR's.
+      "the admin should be informed that stuff has  the spec wants the OWNER
+       been uploaded"                               notified; private versions
+                                                    are visible to admin. Not a
+                                                    contradiction, an addition.
+      "when the dev is uploading things to be       THE SPEC PUTS THE TEST LATER,
+       included in the game it goes through the     at SUBMIT FOR GAME, not at
+       tech checks and if it fails it can't be      upload. See the question
+       uploaded, otherwise it goes to the library"  below — this is the one place
+                                                    the two readings differ.
+      "specify which part of the game"              the spec's multiple
+                                                    categories.
+      "pass the tech checks then be submitted for   exactly the spec's stages 4
+       approval for inclusion by the prod"          and 5 — with the naming
+                                                    question below.
+      "the library is the complete asset store"     THE SPEC'S OWN WORDS.
+      "an asset may be in one or many versions of   the spec: branches, builds,
+       the game"                                    and a recorded current
+                                                    version per asset.
+
+    ============================================================
+    THE QUESTIONS THAT ACTUALLY BLOCK
+    ============================================================
+
+    1. DOES THE TECH CHECK RUN AT UPLOAD, OR AT SUBMIT? The owner says at
+       upload, for anything destined for the game. The spec puts it at submit,
+       against a specific build. These are different rules: at upload there is
+       nothing to test against yet, because a build has to be named.
+
+    2. IS 'prod' THE DIRECTOR? The role exists and decides creative approvals
+       today. The spec says Director and treats it as an artistic decision
+       separate from the technical one. Either the role is renamed, or the
+       director is somebody else.
+
+    3. WHAT IS A "VERSION OF THE GAME" — a BRANCH (Production, Development,
+       Experimental), or a BUILD within a branch, or a release? Item 60 has
+       this open already. It decides what "in one or many versions" means.
+
+    4. DOES THE WORKSPACE SURVIVE? If the library is the whole system, the
+       workspace is either the PRIVATE stage of a library asset, or something
+       else. It has its own tables, quota, bin and history today.
+
+    NOTHING IS CHANGED YET. This item is the correction to the model, written
+    down before anything is built on top of it.
