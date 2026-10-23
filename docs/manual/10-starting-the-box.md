@@ -89,7 +89,8 @@ you if any content no longer matches its own name.
 One script, run from cron. It does two things in order, because the second
 feeds on the first:
 
-1. **Empties expired bins.** Anything deleted more than 14 days ago loses its
+1. **Empties expired bins.** Anything deleted longer ago than the **wastebin
+   retention** setting — 14 days by default, an admin can change it — loses its
    files. The version and everything that happened to it stay.
 2. **Collects unreferenced content.** Blobs nothing points at any more lose
    their row and their file. This is what actually frees disk.

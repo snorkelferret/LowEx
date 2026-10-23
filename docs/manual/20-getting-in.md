@@ -44,6 +44,11 @@ reaches you either way.
 Username and password, then a **code from an authenticator app**. Two-factor is
 required; there is no way to skip it.
 
+**If you have not set up an authenticator yet**, the portal accepts **`000000`**
+while no secret is registered for your account — which is how a brand new
+account signs in before its authenticator exists. It is a fallback, not a second
+password: set the authenticator up rather than relying on it.
+
 If you cannot get in at all — the link is dead, the code will not work, the
 password is wrong — use the **Report a problem** button in the bottom-right
 corner of every page. That button works *without* being signed in, deliberately:

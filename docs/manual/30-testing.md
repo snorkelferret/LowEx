@@ -8,8 +8,9 @@ There is no "tester" account type and no permission for it. A tester is simply
 someone with a login and the plain `user` role.
 
 That is deliberate. Everyone who has a login can be a tester: developers and
-administrators too. Downloading a build, leaving a comment or reporting a
-problem are things any signed-in person can do, not a special grant.
+administrators too. Reporting a problem is something any signed-in person can
+do, not a special grant — and downloading a build or leaving a comment will be
+the same, when they exist (see below).
 
 So being invited "as a tester" just means being invited as a plain user. You get
 no workspace and no upload rights, and none of that is a restriction placed on

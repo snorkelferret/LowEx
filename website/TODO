@@ -9609,6 +9609,54 @@ no upside. If something seems to need one of them, ask.
       note and the manual both say it.
 
     ============================================================
+    THE SYSTEMATIC MANUAL PASS — 2026-10-23
+    ============================================================
+
+    THE OWNER ASKED whether the manual/code discrepancies were actually fixed.
+    THEY WERE NOT, FULLY. The earlier pass fixed the six that this week's work
+    touched; it had not gone through every file. THIS ONE DID, section by
+    section, and found four more:
+
+      50 SETTINGS TABLE      did not list SESSION LIFETIME — a gap this session
+                             CREATED by adding the setting and not the row. Now
+                             lists it, with the "applies from the next sign-in"
+                             note the other two settings already have.
+      30 TESTERS             "Downloading a build, leaving a comment or
+                             reporting a problem ARE things any signed-in person
+                             can do" — present tense about two things that do
+                             not exist, on a page that then lists them as
+                             things that do not exist.
+      10 STARTING            "deleted more than 14 days ago" — 14 is the DEFAULT
+                             of a setting now, not a fixed number.
+      20 SIGNING IN          TOLD NOBODY ABOUT `000000`. The page says two-factor
+                             is required and cannot be skipped, and never says
+                             what to type when no authenticator is registered —
+                             which is every new account. The sign-in page itself
+                             says it; the manual did not.
+
+    --- AND ONE DEFECT IN THE CODE, FOUND BY CHECKING THE MANUAL AGAINST IT ---
+
+      THE HISTORY TAB DID NOT RENDER REFUSED UPLOADS. The API returned
+      `refused_uploads`; the client read it and rendered nothing. So the refusal
+      the owner asked for was recorded and never shown — the requirement was
+      "refuse with explanations to human, so in the history", and half of it
+      was done.
+
+      Now rendered, with what was refused, how many files, which metadata
+      differed, and when.
+
+      WORTH KEEPING: the manual is what led to a CODE bug. Comparing a sentence
+      against the behaviour is a test nobody had written, and it caught one.
+
+    --- WHAT ELSE WAS CHECKED AND FOUND CORRECT ---
+
+      the five check scripts named and described 10 correctly; the daily job's
+      flags, 24-hour grace and cron reasoning; the disk layout and the backup
+      pairing; the invitation window and its six reissues; deactivation taking
+      effect on the next request; the bin, soft delete and "a developer can
+      never remove a game asset"; the technical check's table of seven checks.
+
+    ============================================================
     THE VERIFICATION PASS — MANUAL, SPEC AND CODE CHECKED AGAINST EACH OTHER
     2026-10-23
     ============================================================

@@ -2540,6 +2540,66 @@ function renderDownloadHistory(downloads) {
     return section;
 }
 
+// WHAT DID NOT GET IN, AND WHY.
+//
+// An upload refused for changing nothing stored nothing, so it leaves no row in
+// the workspace — the audit log is the only record, and until this the developer
+// was told once, at the moment it happened, and could never look it up again.
+function renderRefusedUploadHistory(refusals) {
+    const section = document.createElement('div');
+    section.className = 'mt-4';
+
+    const heading = document.createElement('h3');
+    heading.className = 'h6 mb-1';
+    heading.textContent = 'Uploads refused';
+    section.appendChild(heading);
+
+    const note = document.createElement('p');
+    note.className = 'small text-secondary mb-2';
+    note.textContent =
+        'Uploads that stored nothing, because their content was identical to a ' +
+        'version you already had. Nothing was changed and no version was made.';
+    section.appendChild(note);
+
+    for (const item of refusals) {
+        const row = document.createElement('div');
+        row.className = 'd-flex flex-wrap justify-content-between gap-2 border-bottom py-2';
+
+        const what = document.createElement('div');
+
+        const name = document.createElement('div');
+        name.className = 'fw-medium';
+        name.textContent = item.version_number
+            ? `${item.asset_name} — same as v${item.version_number}`
+            : item.asset_name;
+        what.appendChild(name);
+
+        const detail = document.createElement('div');
+        detail.className = 'small text-secondary';
+
+        const bits = [
+            `${item.file_count} file${item.file_count === 1 ? '' : 's'}`
+        ];
+
+        if (Array.isArray(item.metadata_changed) && item.metadata_changed.length) {
+            bits.push(`only the ${item.metadata_changed.join(' and ')} differed`);
+        }
+
+        detail.textContent = bits.join(' · ');
+        what.appendChild(detail);
+        row.appendChild(what);
+
+        const when = document.createElement('div');
+        when.className = 'small text-secondary text-end';
+        when.textContent = formatWorkspaceDate(item.created_at);
+        row.appendChild(when);
+
+        section.appendChild(row);
+    }
+
+    return section;
+}
+
 function renderAssetHistory(data) {
     const list = $('historyList');
     if (!list) return;
@@ -2551,11 +2611,12 @@ function renderAssetHistory(data) {
 
     const assets = data.assets || [];
     const downloads = data.downloads || [];
+    const refusals = data.refused_uploads || [];
 
     // NEITHER, rather than no assets — a developer who has only ever downloaded
     // somebody else's work has a history, and being told they have not uploaded
     // anything would be true and useless.
-    if (assets.length === 0 && downloads.length === 0) {
+    if (assets.length === 0 && downloads.length === 0 && refusals.length === 0) {
         list.className = 'text-secondary';
         list.textContent =
             'Nothing yet. Work you upload will be recorded here, including ' +
@@ -2570,6 +2631,10 @@ function renderAssetHistory(data) {
 
     if (downloads.length > 0) {
         list.appendChild(renderDownloadHistory(downloads));
+    }
+
+    if (refusals.length > 0) {
+        list.appendChild(renderRefusedUploadHistory(refusals));
     }
 }
 

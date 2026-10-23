@@ -189,11 +189,15 @@ audit log with who changed it and what it was before.
 | **Developer storage allowance** | How much each developer's workspace may hold |
 | **Warning level** | When a disk, file table or quota is called "filling up" |
 | **Critical level** | When it is called "nearly full" |
+| **Session lifetime** | How long a sign-in lasts before it is refused — **2 hours by default**, between 1 and 24 |
 
-Two things about these are worth knowing in advance:
+Three things about these are worth knowing in advance:
 
 - **Changing the invitation window does not affect invitations already sent.**
   Each one keeps the date it was issued with.
+- **Changing the session lifetime applies from the next sign-in.** The deadline
+  is inside the session token, so anyone signed in now keeps the expiry they
+  were issued with.
 - **Changing the wastebin retention does affect items already in a bin.** The
   deadline is worked out from when the item was deleted, so shortening the
   window can bring something to its purge date immediately. The panel says so
