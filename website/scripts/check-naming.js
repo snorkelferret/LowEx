@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const N = require(path.join(__dirname, '../shared/assetRules.mjs'));
 const F = require(path.join(__dirname, '../shared/feedbackRules.mjs'));
+const MAN = require(path.join(__dirname, '../shared/manifest.mjs'));
 
 let pass = 0;
 let fail = 0;
@@ -448,6 +449,49 @@ check('the page URL is truncated, not refused',
 check('validateFeedback returns nothing the client could use to claim identity',
     !('user_id' in F.validateFeedback({ kind: 'bug', message: 'hi' }).value) &&
     !('created_at' in F.validateFeedback({ kind: 'bug', message: 'hi' }).value));
+
+// ---------------------------------------------------------------- manifest
+
+{
+    const files = [
+        { relative_path: 'Game/art', filename: 'tree.png', sha256: 'aaa', size: 10 },
+        { relative_path: 'Game', filename: 'scene.blend', sha256: 'bbb', size: 20 }
+    ];
+
+    check('the canonical path joins with a forward slash',
+        MAN.canonicalPath('Game/art', 'tree.png') === 'Game/art/tree.png');
+
+    check('a Windows path hashes like a Linux one',
+        MAN.canonicalPath('Game\\art', 'tree.png') === 'Game/art/tree.png');
+
+    check('entries are sorted by path',
+        MAN.manifestEntries(files).map(e => e.path).join('|') ===
+            'Game/art/tree.png|Game/scene.blend');
+
+    check('the hash does not depend on the order the files arrive in',
+        MAN.manifestCanonical(files) === MAN.manifestCanonical([...files].reverse()));
+
+    check('a changed byte changes the canonical form',
+        MAN.manifestCanonical(files) !==
+            MAN.manifestCanonical([{ ...files[0], sha256: 'zzz' }, files[1]]));
+
+    check('a moved file changes the canonical form',
+        MAN.manifestCanonical(files) !==
+            MAN.manifestCanonical([{ ...files[0], relative_path: 'Game/textures' }, files[1]]));
+
+    check('a renamed file changes the canonical form',
+        MAN.manifestCanonical(files) !==
+            MAN.manifestCanonical([{ ...files[0], filename: 'oak.png' }, files[1]]));
+
+    check('a file arriving or leaving changes the canonical form',
+        MAN.manifestCanonical(files) !== MAN.manifestCanonical([files[0]]));
+
+    // The separator bug a plain concatenation would have: without escaping,
+    // these two different file sets would join to the same string.
+    check('a filename cannot forge the separator',
+        MAN.manifestCanonical([{ relative_path: 'a', filename: 'b', sha256: 'c', size: 1 }]) !==
+        MAN.manifestCanonical([{ relative_path: 'a"', filename: 'b', sha256: 'c', size: 1 }]));
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 console.log(fail === 0 ? '\n  PASS' : '\n  FAIL');

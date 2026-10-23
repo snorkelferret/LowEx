@@ -26,6 +26,12 @@ const {
 const db = require('./db');
 const audit = require('./lib/audit');
 
+// DATA REPAIRS RUN ONCE THE DATABASE IS OPEN, not inside db.js — see that
+// file's note on why it may not require a sibling. This fills in the content
+// identity of any version created before the column existed, and does nothing
+// on every subsequent start.
+require('./lib/backfillManifestHashes').backfillManifestHashes(db);
+
 // Shared invitation rules, so registration and creation cannot disagree about
 // what "still valid" means.
 const { isAcceptable } = require('./lib/invites');

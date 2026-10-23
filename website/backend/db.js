@@ -269,6 +269,10 @@ const applyAssetRepositorySchema = () => {
       deleted_at DATETIME,
       files_purged_at DATETIME,
       purged_file_manifest TEXT,
+      -- The content identity of this version: one SHA-256 over its components,
+      -- path + sha + size, canonically ordered. See shared/manifest.mjs.
+      -- NOT UNIQUE, deliberately: two versions may hold identical content.
+      manifest_hash TEXT,
       FOREIGN KEY (workspace_asset_id)
         REFERENCES workspace_assets(id)
         ON DELETE CASCADE,
@@ -300,6 +304,9 @@ const applyAssetRepositorySchema = () => {
       created_by INTEGER NOT NULL,
       version_note TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      -- The content identity of this version — see shared/manifest.mjs.
+      -- NOT UNIQUE: see the note on workspace_versions above.
+      manifest_hash TEXT,
       FOREIGN KEY (asset_id)
         REFERENCES assets(id),
       UNIQUE (asset_id, version_number),
@@ -692,6 +699,18 @@ const applyAssetWorkflowSchemaPatches = () => {
    * ----------------------------------------------------------
    */
 
+  const assetVersionColumns = db
+    .prepare("PRAGMA table_info(asset_versions)")
+    .all()
+    .map(c => c.name);
+
+  if (!assetVersionColumns.includes('manifest_hash')) {
+    db.exec(`
+      ALTER TABLE asset_versions
+      ADD COLUMN manifest_hash TEXT;
+    `);
+  }
+
   const workspaceAssetColumns = db
     .prepare("PRAGMA table_info(workspace_assets)")
     .all()
@@ -800,6 +819,16 @@ const applyAssetWorkflowSchemaPatches = () => {
     db.exec(`
       ALTER TABLE workspace_versions
       ADD COLUMN repository_version_id INTEGER;
+    `);
+  }
+
+  // THE CONTENT IDENTITY OF THE VERSION. Backfilled below for every existing
+  // version, because a version without one would silently disagree with a
+  // comparison that expects it.
+  if (!workspaceVersionColumns.includes('manifest_hash')) {
+    db.exec(`
+      ALTER TABLE workspace_versions
+      ADD COLUMN manifest_hash TEXT;
     `);
   }
 
@@ -1123,6 +1152,19 @@ const applyAssetWorkflowSchemaPatches = () => {
  * ------------------------------------------------------------
  * Database initialisation
  * ------------------------------------------------------------
+ */
+
+/*
+ * NOTHING IN THIS FILE MAY REQUIRE A SIBLING FILE.
+ *
+ * scripts/check-schema-drift.js copies db.js ALONE into a temp directory and
+ * symlinks only node_modules — which is how it proves the schema comes from
+ * db.js rather than from the live database. A require('./lib/...') here breaks
+ * that check, and it broke it once: the manifest backfill lived here for an
+ * hour before check:schema caught it.
+ *
+ * DATA REPAIRS BELONG ELSEWHERE. backend/lib/backfillManifestHashes.js is
+ * called from server.js for exactly this reason.
  */
 
 const initDb = () => {
@@ -1641,6 +1683,7 @@ const initDb = () => {
    */
 
   applyAssetWorkflowSchemaPatches();
+
 
 
   /*

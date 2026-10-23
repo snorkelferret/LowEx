@@ -42,6 +42,8 @@ const {
 const { formatBytes } = require('../../shared/formatBytes.mjs');
 // Where the store's files live, and the only safe way to build a path to one.
 const { BLOB_DIR, TMP_DIR, isStorageKey, blobPath } = require('../lib/storagePaths');
+// A version's content identity — one SHA-256 over its components.
+const { manifestHash } = require('../lib/manifestHash');
 // Getting bytes into the store. SHARED WITH THE LIBRARY'S UPLOAD — there is one
 // implementation of this on purpose; see the note at the top of the file.
 const { storeOne } = require('../lib/ingestFiles');
@@ -2973,6 +2975,32 @@ router.post(
 
 
                         // --------------------------------------------
+                        // The version's CONTENT IDENTITY.
+                        //
+                        // Computed from the files just written, inside the same
+                        // transaction, so a version cannot exist without the
+                        // value that says which content it is. See
+                        // shared/manifest.mjs and docs/SPEC.md §4.
+                        // --------------------------------------------
+
+                        db.prepare(`
+                            UPDATE workspace_versions
+                            SET manifest_hash = ?
+                            WHERE id = ?
+                        `).run(
+                            manifestHash(
+                                processedFiles.map(item => ({
+                                    relative_path: item.relativePath,
+                                    filename: item.filename,
+                                    sha256: item.sha256,
+                                    size: item.file.size
+                                }))
+                            ),
+                            versionId
+                        );
+
+
+                        // --------------------------------------------
                         // Return the newly-created records.
                         // --------------------------------------------
 
@@ -4516,6 +4544,37 @@ router.post(
                     `).run(
                         repositoryVersionId,
                         approval.workspace_version_id
+                    );
+
+
+                    // ------------------------------------------------
+                    // The repository version's CONTENT IDENTITY.
+                    //
+                    // Computed from the rows just copied, in the same
+                    // transaction — so the store's version carries the same
+                    // kind of identity the workspace version does, and the two
+                    // are computed the same way.
+                    // ------------------------------------------------
+
+                    db.prepare(`
+                        UPDATE asset_versions
+                        SET manifest_hash = ?
+                        WHERE id = ?
+                    `).run(
+                        manifestHash(
+                            db.prepare(`
+                                SELECT
+                                    f.relative_path,
+                                    f.filename,
+                                    sf.sha256,
+                                    sf.file_size AS size
+                                FROM asset_version_files f
+                                JOIN stored_files sf
+                                    ON sf.id = f.stored_file_id
+                                WHERE f.asset_version_id = ?
+                            `).all(repositoryVersionId)
+                        ),
+                        repositoryVersionId
                     );
 
 

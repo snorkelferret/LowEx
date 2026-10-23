@@ -117,7 +117,7 @@ const versionsOf = db.prepare(`
 `);
 
 const versionForDownload = db.prepare(`
-    SELECT av.id, av.version_number
+    SELECT av.id, av.version_number, av.manifest_hash
     FROM asset_versions av
     WHERE av.id = ? AND av.asset_id = ?
 `);
@@ -487,7 +487,9 @@ router.get(
             // one function.
             const { manifest, refused } = buildVersionArchive(files, {
                 assetName: asset.name,
-                versionNumber: version.version_number
+                versionNumber: version.version_number,
+                manifestHash: version.manifest_hash,
+                complete: true
             });
 
             return res.json({
@@ -650,7 +652,9 @@ router.post(
             const { stream, manifest } = buildVersionArchive(files, {
                 assetName: asset.name,
                 versionNumber: version.version_number,
-                stripRoot
+                stripRoot,
+                manifestHash: version.manifest_hash,
+                complete: files.length === rows.length
             });
 
             const safeName = String(asset.name).replace(/[^A-Za-z0-9._-]+/g, '_');

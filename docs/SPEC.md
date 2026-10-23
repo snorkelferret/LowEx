@@ -181,14 +181,17 @@ size`, sorted by canonical path, then hashed. One implementation serves three
 purposes: detecting change, identifying content, and proving that *the version
 tested is the version submitted*.
 
-> **NOT BUILT.** Only per-file SHA-256 exists today. The manifest hash is the
-> single thing three separate requirements all need — this comparison, the
-> version's content identity, and the test receipt (§13) — which is why they
-> should be built together rather than as three.
+**BUILT** — `shared/manifest.mjs` canonicalises the components and
+`backend/lib/manifestHash.js` hashes them. Every version carries one, and it is
+returned by the manifest endpoint and written into every archive manifest.
 
-> The manifest hash identifies **content**, not the version. Two versions may
-> share one, because an insisted metadata change makes a version without changing
-> a byte. It must never be `UNIQUE`, and never used as a version identifier.
+> The value identifies **content**, not the version: two versions may hold it
+> (an insisted description change makes a version without changing a byte). It
+> is never `UNIQUE` and never a version identifier.
+>
+> An archive says whether it is the **whole version** — `complete` — because a
+> negotiated download is routinely a subset, and the hash does not change with
+> it.
 
 **Tech check at upload.** Nothing enters the store untested (TODO 86). File
 contents *are* inspected — the first 512 bytes against a signature table — so a

@@ -53,6 +53,11 @@ const { Readable } = require('stream');
 // hand-rolled one that could be subtly wrong.
 const zlib = require('zlib');
 
+// The version's content identity. Same inputs as the value stored on
+// asset_versions, so the two agreeing is a property of the code rather than of
+// everybody remembering.
+const { manifestHash: computeManifestHash } = require('./manifestHash');
+
 // ---------------------------------------------------------------------------
 // Paths inside the archive
 // ---------------------------------------------------------------------------
@@ -182,7 +187,14 @@ function endOfCentralDirectory(count, size, offset) {
  * path cannot be made safe is a fact about that version, not a reason to fail
  * the request — but it must not be silently dropped either.
  */
-function buildVersionArchive(files, { assetName, versionNumber, stripRoot = null } = {}) {
+function buildVersionArchive(files, {
+    assetName,
+    versionNumber,
+    stripRoot = null,
+    manifestHash = null,
+    complete = null
+} = {}) {
+
     const refused = [];
     const entries = [];
     let offset = 0;
@@ -220,6 +232,35 @@ function buildVersionArchive(files, { assetName, versionNumber, stripRoot = null
         // a name or a thing.
         asset_name: assetName ?? null,
         version_number: versionNumber ?? null,
+
+        // THE VERSION'S CONTENT IDENTITY — always, whatever this archive
+        // holds. Computed from the ORIGINAL relative_path and filename, NOT
+        // from the entry names above, because the entry names have the
+        // container folder stripped for the download while the version's
+        // identity does not.
+        //
+        // THE CALLER SUPPLIES IT when it has it, so the value here is the same
+        // one stored on the version rather than an independent recomputation
+        // that could disagree. When it is not supplied — an archive built from
+        // a bare list of files — it is computed from those files.
+        manifest_hash: manifestHash || computeManifestHash(planned.map(({ file }) => ({
+            relative_path: file.relative_path,
+            filename: file.filename,
+            sha256: file.sha256,
+            size: file.file_size
+        }))),
+
+        // WHETHER THIS ARCHIVE IS THE WHOLE VERSION, or a subset of it — which
+        // the negotiation routinely produces: a developer who already has most
+        // of a version is sent only the difference.
+        //
+        // IT MATTERS BECAUSE manifest_hash DOES NOT CHANGE WITH IT. The hash
+        // names the version; `files` says what is in this zip. Reading the hash
+        // as "the hash of what you just received" would be wrong for any
+        // partial archive, and a receiver can only tell the difference from
+        // this flag.
+        complete: complete ?? planned.length === files.length,
+
         generated_at: new Date().toISOString(),
         // WHAT THE RECEIVER SHOULD END UP WITH. The paths are relative to the
         // project root the developer unpacks into, which is what §5B means by
