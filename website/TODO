@@ -9287,6 +9287,35 @@ no upside. If something seems to need one of them, ask.
       about one and wrong about the other.
 
     ============================================================
+    B3. STATE ON THE ASSET OR THE VERSION — ALREADY SETTLED BY ITEM 86
+    ============================================================
+
+    THE CONTRADICTION. The System PDF gives the asset a `status` field (§4) AND
+    the version a `visibility` field (§5, PRIVATE/PUBLISHED), then describes
+    visibility in §6 as a system-wide model. `assets.status` is never defined
+    anywhere — no values, no meaning.
+
+    IT IS ALREADY DECIDED, BY ITEM 86: the STAGE a version has reached —
+    private, published, submitted, tested, approved — is PER VERSION. So
+    `assets.status` is redundant and is not carried into the living spec, and
+    the stage belongs on the version.
+
+    THE CODE HAS NEITHER COLUMN, which is correct for the first and simply
+    unbuilt for the second.
+
+    WRITTEN INTO docs/SPEC.md §5, and §15 lists the PDF's two fields as
+    superseded. Nothing further to rule on.
+
+    --- AND D1 AND D2, WHICH ARE NOW COVERED ELSEWHERE ---
+
+      D1  GITHUB -> PERFORCE is B1's subject, and B1 settled it: two
+          repositories, two tools, with the PDFs superseded on the tool.
+      D2  IN-PORTAL CHAT -> A SEPARATE BOARD is written into docs/SPEC.md §12
+          with the PDF's sentence marked SUPERSEDED.
+
+    SO D IS DOWN TO D3.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9305,8 +9334,7 @@ no upside. If something seems to need one of them, ask.
     B. THE SPECS CONTRADICT EACH OTHER OR THEMSELVES
       B1  where the game lives — SETTLED above (PDFs right in shape, wrong in tool)
       B2  published immutability vs admin write/delete — SETTLED above
-      B3  is state on the asset (assets.status) or the version
-          (asset_versions.visibility)? Item 86 settled it per VERSION
+      B3  state on the asset or the version — SETTLED by item 86, written above
       B4  forks in the workspace, linear at the store — SETTLED above
 
     C. THE CODE IS WRONG
@@ -9317,8 +9345,8 @@ no upside. If something seems to need one of them, ask.
       C4  session lifetime — settled above as A1
 
     D. THE TODO OVERRULED THE SPEC WITHOUT SAYING SO
-      D1  GitHub -> Perforce for the game (the PDFs make it structural)
-      D2  in-portal chat -> a separate board reached by a link
+      D1  GitHub -> Perforce — covered by B1 above
+      D2  in-portal chat -> a separate board — covered by SPEC.md §12
       D3  deploy-any-branch-to-a-sandbox -> nothing
 
     E. THE SPEC DESCRIBES IT AND NOTHING IMPLEMENTS IT
