@@ -429,7 +429,7 @@ portal role does not carry over.
 | published files are immutable; admin may read/write/delete | **PARTLY SUPERSEDED** — immutable stands; "write" means withdraw, not rewrite (§5) |
 | `assets.status` and `asset_versions.visibility` | **SUPERSEDED** — the stage is per version (§5) |
 | "every asset has an owner" | **RESOLVED** — the owner is the studio; private assets belong to their workspace, and creators are recorded per version. No column is needed (§2) |
-| "do not use a single category column" | **NOT BUILT** — a single free-text column (§3, TODO 87 C3) |
+| "do not use a single category column" | **RESOLVED** — right about classifications, wrong about the category. The many-to-many is **tags**; the category stays one (§3) |
 | private versions visible to "you, admin, superuser" | **SUPERSEDED** — owner only; admin by impersonation (§2) |
 | roles: user, developer, admin, superuser | **SUPERSEDED** — user, developer, prod, admin (§6) |
 | the Director decides | **BUILT as `prod`** (§6) |
