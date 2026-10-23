@@ -8626,11 +8626,36 @@ no upside. If something seems to need one of them, ask.
         than the norm, deliberately.
 
     ============================================================
+    A2. ADMINISTRATOR INVITATIONS — SETTLED 2026-10-23
+    ============================================================
+
+    THE DISCREPANCY. docs/manual/20-getting-in.md told a contributor that
+    "administrator accounts are not invited by anyone ... it does not come as a
+    link", while docs/manual/50-administering.md documents `accounts.js
+    --invite --role admin` as "THE USUAL WAY", and scripts/accounts.js:416
+    invites nothing EXCEPT admin and prod — developers and testers are invited
+    from the admin page instead.
+
+    THE RULING: PAGE 20 WAS STALE. It described the policy from before
+    --invite existed, when a privileged account could only be made by typing a
+    password at the console. Page 50 is right, and argues for it: nobody picks
+    a password on somebody else's behalf and then has to pass it on.
+
+    AND IT WEAKENS NOTHING. The invitation is still ISSUED FROM THE MACHINE, by
+    somebody with shell access, which is the property accounts.js exists to
+    keep. --invite moves WHEN the password is chosen, not WHO may grant the
+    role.
+
+    CORRECTED IN docs/manual/20-getting-in.md and the manual rebuilt. What was
+    kept from the old paragraph is the only thing a contributor needs from it:
+    an invitation is an ordinary link, so you know what to look for.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
     A. THE SPEC IS WRONG
-      A2  the manual contradicts itself on administrator invitations
+      A2  administrator invitations — SETTLED above
       A3  assettypes01: the tech check is "three generic checks", "nothing
           inspects file contents" — seven exist, contents are inspected
       A4  assettypes01's "current state" snapshot of the assets table is stale

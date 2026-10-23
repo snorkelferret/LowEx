@@ -16,8 +16,16 @@ Opening it asks you to choose a username and password. Your **role is fixed by
 the invitation** — you cannot choose it, and if it is wrong, the person who
 invited you has to issue a new one.
 
-**Only developers and testers arrive this way.** Administrator accounts are not
-invited by anyone: they are created on the machine the portal runs on. If you are expecting one of those, it does not come as a link.
+**Every account arrives this way — including privileged ones.** An invitation
+for an administrator or a production reviewer is issued from the machine the
+portal runs on rather than from the admin page, because granting those roles
+takes shell access to the host. It still reaches you as an ordinary link, and
+you still choose your own username and password when you open it — nobody
+chooses a password on your behalf. If you are expecting one, it looks exactly
+like any other invitation.
+
+Administrators: see *Administering the box* for the two commands that issue
+these, and why inviting is the preferred route.
 
 ## The invitation link
 
