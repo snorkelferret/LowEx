@@ -1,10 +1,11 @@
 # The OpenWorld Asset System — the living specification
 
-**This document is the current truth.** The three PDFs in this directory are the
-historical record of intent (August 2026) and are kept as such. Where they
-disagree with this document, **this document wins** — and every place they
-disagree is marked `SUPERSEDED` below, so the old text can still be read with
-the right meaning.
+**This document is the current truth.** The three PDFs in **`docs/archive/`**
+are the historical record of intent (August 2026) and are kept as such. They
+were archived on 2026-10-23 because they cannot be corrected; see the README
+beside them. Where they disagree with this document, **this document wins** —
+and every place they disagree is marked `SUPERSEDED` below, so the old text can
+still be read with the right meaning.
 
 **What this is not.** This says *what is*. `website/TODO` says *why it is that
 way* — the decisions, the alternatives rejected, and the mistakes. When a

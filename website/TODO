@@ -9136,8 +9136,17 @@ no upside. If something seems to need one of them, ask.
     B2 immutability versus withdrawal, B3 state being per version — all three
     are now IN the document rather than queued for a PDF.
 
-    THE PDFs ARE KEPT, NOT DELETED: they record what was intended in August and
-    why, and §15 of SPEC.md is a table of every place they no longer hold.
+    THE PDFs ARE KEPT, NOT DELETED, AND MOVED OUT OF THE WAY. They now live in
+    docs/archive/, with a README beside them saying plainly that nothing there is
+    current, where to look instead, and the one thing they are still good for —
+    the detail that has NOT yet been migrated into SPEC.md. They record what was
+    intended in August and why, and §15 of SPEC.md is a table of every place they
+    no longer hold.
+
+    ONLY THE PDFs WERE ARCHIVED. The editable notes — assettypes01, dbspec01,
+    uploadmodel01, discussionboard01, Specification_v04_web.html — stay where
+    they are for now, because they CAN still be corrected and they still hold
+    detail not yet brought across. Retiring them would lose it.
 
     ============================================================
     STILL TO RULE ON
