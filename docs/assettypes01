@@ -103,15 +103,25 @@ Both coexist. Phase 0 also left `asset_recommended_versions` (the companion
 table) in place while deleting the column, so the live schema is currently in a
 state neither the spec nor the code describes.
 
-Current state, verified:
+Current state, verified 2026-10-23:
 
-    live assets columns : id, name, asset_type, description,
+    live assets columns : id, name, asset_type, category, description,
                           created_at, updated_at, is_active
-    db.js declares it   : no
-    asset_recommended_versions table : exists (orphaned)
+    db.js declares it   : no — the COLUMN is not restored, and that is now a
+                          DECISION rather than an omission. See below.
+    asset_recommended_versions table : DECLARED in db.js (db.js:356) and
+                          present in the live schema. Restored 2026-10-09.
+                          Nothing writes it yet.
 
-Restoring is cheap — the asset tables are empty. It needs a db.js change plus a
-recreate, or it will come back whenever the tables are next rebuilt.
+RESTORING THE COLUMN IS NO LONGER THE PLAN. Item 78 decided the opposite, and
+this note originally pointed the other way: the TABLE does the same job and
+constrains it, because its composite foreign key proves the recommended version
+belongs to this asset. A bare integer column cannot say that, and a pointer to
+another asset's version is a state nothing would catch. Two mechanisms for one
+fact would be worse than either.
+
+(The snapshot above was also stale in a smaller way — it omitted `category`,
+which was added by ALTER. Corrected with the rest, 2026-10-23.)
 
 3.2  YOU CANNOT RUN AN UNREAL GAME IN A BROWSER
 --------------------------------------------------------------------------

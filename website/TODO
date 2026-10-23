@@ -8685,13 +8685,39 @@ no upside. If something seems to need one of them, ask.
     missing.
 
     ============================================================
+    A4. assettypes01's CURRENT-STATE SNAPSHOT — SETTLED 2026-10-23
+    ============================================================
+
+    THE DISCREPANCY. The snapshot said the live `assets` columns were "id, name,
+    asset_type, description, created_at, updated_at, is_active", and that
+    `asset_recommended_versions` "exists (orphaned)".
+
+    BOTH WRONG. `category` was added by ALTER and was missing from the list; and
+    the table IS declared in db.js:356 — restored 2026-10-09 — so it is not
+    orphaned and will not disappear when the tables are next rebuilt.
+
+    AND THE PART THAT MATTERED MORE THAN THE SNAPSHOT. The next paragraph said
+    "restoring is cheap ... it needs a db.js change plus a recreate", i.e. put
+    the recommended_version_id COLUMN back. ITEM 78 DECIDED THE OPPOSITE: the
+    TABLE does the job and constrains it, because its composite foreign key
+    proves the recommended version belongs to this asset, which a bare integer
+    column cannot.
+
+    LEFT AS IT WAS, THAT SENTENCE WOULD HAVE INVITED THE REDUNDANT COLUMN — the
+    same failure as A3: a stale document pointing at work that has already been
+    decided against. Correcting the facts without correcting the recommendation
+    would have been half a fix.
+
+    CORRECTED IN docs/assettypes01 §3.1, snapshot and recommendation both.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
     A. THE SPEC IS WRONG
       A2  administrator invitations — SETTLED above
       A3  the technical check in assettypes01 — SETTLED above
-      A4  assettypes01's "current state" snapshot of the assets table is stale
+      A4  assettypes01's current-state snapshot — SETTLED above
       A5  dbspec01 names `files`, `file references`, `recommended_version_id` —
           none of those names exist in the schema
       A6  the manual says prod manages asset categories and boards; it cannot
