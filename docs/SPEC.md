@@ -181,6 +181,11 @@ size`, sorted by canonical path, then hashed. One implementation serves three
 purposes: detecting change, identifying content, and proving that *the version
 tested is the version submitted*.
 
+> **NOT BUILT.** Only per-file SHA-256 exists today. The manifest hash is the
+> single thing three separate requirements all need — this comparison, the
+> version's content identity, and the test receipt (§13) — which is why they
+> should be built together rather than as three.
+
 > The manifest hash identifies **content**, not the version. Two versions may
 > share one, because an insisted metadata change makes a version without changing
 > a byte. It must never be `UNIQUE`, and never used as a version identifier.

@@ -9351,6 +9351,44 @@ no upside. If something seems to need one of them, ask.
       not built.
 
     ============================================================
+    E. SPECIFIED, NOTHING BUILT — RECORDED 2026-10-23
+    ============================================================
+
+    THIRTEEN ITEMS, ALL THE SAME KIND: the specification describes them, and
+    there is no implementation. That is SCOPE RATHER THAN CONTRADICTION, so
+    they do not each need a ruling — they need to be VISIBLE AS UNBUILT,
+    which is what docs/SPEC.md §13 now does.
+
+        E1   the test receipt protocol
+        E2   the deterministic version manifest hash
+        E3   permissions, licences, commercial-use provenance
+        E4   notifications to the owner          (SPEC.md §11)
+        E5   game builds, branches, official builds
+        E6   game_branch_asset_versions          (SPEC.md §8)
+        E7   asynchronous processing and its states
+        E8   AI classification and suggested tags
+        E9   signed upload URLs
+        E10  a storage-provider abstraction
+        E11  the Browser Sandbox as an asset consumer
+        E12  user-role access to assets          (SPEC.md §6)
+        E13  anti-piracy: HWID, signed URLs, client telemetry
+
+    --- TWO THINGS WORTH PULLING OUT OF THE LIST ---
+
+      E2 IS THE ONE WITH THREE CALLERS, and it is why it is not simply "pending".
+      The manifest hash is needed by the upload comparison (A5/A10), by the
+      version's content identity, and by the test receipt (E1). It should be
+      built ONCE, and the other three rest on it.
+
+      E3 IS THE ONE WITH A COMMERCIAL CONSEQUENCE. "Whether we have the right to
+      use it" cannot be answered by the current model, and OpenWorld is intended
+      for a commercial release. It is scope, but it is the scope item that
+      carries a legal exposure rather than a missing feature.
+
+    NOTHING IS CHANGED FOR GROUP E. The work was making them impossible to
+    mistake for built.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
