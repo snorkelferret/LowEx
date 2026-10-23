@@ -9427,12 +9427,24 @@ no upside. If something seems to need one of them, ask.
     require breaks it. db.js carries a note now: nothing in it may require a
     sibling file. Data repairs belong in lib/ and are called from server.js.
 
-    --- `complete`: WHAT A PARTIAL ARCHIVE MUST SAY ---
+    --- TWO HASHES, BECAUSE A VERSION AND A ZIP ARE DIFFERENT THINGS ---
 
       A negotiated download sends only the files the developer lacks, so an
-      archive is routinely a SUBSET of the version. The hash does not change
-      with it — it names the version — so a receiver reading it as "the hash of
-      what I just got" would be wrong. `complete` is how they can tell.
+      archive is routinely a SUBSET of the version. The owner spotted the flaw
+      in the first attempt, which reported `complete: true|false` — a boolean
+      is a lossy summary of a question that has an exact answer.
+
+      SO MANIFESTS CARRY TWO VALUES, computed identically over the same
+      canonical paths (the version's relative_path, NOT the zip's stripped
+      entry names — otherwise even a complete archive would differ and the
+      comparison would say nothing):
+
+          manifest_hash   the VERSION: every component
+          archive_hash    THIS ZIP: the components it holds
+
+      EQUAL MEANS THE ZIP IS THE WHOLE VERSION. Different means it is a subset,
+      and both values are true statements about different things. No flag is
+      needed.
 
       FOUND BY TESTING: the first version reported the hash of whatever files
       were in the zip, which meant a 1-of-3 archive claimed a different identity
@@ -9440,9 +9452,9 @@ no upside. If something seems to need one of them, ask.
 
     --- VERIFIED ---
 
-      * the hash matches the stored value across the endpoint and both archive
-        kinds, and does not change between them;
-      * a full archive reports complete: true, a 1-of-3 archive complete: false;
+      * manifest_hash is the same across the endpoint and both archive kinds;
+      * archive_hash equals it for a whole version and differs for a 1-of-3
+        subset;
       * order-independent, and moves when a byte, a path, a name or a file's
         presence changes;
       * 107 checks pass, including the separator-forging case that a plain

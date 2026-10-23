@@ -191,8 +191,7 @@ function buildVersionArchive(files, {
     assetName,
     versionNumber,
     stripRoot = null,
-    manifestHash = null,
-    complete = null
+    manifestHash = null
 } = {}) {
 
     const refused = [];
@@ -250,16 +249,28 @@ function buildVersionArchive(files, {
             size: file.file_size
         }))),
 
-        // WHETHER THIS ARCHIVE IS THE WHOLE VERSION, or a subset of it — which
-        // the negotiation routinely produces: a developer who already has most
-        // of a version is sent only the difference.
+        // THE IDENTITY OF WHAT IS ACTUALLY IN THIS ZIP.
         //
-        // IT MATTERS BECAUSE manifest_hash DOES NOT CHANGE WITH IT. The hash
-        // names the version; `files` says what is in this zip. Reading the hash
-        // as "the hash of what you just received" would be wrong for any
-        // partial archive, and a receiver can only tell the difference from
-        // this flag.
-        complete: complete ?? planned.length === files.length,
+        // A VERSION HAS ONE HASH AND A ZIP MAY HOLD ONLY PART OF IT. The
+        // negotiation routinely sends a developer only the files they lack, so
+        // an archive is often a subset. manifest_hash names the VERSION and
+        // never changes with that; this names the delivery.
+        //
+        // THE TWO ARE COMPUTED THE SAME WAY over the same canonical paths, so
+        // they are directly comparable and no separate flag is needed:
+        //
+        //     archive_hash === manifest_hash   this zip is the whole version
+        //     they differ                      it is a subset
+        //
+        // A receiver can hash what they unpacked and check this. Checking
+        // manifest_hash instead would fail on every partial download, which is
+        // exactly the trap a single hash set.
+        archive_hash: computeManifestHash(planned.map(({ file }) => ({
+            relative_path: file.relative_path,
+            filename: file.filename,
+            sha256: file.sha256,
+            size: file.file_size
+        }))),
 
         generated_at: new Date().toISOString(),
         // WHAT THE RECEIVER SHOULD END UP WITH. The paths are relative to the

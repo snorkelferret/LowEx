@@ -488,8 +488,7 @@ router.get(
             const { manifest, refused } = buildVersionArchive(files, {
                 assetName: asset.name,
                 versionNumber: version.version_number,
-                manifestHash: version.manifest_hash,
-                complete: true
+                manifestHash: version.manifest_hash
             });
 
             return res.json({
@@ -653,8 +652,7 @@ router.post(
                 assetName: asset.name,
                 versionNumber: version.version_number,
                 stripRoot,
-                manifestHash: version.manifest_hash,
-                complete: files.length === rows.length
+                manifestHash: version.manifest_hash
             });
 
             const safeName = String(asset.name).replace(/[^A-Za-z0-9._-]+/g, '_');

@@ -189,9 +189,18 @@ returned by the manifest endpoint and written into every archive manifest.
 > (an insisted description change makes a version without changing a byte). It
 > is never `UNIQUE` and never a version identifier.
 >
-> An archive says whether it is the **whole version** — `complete` — because a
-> negotiated download is routinely a subset, and the hash does not change with
-> it.
+> **A version has one hash; a zip may hold only part of it.** A negotiated
+> download sends a developer only the files they lack, so an archive is often a
+> subset. Manifests therefore carry **two** values, computed the same way over
+> the same canonical paths:
+>
+> | | |
+> |---|---|
+> | `manifest_hash` | the **version** — every component |
+> | `archive_hash` | **this zip** — the components it holds |
+>
+> Equal means the zip is the whole version; different means it is a subset. No
+> flag is needed, because the comparison says it exactly.
 
 **Tech check at upload.** Nothing enters the store untested (TODO 86). File
 contents *are* inspected — the first 512 bytes against a signature table — so a
