@@ -9105,6 +9105,41 @@ no upside. If something seems to need one of them, ask.
     read as "withdraw". The PDF itself cannot be edited here.
 
     ============================================================
+    THE LIVING SPEC — DECIDED 2026-10-23
+    ============================================================
+
+    THE PROBLEM THIS SOLVES, demonstrated by the three items before it. B1, B2
+    and B3 all landed on corrections that live only in the three PDFs — AND A
+    PDF CANNOT BE EDITED IN THIS ENVIRONMENT, and would drift again if it could.
+    Three corrections were queued with nowhere to go, and group E's twelve
+    "mark this deferred" lines had the same problem.
+
+    SO: docs/SPEC.md IS NOW THE CURRENT TRUTH. The PDFs stay as the historical
+    record of intent (August 2026) and are cited by it.
+
+        docs/SPEC.md      WHAT IS. One editable document, every section marked
+                          BUILT / DECIDED / DEFERRED / OPEN / UNRECONCILED, and
+                          every place it supersedes a PDF marked SUPERSEDED with
+                          the old text named.
+
+        this file         WHY. The decisions, the alternatives rejected, and the
+                          mistakes. Where SPEC.md says something surprising, the
+                          reasoning is here, by item number.
+
+    WHY NOT THE ALTERNATIVES: (1) editing the PDFs by hand is faithful but puts
+    the corrections somewhere that cannot take the next one; (3) treating this
+    file as sole authority is what was happening by accident already, with
+    readers of the PDFs never knowing it. SPEC.md makes the relationship
+    explicit in both directions.
+
+    AND IT IS WRITTEN AS THE CORRECTIONS ARE MADE: B1 set the repository model,
+    B2 immutability versus withdrawal, B3 state being per version — all three
+    are now IN the document rather than queued for a PDF.
+
+    THE PDFs ARE KEPT, NOT DELETED: they record what was intended in August and
+    why, and §15 of SPEC.md is a table of every place they no longer hold.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
