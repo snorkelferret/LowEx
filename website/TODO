@@ -8651,13 +8651,46 @@ no upside. If something seems to need one of them, ask.
     an invitation is an ordinary link, so you know what to look for.
 
     ============================================================
+    A3. THE TECHNICAL CHECK, IN assettypes01 — SETTLED 2026-10-23
+    ============================================================
+
+    THE DISCREPANCY. docs/assettypes01 said "nothing inspects file contents"
+    (§A) and that "Only 3 generic checks exist: files_present, stored_file:<id>,
+    logical_paths_unique" (§4).
+
+    THE CODE HAS SEVEN, and one of them reads the bytes:
+
+        files_present             stored_file:<id>
+        logical_paths_unique      asset_types_recognised
+        files_not_empty           no_executable_content
+        content_matches_extension
+
+    content_matches_extension calls checkFileContent() in
+    shared/assetRules.mjs:310, which reads the first 512 bytes and matches them
+    against a signature table — confirmed / contradicted / unverifiable. A JPEG
+    renamed .png is caught.
+
+    THE RULING: CORRECT THE DOCUMENT. Its PREMISE was wrong even though its
+    CONCLUSION was partly right: the format-compliance gate it proposes —
+    polygon limits, texture dimensions, naming conventions — is genuinely
+    unbuilt. Almost everything else it said was missing is there.
+
+    AND A WRONG PREMISE IS THE DANGEROUS HALF, because it invites somebody to
+    build content_matches_extension a second time. That is item 84's failure
+    mode arriving through a stale document rather than through code.
+
+    CORRECTED IN docs/assettypes01: the status line (it said "NOT STARTED"),
+    §A's "nothing inspects file contents", and §4's "only 3 generic checks",
+    which now names all seven and says plainly that only the compliance gate is
+    missing.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
     A. THE SPEC IS WRONG
       A2  administrator invitations — SETTLED above
-      A3  assettypes01: the tech check is "three generic checks", "nothing
-          inspects file contents" — seven exist, contents are inspected
+      A3  the technical check in assettypes01 — SETTLED above
       A4  assettypes01's "current state" snapshot of the assets table is stale
       A5  dbspec01 names `files`, `file references`, `recommended_version_id` —
           none of those names exist in the schema

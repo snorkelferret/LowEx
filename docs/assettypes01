@@ -1,6 +1,9 @@
 ASSET TYPES, PREVIEW AND LOCAL DISTRIBUTION
 Design note — v0.1 — 2026-09-29
-Status: NOT STARTED. Discussion captured, decisions open.
+Status: PARTLY BUILT — see the divergence table in section 4. The check set,
+the download and the library's image thumbnails exist; upload types, preview
+for game assets and format compliance do not. Decisions still open are marked
+in section 6.
 
 ================================================================================
 1. WHAT THIS SECTION COVERS
@@ -9,8 +12,11 @@ Status: NOT STARTED. Discussion captured, decisions open.
 Three related capabilities, raised together but separable:
 
   A. Upload types — Blender, Nuke, Unreal, Maya, images. Per-type rules,
-     validation and handling. Today `asset_type` is free text and nothing
-     inspects file contents.
+     validation and handling. Today `asset_type` is free text. FILE CONTENTS ARE
+     INSPECTED — `content_matches_extension` reads the first 512 bytes and
+     matches them against a format signature table (shared/assetRules.mjs), so a
+     JPEG renamed .png is caught. What does NOT exist is FORMAT COMPLIANCE:
+     polygon counts, texture dimensions, naming conventions.
 
   B. Preview — seeing the asset on the website, so an approver can judge it
      without downloading.
@@ -165,9 +171,28 @@ That is a direct trade-off and needs an explicit decision, not a default.
   "The current game version is a pointer       Not implemented. This is what the
    to a specific tested/approved version"      proposed `releases` table was
                                                reaching for.
-  Format compliance gate (polygon limits,      Only 3 generic checks exist:
-  texture dimensions, naming conventions)      files_present, stored_file:<id>,
-                                               logical_paths_unique
+  Format compliance gate (polygon limits,      NOT IMPLEMENTED. This document
+  texture dimensions, naming conventions)      used to say "only 3 generic
+                                               checks exist: files_present,
+                                               stored_file:<id>,
+                                               logical_paths_unique". SEVEN
+                                               exist now, and none of them is
+                                               the gate described here:
+
+                                                 files_present
+                                                 stored_file:<id>
+                                                 logical_paths_unique
+                                                 asset_types_recognised
+                                                 files_not_empty
+                                                 no_executable_content
+                                                 content_matches_extension
+
+                                               content_matches_extension DOES
+                                               read the bytes — corrected
+                                               2026-10-23, because the old
+                                               wording invited somebody to
+                                               build a check that already
+                                               exists
 
 The identical-content row is a small bug worth fixing regardless of this
 section: re-uploading byte-identical content currently bumps the version number
