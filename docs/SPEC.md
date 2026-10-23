@@ -56,12 +56,37 @@ a finished Unreal asset. Every asset in it carries three things:
 
 | | |
 |---|---|
-| **an owner** | the developer who uploaded it |
+| **an owner** | *see below* — the developer while private, **the studio** once it is in |
 | **a stage** | private → published → submitted → tested → approved |
 | **game versions** | production, candidate dev, experimental — one, several, or none |
 
 **The workspace is the private end of the same thing**, not a separate place with
 separate files. The game store is the subset approved into a game version.
+
+### Who owns it
+
+| | owned by | what that means |
+|---|---|---|
+| **private** (in a workspace) | the developer | only they read it, only they delete it |
+| **published, in the store, in the game** | **the studio** | **none.** The original developer has no more right to it than anyone else |
+
+**Once it is uploaded, the developer has no special privileges.** Anyone with the
+role may add a version to it. The original version is untouched, and the
+**history records who created each version** — that is where a person's name
+lives, not in a privilege.
+
+Ownership by the studio does **not** answer whether the studio may use something:
+an asset can be studio-owned and still carry a licence or a restriction. That is
+a separate record and it is **not built** (§13).
+
+**Provenance per file.** Files are content-addressed, so one blob can be
+referenced by many assets and versions. The store records **the first uploader of
+each blob** — who brought that content in, and when — once, at the moment it
+enters. It is not per-asset and it never changes.
+
+> **NOT BUILT:** `stored_files` has no first-uploader column.
+> **NOT BUILT:** `assets` has no owner column — and does not need one, under this
+> model. The owner is the studio; private assets are owned by their workspace.
 
 > **SUPERSEDES:** the code built a third space (TODO 57), and recorded that "an
 > image is not a game asset" (TODO 58). Both are wrong — see TODO 86. An image
@@ -377,7 +402,7 @@ portal role does not carry over.
 | one central GitHub repository for everything | **SUPERSEDED** — two repositories, two tools |
 | published files are immutable; admin may read/write/delete | **PARTLY SUPERSEDED** — immutable stands; "write" means withdraw, not rewrite (§5) |
 | `assets.status` and `asset_versions.visibility` | **SUPERSEDED** — the stage is per version (§5) |
-| "every asset has an owner" | **NOT BUILT** — `assets` has no owner column (§6, TODO 87 C2) |
+| "every asset has an owner" | **RESOLVED** — the owner is the studio; private assets belong to their workspace, and creators are recorded per version. No column is needed (§2) |
 | "do not use a single category column" | **NOT BUILT** — a single free-text column (§3, TODO 87 C3) |
 | private versions visible to "you, admin, superuser" | **SUPERSEDED** — owner only; admin by impersonation (§2) |
 | roles: user, developer, admin, superuser | **SUPERSEDED** — user, developer, prod, admin (§6) |

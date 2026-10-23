@@ -9149,6 +9149,61 @@ no upside. If something seems to need one of them, ask.
     detail not yet brought across. Retiring them would lose it.
 
     ============================================================
+    B4 AND C2. OWNERSHIP — SETTLED 2026-10-23
+    ============================================================
+
+    B4 AS LISTED: the Repository PDF's example has Developer B downloading v1,
+    modifying it and publishing v2 under v1, while the System PDF says
+    "owner_id references the user who owns the asset".
+
+    NOT A CONTRADICTION. They describe ONE LOOP AT TWO LEVELS, and the code
+    already does both:
+
+        B IMPORTS v1 into their own workspace — a private copy, with
+        repository_asset_id and repository_base_version_id recording where it
+        came from. A's asset is untouched.
+
+        B works on it privately. A's private work stays A's.
+
+        B SUBMITS; prod APPROVES; approval ADDS v2 TO THE SAME STORE ASSET,
+        because the import recorded the link (developerWorkspace.js:4287-4320).
+
+    SO: LINEAR AT THE STORE, FORKS IN THE WORKSPACE.
+
+    --- AND THE OWNERSHIP MODEL, IN THE OWNER'S WORDS ---
+
+        "Anything in the game is owned by the studio - once it is uploaded the
+         original dev has not special priviledges - a history of the asset or
+         file will have the name of the creator(s)."
+
+        private (in a workspace)   owned by the DEVELOPER; only they read it,
+                                   only they delete it
+        published / store / game   owned by THE STUDIO. The original developer
+                                   has NO special privileges.
+        the history                records who created each version
+
+    WHICH MAKES C2 A NON-ISSUE RATHER THAN A DEFECT. C2 said "assets has no
+    owner column" against the spec's "every asset has an owner". THE OWNER IS
+    THE STUDIO, so no column is needed: private assets carry their owner in the
+    workspace (developer_id), and everything else is the studio's.
+
+    WHAT IS ACTUALLY MISSING IS THE CREATOR HISTORY BEING VISIBLE — asset_versions
+    already has created_by, and C1 says the audit trail that would show it does
+    not exist.
+
+    --- AND PER-FILE PROVENANCE, DECIDED ---
+
+      "yes the name of the first uploader"
+
+      FILES ARE CONTENT-ADDRESSED, so one blob can be referenced by many assets
+      and versions. THE STORE RECORDS THE FIRST UPLOADER OF EACH BLOB — who
+      brought that content in, and when — once, when it enters, and never
+      changed after.
+
+      NOT BUILT: stored_files has no such column. It is a small ALTER TABLE plus
+      a write in ingestFiles(), which is the ONE place a file enters the store.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9169,12 +9224,12 @@ no upside. If something seems to need one of them, ask.
       B2  published immutability vs admin write/delete — SETTLED above
       B3  is state on the asset (assets.status) or the version
           (asset_versions.visibility)? Item 86 settled it per VERSION
-      B4  does a second developer add a version to your asset (the Repository
-          PDF's worked example) or fork it (the System PDF's ownership model)?
+      B4  forks in the workspace, linear at the store — SETTLED above
 
     C. THE CODE IS WRONG
       C1  zero audit records across submit, test, approve, reject
-      C2  assets has no owner column at all
+      C2  ownership — SETTLED above; the owner is the studio, and no column
+          is needed
       C3  a single category column, which the spec explicitly forbids
       C4  session lifetime — settled above as A1
 
