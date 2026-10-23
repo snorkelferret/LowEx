@@ -8996,6 +8996,45 @@ no upside. If something seems to need one of them, ask.
     THIS CLOSES ITEM 17, which had been waiting on this decision.
 
     ============================================================
+    B1. WHERE THE GAME LIVES — SETTLED 2026-10-23
+    ============================================================
+
+    THREE POSITIONS, and they were all still in the repository at once:
+
+        the two PDFs      "The game source code is MAINTAINED SEPARATELY IN
+                          GITHUB."                        (Repository §8, System §12)
+        the html spec     "ALL game source code, compiled binaries, raw assets,
+                          website files, and documentation RESIDE IN A CENTRAL
+                          PRIVATE GITHUB REPOSITORY (using Git LFS)."
+                          (Specification_v04_web.html §03)
+        this file         the game in PERFORCE, the website in git, separate
+                          (items 62 and 67)
+
+    THE RULING: THE PDFS ARE RIGHT IN SHAPE AND WRONG IN TOOL; THE HTML SPEC IS
+    WRONG IN BOTH. Separate repositories is the decision. Perforce replaced
+    GitHub for the game because of the scale of its binary assets and the file
+    locking artists need — items 62 and 67.
+
+    CORRECTED IN Specification_v04_web.html §03, which now says two
+    repositories, two tools, and records that its one-repo model is superseded.
+
+    --- AND THE PDFs CANNOT BE EDITED HERE ---
+
+      They are binary and there is no PDF editor available in this environment,
+      so the two "maintained separately in GitHub" sentences still stand in the
+      files. THEY ARE SUPERSEDED BY THIS ITEM AND BY 62/67, and the html spec
+      now says so where a reader of that file will see it. IF THE PDFs ARE TO
+      STAND ALONE, SOMEBODY HAS TO EDIT THEM.
+
+    --- A CONSEQUENCE STILL OPEN ---
+
+      Specification_v04 §03's next bullet says "Logged-in web portal
+      contributors pass seamlessly into GitHub without requiring secondary
+      authentication." That handoff was justified BY THE GAME BEING IN GITHUB.
+      With the game in Perforce, it is not obvious what the handoff is for —
+      the website's own repository, which only some roles touch? NOT SETTLED.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9012,9 +9051,7 @@ no upside. If something seems to need one of them, ask.
       A10 the upload still versions on every upload — SETTLED above
 
     B. THE SPECS CONTRADICT EACH OTHER OR THEMSELVES
-      B1  the game is "maintained separately in GitHub" (both PDFs) against
-          "all game source code ... in a central private GitHub repository"
-          (Specification_v04_web.html) — and against the TODO's Perforce
+      B1  where the game lives — SETTLED above (PDFs right in shape, wrong in tool)
       B2  "published files should be treated as immutable" against a permission
           table giving admin read/write/delete on a published version
       B3  is state on the asset (assets.status) or the version

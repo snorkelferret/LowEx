@@ -281,7 +281,8 @@
     
     <div class="spec-card">
         <ul class="mb-0">
-            <li class="mb-2"><strong>Single Source of Truth:</strong> All game source code, compiled binaries, raw assets, website files, and documentation reside in a central private GitHub repository (using Git LFS for binary assets).</li>
+            <li class="mb-2"><strong>Two Repositories, Two Tools.</strong> The <strong>game</strong> is versioned in <strong>Perforce</strong>; the <strong>website</strong> and its documentation are versioned in git. They are separate repositories, deliberately.
+                <br><em>This bullet previously specified one central private GitHub repository for everything, with Git LFS for binary assets. That is superseded — see TODO items 62 and 67. Perforce was chosen for the game because of the scale of its binary assets and the file locking artists need, and the portal neither stores, serves, versions nor transfers a game build. The three PDFs in this directory say the game is "maintained separately in GitHub": separate is right, GitHub is superseded.</em></li>
             <li class="mb-2"><strong>Authentication & Security:</strong> Mandatory 2-Factor Authentication (2FA) across all contributor access points.</li>
             <li><strong>Seamless SSO Handoff:</strong> Logged-in web portal contributors pass seamlessly into GitHub without requiring secondary authentication.</li>
         </ul>
