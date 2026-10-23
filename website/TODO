@@ -9242,6 +9242,51 @@ no upside. If something seems to need one of them, ask.
     the ROLE SWITCH, and IMPERSONATION start/stop — neither is built.
 
     ============================================================
+    C3. CATEGORY VERSUS CLASSIFICATION — SETTLED 2026-10-23
+    ============================================================
+
+    THE DISCREPANCY, verbatim from the System PDF §9:
+
+        "Assets can have multiple classifications.
+         DO NOT USE A SINGLE CATEGORY COLUMN.
+         Use a many-to-many relationship."
+
+    against the code, which has ONE free-text column: assets.category and
+    workspace_assets.category, no join table, no vocabulary.
+
+    THE OWNER'S RULING — "number three" — IS THAT THE SPEC IS RIGHT ABOUT
+    CLASSIFICATIONS AND WRONG ABOUT THE CATEGORY, BECAUSE THEY ARE TWO
+    DIFFERENT QUESTIONS:
+
+        CATEGORY   WHICH PART OF THE GAME. One value, because an asset is
+                   placed in one part of the game. Character, Environment,
+                   Prop, Vehicle, Weapon, FX, Audio, UI. Blank is normal.
+
+        TAGS       WHAT THE THING IS. Free-form, per asset, many-to-many.
+                   "African vegetation", "rust", "concrete texture" — the words
+                   somebody would search for. A tree is Environment AND
+                   Vegetation, and the second is a tag.
+
+    SO THE SINGLE COLUMN STAYS AND THE MANY-TO-MANY IS NEW.
+
+    --- WHAT IT TAKES ---
+
+      asset_tags(id, asset_id, tag, created_at) copying library_item_tags
+      exactly: FK ON DELETE CASCADE, UNIQUE (asset_id, tag), an index on each
+      column. NOT BUILT.
+
+      AND normaliseTag MOVES TO shared/ RATHER THAN BEING COPIED. It lives in
+      backend/routes/library.js:239 today and does trim / lowercase / collapse
+      whitespace. A second copy in the store is how the two ends up disagreeing
+      about whether "African  Vegetation" and "african vegetation" are one tag
+      (item 84).
+
+    --- AND THE SPEC WORDING IS NOW PRECISE RATHER THAN CONTRADICTORY ---
+
+      docs/SPEC.md §3 says what each is for and why the PDF's rule is right
+      about one and wrong about the other.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9268,7 +9313,7 @@ no upside. If something seems to need one of them, ask.
       C1  the audit trail — BUILT and verified above
       C2  ownership — SETTLED above; the owner is the studio, and no column
           is needed
-      C3  a single category column, which the spec explicitly forbids
+      C3  category versus classification — SETTLED above
       C4  session lifetime — settled above as A1
 
     D. THE TODO OVERRULED THE SPEC WITHOUT SAYING SO

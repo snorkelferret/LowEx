@@ -125,6 +125,27 @@ and the type is recorded only when every file in the version agrees. A `.blend`
 plus forty textures has no single type, and "Image" would be a confident wrong
 answer.
 
+### Category and tags — two different questions
+
+**One category: which part of the game.** Character, Environment, Prop,
+Vehicle, Weapon, FX, Audio, UI. **A single value on the asset**, because an asset
+is placed in one part of the game. Blank means "not categorised", which is a
+normal state and not an error.
+
+**Many tags: what the thing is.** Free-form, per asset, many-to-many. "African
+vegetation", "rust", "concrete texture" — the words somebody would actually
+search for. A tree is Environment *and* Vegetation; the second word is a tag.
+
+> **SUPERSEDES:** the System PDF says *"Do not use a single category column. Use
+> a many-to-many relationship."* That is right about **classifications** and
+> wrong about the **category** — they are two questions, and the category is one
+> answer. The many-to-many is the tags.
+
+> **NOT BUILT:** there is no tag table for assets. `library_item_tags` is the
+> shape to copy, and its `normaliseTag` should move into `shared/` rather than
+> being copied — otherwise the library and the store can disagree about what a
+> tag is.
+
 ---
 
 ## 4. Upload
