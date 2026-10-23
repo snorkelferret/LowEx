@@ -255,9 +255,14 @@ for the first, the approval for the second. "Technically correct but artisticall
 rejected" and "artistically excellent but technically not ready" must both be
 expressible.
 
-> **DEFECT (TODO 87, C1):** there is **no audit record** anywhere on this path —
-> submit, test, approve and reject all record nothing, while the specification
-> requires that all security-sensitive state changes are auditable.
+**Every act is audited.** Upload, submit, technical check, approve and reject
+each write an audit record — who did it, to what, and with what result — **inside
+the same transaction as the act**, so a decision and its record land together or
+not at all.
+
+**The role is not repeated on every row.** An admin acting as prod is recorded by
+the role switch itself, once; the log's chronology carries the rest. Repeating it
+per decision would be the same fact said twice.
 
 ---
 

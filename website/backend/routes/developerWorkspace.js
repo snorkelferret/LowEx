@@ -3005,6 +3005,30 @@ router.post(
                             `).all(versionId);
 
 
+                        // THE UPLOAD ITSELF, RECORDED — inside the
+                        // transaction, so an upload that rolls back leaves no
+                        // record of having happened, and one that commits
+                        // cannot exist without one (TODO 87 C1).
+                        //
+                        // A REFUSAL IS NOT RECORDED HERE. The refusal that
+                        // matters — identical components, with the popup and
+                        // the override — does not exist yet (TODO 87, A5/A10).
+                        // When it does it belongs BEFORE this transaction
+                        // opens, at the point the comparison is made.
+                        audit.record(
+                            developerId,
+                            'workspace.upload',
+                            asset.name,
+                            {
+                                workspace_asset_id: asset.id,
+                                workspace_version_id: version.id,
+                                version_number: version.version_number,
+                                file_count: files.length,
+                                version_note: versionNote
+                            }
+                        );
+
+
                         return {
                             asset,
                             version,
@@ -3669,6 +3693,31 @@ router.post(
 
                         runId
                     );
+
+
+                    // THE VERDICT, WITH WHO ASKED FOR IT. Inside the same
+                    // transaction as the results and the completion, so the
+                    // record cannot describe a run that was not stored
+                    // (TODO 87 C1).
+                    //
+                    // THE FAILED CHECK NAMES GO IN, not only the verdict:
+                    // "technical validation failed" without saying which check
+                    // is a summary, and this is meant to be a record.
+                    audit.record(
+                        developerId,
+                        'technical_check.run',
+                        version.asset_name,
+                        {
+                            workspace_asset_id: version.workspace_asset_id,
+                            workspace_version_id: versionId,
+                            version_number: version.version_number,
+                            run_id: runId,
+                            status: finalStatus,
+                            failed_checks: results
+                                .filter(result => result.status === 'failed')
+                                .map(result => result.name)
+                        }
+                    );
                 });
 
 
@@ -3919,6 +3968,24 @@ router.post(
                         );
 
 
+                    // THE MOMENT A DEVELOPER DECLARES A VERSION READY, and the
+                    // moment the freeze on that version begins. Recorded inside
+                    // the same transaction as the lock and the request, so the
+                    // three cannot disagree — an approval row with no record of
+                    // who asked for it is exactly what TODO 87 C1 is about.
+                    audit.record(
+                        developerId,
+                        'creative_approval.submit',
+                        version.asset_name,
+                        {
+                            workspace_asset_id: assetId,
+                            workspace_version_id: versionId,
+                            version_number: version.version_number,
+                            approval_id: result.lastInsertRowid
+                        }
+                    );
+
+
                     return result.lastInsertRowid;
                 });
 
@@ -4016,11 +4083,24 @@ router.post(
 
         try {
 
+            // THE ASSET'S NAME COMES WITH IT, because the audit record names
+            // what was rejected rather than only numbering it.
             const approval =
                 db.prepare(`
-                    SELECT *
-                    FROM creative_approvals
-                    WHERE id = ?
+                    SELECT
+                        ca.*,
+                        wa.name AS workspace_asset_name,
+                        wv.version_number
+
+                    FROM creative_approvals ca
+
+                    JOIN workspace_assets wa
+                        ON wa.id = ca.workspace_asset_id
+
+                    JOIN workspace_versions wv
+                        ON wv.id = ca.workspace_version_id
+
+                    WHERE ca.id = ?
                 `).get(approvalId);
 
 
@@ -4065,6 +4145,22 @@ router.post(
                         WHERE id = ?
                     `).run(
                         approval.workspace_version_id
+                    );
+
+
+                    // See the note on the approve record: same transaction as
+                    // the decision, actor only, the role comes from the switch.
+                    audit.record(
+                        decidedBy,
+                        'creative_approval.reject',
+                        approval.workspace_asset_name,
+                        {
+                            approval_id: approvalId,
+                            workspace_asset_id: approval.workspace_asset_id,
+                            workspace_version_id: approval.workspace_version_id,
+                            version_number: approval.version_number,
+                            decision_comment: decisionComment || null
+                        }
                     );
                 });
 
@@ -4464,6 +4560,34 @@ router.post(
                         repositoryAsset.id,
                         repositoryVersionId,
                         approvalId
+                    );
+
+
+                    // WHO DECIDED, AND WHAT THEY DECIDED. Inside the same
+                    // transaction as the decision, so the record and the
+                    // decision land together or not at all — an approval that
+                    // happened with nothing to show who made it is the gap
+                    // TODO 87 C1 is about.
+                    //
+                    // THE ROLE IS NOT RECORDED PER DECISION. An admin acting as
+                    // prod is recorded by the role switch itself, once, and the
+                    // log's chronology carries the rest; repeating it on every
+                    // row would be the same fact said twice (item 84).
+                    audit.record(
+                        decidedBy,
+                        'creative_approval.approve',
+                        approval.workspace_asset_name,
+                        {
+                            approval_id: approvalId,
+                            workspace_asset_id: approval.workspace_asset_id,
+                            workspace_version_id: approval.workspace_version_id,
+                            version_number: approval.version_number,
+                            repository_asset_id: repositoryAsset.id,
+                            repository_version_id: repositoryVersionId,
+                            repository_version_number:
+                                repositoryVersionNumber,
+                            decision_comment: decisionComment || null
+                        }
                     );
 
 

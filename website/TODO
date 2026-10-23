@@ -9204,6 +9204,44 @@ no upside. If something seems to need one of them, ask.
       a write in ingestFiles(), which is the ONE place a file enters the store.
 
     ============================================================
+    C1. THE MISSING AUDIT TRAIL — BUILT 2026-10-23
+    ============================================================
+
+    THE DEFECT. Zero audit.record calls anywhere between submit, test, approve
+    and reject, while the specification requires that all security-sensitive
+    state changes are auditable and names exactly those events.
+
+    FIVE SITES ADDED, each inside the transaction of the act it records so a
+    decision and its record land together or not at all:
+
+        workspace.upload               the upload, in createAssetVersion's
+                                       transaction
+        technical_check.run            the verdict, with the failed check names
+        creative_approval.submit       the moment a version is declared ready
+                                       and the freeze begins
+        creative_approval.approve      inside the approval transaction
+        creative_approval.reject       inside the reject transaction
+
+    THE ROLE IS NOT ON EVERY ROW. An earlier draft had acting_as per event; the
+    owner asked why, and it is redundant — the role SWITCH is its own event,
+    recorded once, and the log's chronology carries the rest. Repeating it per
+    decision is the same fact twice (item 84).
+
+    --- VERIFIED, THREE OF THE FIVE, AGAINST THE LIVE SERVER ---
+
+        technical_check.run       actor 3, TestUpload, status 'passed',
+                                  failed_checks []
+        creative_approval.submit  actor 3, approval 3, version 2
+        creative_approval.reject  actor 14 (prod), approval 3, the comment
+
+    THE OTHER TWO ARE NOT RUNTIME-VERIFIED: approve (it would create a new store
+    version) and upload (it needs a real file upload). Both compile and both sit
+    in the same transaction pattern as the three that ran.
+
+    STILL NOT RECORDED, and they belong with the session work rather than here:
+    the ROLE SWITCH, and IMPERSONATION start/stop — neither is built.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9227,7 +9265,7 @@ no upside. If something seems to need one of them, ask.
       B4  forks in the workspace, linear at the store — SETTLED above
 
     C. THE CODE IS WRONG
-      C1  zero audit records across submit, test, approve, reject
+      C1  the audit trail — BUILT and verified above
       C2  ownership — SETTLED above; the owner is the studio, and no column
           is needed
       C3  a single category column, which the spec explicitly forbids
