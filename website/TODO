@@ -8711,6 +8711,78 @@ no upside. If something seems to need one of them, ask.
     CORRECTED IN docs/assettypes01 §3.1, snapshot and recommendation both.
 
     ============================================================
+    A5 + A10. THE UPLOAD AND VERSIONING MODEL — SETTLED 2026-10-23
+    ============================================================
+
+    THE DISCREPANCY. dbspec01 and uploadmodel01 BOTH say the upload must stop
+    creating a version on every upload. The code still does exactly that:
+    developerWorkspace.js:2904-2930 takes MAX(version_number) + 1 and inserts
+    unconditionally, with no comparison of any kind.
+
+    SO THESE TWO DOCUMENTS ARE RIGHT AND THE CODE IS BEHIND — the opposite
+    direction from almost everything else in group A. There is nothing to
+    correct in them; they are the specification to build against.
+
+    --- THE RULE, AS THE OWNER SET IT ---
+
+      A VERSION IS THE ASSET'S FILE SET. Compare the upload's components with
+      the newest version:
+
+        identical paths and hashes         -> NO new version. REFUSE, explain
+                                              to the human, and record the
+                                              refusal IN THE HISTORY.
+        a component added, removed,
+        RENAMED or MOVED (path changed)    -> NEW version
+        a component's content changed      -> NEW version
+        the developer overrides a refusal  -> NEW version, deliberately
+
+      UNCHANGED COMPONENTS ARE NEVER STORED AGAIN. They are already in the SHA
+      store; the new version references the same rows. The same file uploaded
+      n times costs one blob and one reference.
+
+    --- THREE KINDS OF "METADATA", WHICH WERE BEING CONFUSED ---
+
+      FILE metadata — EXIF/XMP, container and scene metadata — IS INSIDE THE
+      BYTES. A change to it changes the SHA, so it is a content change and the
+      rule above already covers it. NO EXTRA MACHINERY IS NEEDED.
+
+      ASSET metadata — name, category, description — lives on the asset row.
+      THE DEVELOPER MAY SUPPLY IT, IT IS OPTIONAL, AND THE STUDIO MAY OVERRIDE
+      IT. The developer's values are a PROPOSAL; the store's are the studio's.
+
+      COMPONENT identity — path + hash — is what the comparison uses and
+      NOTHING ELSE. Asset metadata must never make identical files look changed.
+
+    --- THE TRAPS, WHICH ARE THE POINT OF WRITING THIS DOWN ---
+
+      1. CHECK BEFORE WRITE. A refused upload writes the history entry and
+         NOTHING ELSE. The upload reads asset_type, category and description
+         from the body today (developerWorkspace.js:2147-2158), so writing them
+         before the comparison would mean a "nothing changed" refusal silently
+         changes the description — the human is told nothing happened, and
+         something did.
+
+      2. THE STUDIO OVERRIDE IS NOT BUILT. Approval copies ONLY category, with
+         UPDATE assets SET category = COALESCE(?, category)
+         (developerWorkspace.js:4316), and only when the workspace has one.
+         Name and description are set once when the store asset is created and
+         never updated afterwards. "The studio may override" has to be built.
+
+      3. METADATA CHANGES LEAVE NO TRACE — item C1. There is no audit record on
+         this path, so "who renamed this, and when" is unanswerable.
+
+    --- THE MECHANISM, WHICH DOES TWO JOBS ---
+
+      The comparison IS the deterministic manifest hash the spec already
+      requires (E2): filename + SHA256 + size, sorted by canonical path, then
+      hashed. Build it once and "did anything change?" becomes one string
+      equality — and the spec's "the version I tested is the version I
+      submitted" guarantee (E1) rests on the same value.
+
+      WHICH IS WHY THIS AND E1/E2 SHOULD BE BUILT TOGETHER rather than as three
+      separate things that each need the same computation.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -8718,13 +8790,13 @@ no upside. If something seems to need one of them, ask.
       A2  administrator invitations — SETTLED above
       A3  the technical check in assettypes01 — SETTLED above
       A4  assettypes01's current-state snapshot — SETTLED above
-      A5  dbspec01 names `files`, `file references`, `recommended_version_id` —
-          none of those names exist in the schema
+      A5  dbspec01's names — SETTLED with A10 above (the documents are right;
+          the code is behind)
       A6  the manual says prod manages asset categories and boards; it cannot
       A7  the manual says revoking portal access revokes board access; unbuilt
       A8  assettypes01's controlled vocabulary for asset_type was never applied
       A9  uploadmodel01 says filename_overrides is dead code; it is live
-      A10 uploadmodel01's central change was never made — upload still versions
+      A10 the upload still versions on every upload — SETTLED above
 
     B. THE SPECS CONTRADICT EACH OTHER OR THEMSELVES
       B1  the game is "maintained separately in GitHub" (both PDFs) against
