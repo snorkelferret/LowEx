@@ -8805,17 +8805,34 @@ no upside. If something seems to need one of them, ask.
 
          and offers two things and no third:
 
-             [ Overwrite description ]   [ Cancel ]
+             [ Create a new version with this description ]   [ Cancel ]
 
-      5. OVERWRITE DESCRIPTION applies the developer's metadata and CREATES NO
-         VERSION. A version whose components are byte-for-byte identical to the
-         one before it is the pointless version this rule exists to prevent,
-         and the popup's own words say nothing has really changed.
+      5. IF THE DEVELOPER INSISTS, IT MAKES A VERSION. Overriding CREATES A NEW
+         VERSION whose components are identical to the previous one, carrying
+         the new description, AND RECORDS IT IN THE HISTORY.
+
+         THIS REVERSES A RULING MADE EARLIER THE SAME DAY, which said "apply the
+         metadata, no version". The owner changed it deliberately, and the
+         reason is worth keeping: a description the developer INSISTED ON is a
+         deliberate act, and a deliberate act belongs in the version history
+         rather than sitting on a mutable row with nothing to show for it.
 
       6. EITHER WAY the outcome is recorded IN THE HISTORY — refusals and
          cancellations included. A refusal the developer never sees reads as a
          failed upload, and a no-op that looks like a failure is exactly the
          failure that cost an evening on the download side.
+
+    --- THE CONSEQUENCE NOBODY SHOULD BE SURPRISED BY LATER ---
+
+      A VERSION CAN NOW DIFFER FROM THE ONE BEFORE IT IN METADATA ALONE. Which
+      means the manifest hash identifies the CONTENT and not the version: two
+      versions can carry the same manifest hash.
+
+      THAT IS HARMLESS — identical bytes are identical bytes, so testing either
+      tests both — BUT THE HASH MUST NEVER BE TREATED AS UNIQUE PER VERSION. No
+      UNIQUE constraint on it, and no using it as a version identifier. The
+      version number identifies the version; the manifest hash identifies what
+      was in it.
 
     AND THE METADATA CHANGE NEEDS ITS OWN RECORD, not only a history line: it
     is the case Trap 3 names, where there is no audit trail and "who changed
