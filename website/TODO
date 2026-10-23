@@ -9316,6 +9316,41 @@ no upside. If something seems to need one of them, ask.
     SO D IS DOWN TO D3.
 
     ============================================================
+    D3. DEPLOY-ANY-BRANCH-TO-A-SANDBOX — SUPERSEDED 2026-10-23
+    ============================================================
+
+    Specification_v04_web.html §01: "Contributors can trigger automated
+    deployments of any active git branch directly to the online sandbox
+    environment based on role-based repository permissions."
+
+    SUPERSEDED ON ALL THREE COUNTS:
+
+        no git            the game is versioned in Perforce (B1, items 62/67)
+        no shared sandbox the "sandbox" in this project is the developer's
+                          PRIVATE workspace (items 56, 60), not a shared online
+                          environment
+        not the portal's  DEPLOYING IS THE BUILD MACHINE'S JOB, not the portal's
+                          (items 62, 67) — the same correction the role model
+                          needed when it named deploying and branching as
+                          superuser powers
+
+    RECORDED IN docs/SPEC.md §13 as superseded rather than unbuilt, because
+    nothing here is waiting to be built.
+
+    --- AND IT TURNED UP ONE THE CONSOLIDATED LIST HAD DROPPED ---
+
+      THE SAME SECTION ASSERTS ANTI-PIRACY MACHINERY: "HWID & Account
+      Fingerprinting ... Session tokens are tied to Hardware ID hashes",
+      "Signed URLs & Watermarking ... Dynamic account telemetry is embedded in
+      client binaries", and server-side behavioural telemetry.
+
+      THERE IS NO HWID, no signed build URL, no binary watermarking and no game
+      telemetry anywhere in backend/ or frontend/src/. It was in the third
+      pass's findings and did not make the consolidated 22 — which is a gap in
+      the consolidation rather than a change of mind. Added to SPEC.md §13 as
+      not built.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9347,7 +9382,7 @@ no upside. If something seems to need one of them, ask.
     D. THE TODO OVERRULED THE SPEC WITHOUT SAYING SO
       D1  GitHub -> Perforce — covered by B1 above
       D2  in-portal chat -> a separate board — covered by SPEC.md §12
-      D3  deploy-any-branch-to-a-sandbox -> nothing
+      D3  deploy-any-branch-to-a-sandbox — SUPERSEDED above
 
     E. THE SPEC DESCRIBES IT AND NOTHING IMPLEMENTS IT
       E1  the test receipt protocol — harness, build id, manifest hash,
