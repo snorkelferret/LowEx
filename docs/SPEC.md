@@ -38,9 +38,13 @@ developer's machine into the game under deliberate approval.
 
 > **Publishing an asset does not put it in the game.**
 
-An asset can be shared with colleagues, downloaded, discussed and used as a
-starting point without ever being submitted for the game. Being *in the store* is
-not being *in the game*.
+An asset can be **shared with colleagues, downloaded and used as a starting
+point** without ever being submitted for the game. Being *in the store* is not
+being *in the game*.
+
+> **Discussion is not built** — comments and boards are intended, and there is
+> no portal-side discussion at all yet (§11, §12). It belongs in that list and
+> is not in it.
 
 ---
 
@@ -61,7 +65,12 @@ a finished Unreal asset. Every asset in it carries three things:
 | **game versions** | production, candidate dev, experimental — one, several, or none |
 
 **The workspace is the private end of the same thing**, not a separate place with
-separate files. The game store is the subset approved into a game version.
+separate files.
+
+**The game store is the subset approved into it** — not, yet, the subset in a
+game *version*. Those are different questions and only the first is built: what
+is in the store is content the studio has approved, and which release holds it
+is §8, unbuilt.
 
 ### Who owns it
 
@@ -152,9 +161,14 @@ search for. A tree is Environment *and* Vegetation; the second word is a tag.
 
 *State: BUILT*
 
-The developer uploads a folder, a zip, or a selection of files. The request
-carries the components and, **optionally**, a name, category and description —
-which are the developer's *proposal*. The studio may override them later.
+The developer uploads a **folder**, or a **selection of loose files** named
+afterwards. The request carries the components and, **optionally**, a name,
+category and description — which are the developer's *proposal*. The studio may
+override them later.
+
+> **NOT BUILT: a zip.** The upload does not unpack an archive, and a monolithic
+> zip is not the intended mechanism — a folder or a file selection is. Item 55's
+> "unzip is a feeder, not a second upload path" is about a future one, not this.
 
 **The flow, in order:**
 
@@ -165,8 +179,9 @@ which are the developer's *proposal*. The studio may override them later.
 3. **Nothing changed in the components** → nothing is written yet. A popup says
    *"Nothing has really changed except the description you provided"* and offers
    **Create a new version with this description** or **Cancel**.
-4. **Either way the outcome is recorded in the history** — refusals and
-   cancellations included.
+4. **A refusal is recorded in the history.** A *cancellation* is not: pressing
+   Cancel never reaches the server, so there is nothing to record and nothing
+   was changed.
 
 **Unchanged components are never stored twice.** The SHA store holds one copy of
 any content; a new version references the same rows. The same file uploaded a
@@ -271,7 +286,7 @@ PRIVATE → PUBLISHED → SUBMIT FOR GAME → TECHNICAL TEST → DIRECTOR REVIEW
 |---|---|
 | **user** | a tester |
 | **developer** | works in a private workspace; uploads, versions, submits |
-| **prod** | production — a **craft** role, not a seniority. Approvals, comments, categories, boards |
+| **prod** | production — a **craft** role, not a seniority. Approvals and comments **are built**; categories and boards are **intended and not built** |
 | **admin** | administers the system. Accounts, invitations, reports, settings, audit, deactivation. **Top of the ladder** |
 
 **Admin administers the system and nothing else. Craft powers are not admin's
@@ -295,8 +310,9 @@ names the role whose *job* it is.
 > never written). Under this model admin currently has **no route to any craft
 > power at all**.
 
-> **PREREQUISITE:** the audit trail (below). A role switch that is not audited is
-> only a way of doing things invisibly.
+> **THE AUDIT TRAIL IS THE PREREQUISITE, AND IT IS NOW BUILT** (§7). A role switch
+> that is not audited would only be a way of doing things invisibly — so the role
+> switch itself still has to be recorded when it is built.
 
 ---
 
@@ -318,9 +334,14 @@ each write an audit record — who did it, to what, and with what result — **i
 the same transaction as the act**, so a decision and its record land together or
 not at all.
 
-**The role is not repeated on every row.** An admin acting as prod is recorded by
-the role switch itself, once; the log's chronology carries the rest. Repeating it
-per decision would be the same fact said twice.
+**The role is not repeated on every row.** When multi-role exists (§6), an admin
+acting as prod will be recorded by the **role switch** — once — and the log's
+chronology carries the rest; repeating it per decision would be the same fact
+said twice.
+
+> **NOT BUILT:** the role switch itself. Until it is, every audit row records the
+> actor and the approval routes admit `prod` only, so there is no ambiguity to
+> disambiguate.
 
 ---
 
@@ -395,9 +416,11 @@ token somebody else is using dies within a day.
 **The server enforces; the popup is a courtesy.** A closed or sleeping tab runs
 no timer, so client-side-only expiry logs nobody out.
 
-> **SUPERSEDES:** the manual says "a session lasts 8 hours", and the browser's
-> login issues 2. There are also two login endpoints with different lifetimes;
-> the dead one is removed. See TODO 87, A1.
+> **SUPERSEDES:** the manual used to say "a session lasts 8 hours" while the
+> browser's login issued 2 — corrected. A third login endpoint
+> (`POST /api/auth/login`, which the browser does not use) had its own hardcoded
+> 8 hours: it now reads the same setting, and **is still there** — TODO 87 A1
+> decided it should be removed, and that has not been carried out.
 
 ---
 
@@ -433,7 +456,7 @@ portal role does not carry over.
 
 ## 13. Specified and not built
 
-*State: DEFERRED — specified and unbuilt, except the manifest hash (§4) and the receipt's asset half (§5), which are now in*
+*State: DEFERRED — specified and unbuilt, except two that are now built: the manifest hash (§4) and the receipt's asset half (§5)*
 
 | | |
 |---|---|

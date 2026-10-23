@@ -9609,6 +9609,60 @@ no upside. If something seems to need one of them, ask.
       note and the manual both say it.
 
     ============================================================
+    THE SYSTEMATIC SPEC PASS — 2026-10-23
+    ============================================================
+
+    THE OWNER ASKED FOR THE SAME CHECK OF docs/SPEC.md AGAINST THE CODE that the
+    manual had just had. IT FOUND EIGHT THINGS, and most were mine — written
+    into the living spec during the reconciliation and never checked against
+    what the code actually does.
+
+        §1   SAID AN ASSET CAN BE "discussed" without being submitted. There is
+             no portal-side discussion at all. Removed from the list and marked.
+
+        §2   SAID the game store is "the subset approved into a GAME VERSION".
+             It is the subset approved into the STORE. Which release holds it is
+             §8, which is unbuilt. Two different questions, conflated.
+
+        §4   SAID the developer uploads "a folder, a zip, or a selection".
+             THERE IS NO ZIP UPLOAD — the only mention of one in the upload
+             route is a comment saying a monolithic zip is not the mechanism.
+
+        §4   SAID refusals AND CANCELLATIONS are recorded in the history. A
+             CANCELLATION IS NOT RECORDED: pressing Cancel never reaches the
+             server. Only the refusal is.
+
+        §6   LISTED categories and boards among prod's powers under a section
+             marked BUILT. Neither exists. And its "PREREQUISITE: the audit
+             trail" is now met, so it read as outstanding when it is not.
+
+        §7   DESCRIBED THE ROLE SWITCH AS ESTABLISHED FACT — "an admin acting as
+             prod is recorded by the role switch itself" — when there is no role
+             switch (item 86). Rewritten as future, with a NOT BUILT note.
+
+        §10  ITS SUPERSEDES NOTE was already stale: it said the manual claims 8
+             hours (fixed) and that the third login endpoint "is removed" (A1
+             decided that; it is still there, now reading the setting).
+
+        §13  state line tidied so it does not read as "everything here is
+             unbuilt" when two are in.
+
+    --- THE PATTERN, WHICH IS THE POINT ---
+
+      THE LIVING SPEC WAS WRITTEN FROM THE RECONCILIATION AND WAS RIGHT ABOUT
+      DECISIONS AND WRONG ABOUT STATE. Every one of these eight is the same
+      error: something DECIDED or INTENDED described in the grammar of something
+      BUILT.
+
+      THAT IS WHAT THE STATE MARKERS EXIST TO PREVENT, and they only work if
+      each claim underneath is checked rather than inherited from the heading.
+      A section marked BUILT can still contain a sentence about the future.
+
+      SO THE RULE, now in the memory note: when SPEC.md says a thing is built,
+      the sentence has to be checkable against the code, not merely consistent
+      with the section's label.
+
+    ============================================================
     THE SYSTEMATIC MANUAL PASS — 2026-10-23
     ============================================================
 
