@@ -8559,3 +8559,124 @@ no upside. If something seems to need one of them, ask.
     IMPERSONATION IS THEREFORE A PREREQUISITE OF THE PRIVATE STAGE, not a
     separate feature. Marked, time-bounded and audit-logged, as the rule
     already says in three places.
+
+87) THE SPEC RECONCILIATION — DISCREPANCIES BETWEEN THE CODE, THE PDFS AND THIS
+    FILE. Listed 2026-10-16; being ruled on one at a time with the owner.
+    Overlaps items 78 and 80, which audited parts of this earlier. Those are the
+    audits; this is the consolidated list and the rulings.
+
+    ============================================================
+    A1. SESSION LIFETIME — SETTLED 2026-10-23
+    ============================================================
+
+    THE DISCREPANCY. The manual promises an 8-hour session
+    (docs/manual/20-getting-in.md:53,58); the login the browser actually uses
+    issues 2 hours (server.js:411,419). And there are TWO login endpoints with
+    different lifetimes — the dead POST /api/auth/login issues 8h
+    (routes/auth.js:53) — which is a second way to do one thing (item 84).
+
+    THE DECISION. SESSIONS EXPIRE ON IDLENESS, NOT ON A FIXED CLOCK.
+
+        developer      idle 2 hours, then a warning, then 3 minutes to respond
+        prod / admin   idle 30 minutes, absolute cap 8 hours
+        everyone       ABSOLUTE CAP 24 HOURS, however active
+
+    AN ACTIVE SESSION IS NOT LOGGED OUT. The 24-hour cap is the outer bound: a
+    token somebody else is using dies within a day whatever they do with it.
+
+    --- WHAT IT TAKES ---
+
+      * sessions.last_seen_at. The table exists, is unused, and already has
+        user_id, token, ip_address, user_agent, is_impersonated, impersonated_by,
+        created_at and expires_at (db.js:1577). expires_at does the absolute
+        cap; last_seen_at does the idle check.
+      * authenticateToken gains an indexed session lookup. It already re-reads
+        the user from the database on EVERY request (middleware/auth.js:33), so
+        this is one more read on a path that already does one.
+      * The idle value is an app_settings definition — lib/settings.js is
+        already definition-driven, with validate and bounds — NOT a constant.
+
+    --- THE THREE THINGS THAT WILL BITE ---
+
+      1. THE SERVER ENFORCES; THE POPUP IS A COURTESY. A closed or sleeping tab
+         runs no timer, so client-side-only expiry logs nobody out. Today's
+         fixed JWT does enforce itself, so skipping the server side would be a
+         REGRESSION in the one respect that matters.
+      2. THE COOKIE'S maxAge IS CURRENTLY 2 HOURS (server.js:419) and would log
+         people out BEFORE any idle check could fire. It has to become
+         long-lived and let the server decide.
+      3. "ACTIVITY" MUST COUNT A REQUEST IN FLIGHT. last_seen_at updates when a
+         request STARTS, or a two-hour upload looks like idleness and the
+         developer is logged out mid-upload.
+
+    --- AND IT UNBLOCKS IMPERSONATION ---
+
+      A server-side session is exactly what item 86's impersonation needs:
+      time-bounded by expires_at, marked by is_impersonated, attributed by
+      impersonated_by. It also gives the portal REAL REVOCATION, which it does
+      not have today — routes/auth.js:91-93 says so in as many words.
+
+    --- ALSO DECIDED ---
+
+      * The dead POST /api/auth/login is removed. One way to get a session.
+      * The manual's "a session lasts 8 hours" section is rewritten: idle-based,
+        with the warning, and both caps stated.
+      * The industry norm for an internal tool is about a working day of idle
+        and 1-14 days absolute. 2 hours idle and 24 hours absolute is stricter
+        than the norm, deliberately.
+
+    ============================================================
+    STILL TO RULE ON
+    ============================================================
+
+    A. THE SPEC IS WRONG
+      A2  the manual contradicts itself on administrator invitations
+      A3  assettypes01: the tech check is "three generic checks", "nothing
+          inspects file contents" — seven exist, contents are inspected
+      A4  assettypes01's "current state" snapshot of the assets table is stale
+      A5  dbspec01 names `files`, `file references`, `recommended_version_id` —
+          none of those names exist in the schema
+      A6  the manual says prod manages asset categories and boards; it cannot
+      A7  the manual says revoking portal access revokes board access; unbuilt
+      A8  assettypes01's controlled vocabulary for asset_type was never applied
+      A9  uploadmodel01 says filename_overrides is dead code; it is live
+      A10 uploadmodel01's central change was never made — upload still versions
+
+    B. THE SPECS CONTRADICT EACH OTHER OR THEMSELVES
+      B1  the game is "maintained separately in GitHub" (both PDFs) against
+          "all game source code ... in a central private GitHub repository"
+          (Specification_v04_web.html) — and against the TODO's Perforce
+      B2  "published files should be treated as immutable" against a permission
+          table giving admin read/write/delete on a published version
+      B3  is state on the asset (assets.status) or the version
+          (asset_versions.visibility)? Item 86 settled it per VERSION
+      B4  does a second developer add a version to your asset (the Repository
+          PDF's worked example) or fork it (the System PDF's ownership model)?
+
+    C. THE CODE IS WRONG
+      C1  zero audit records across submit, test, approve, reject
+      C2  assets has no owner column at all
+      C3  a single category column, which the spec explicitly forbids
+      C4  session lifetime — settled above as A1
+
+    D. THE TODO OVERRULED THE SPEC WITHOUT SAYING SO
+      D1  GitHub -> Perforce for the game (the PDFs make it structural)
+      D2  in-portal chat -> a separate board reached by a link
+      D3  deploy-any-branch-to-a-sandbox -> nothing
+
+    E. THE SPEC DESCRIBES IT AND NOTHING IMPLEMENTS IT
+      E1  the test receipt protocol — harness, build id, manifest hash,
+          server-side validation of a submission
+      E2  a deterministic version manifest hash
+      E3  permissions, licences and commercial-use provenance
+      E4  notifications to the asset's OWNER on test/approval events
+      E5  branches and official builds
+      E6  game_branch_asset_versions — the version currently used PER BRANCH;
+          asset_recommended_versions is one row per asset and cannot express an
+          asset being in production and candidate dev at once
+      E7  asynchronous processing with a visible state
+      E8  AI classification tables and the "human wins" rule
+      E9  signed upload URLs
+      E10 a storage_provider abstraction
+      E11 the Browser Sandbox as an asset consumer
+      E12 user-role access to assets made available to users
