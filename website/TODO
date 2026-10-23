@@ -9056,6 +9056,55 @@ no upside. If something seems to need one of them, ask.
       the website's own repository, which only some roles touch? NOT SETTLED.
 
     ============================================================
+    B2. CAN A PUBLISHED VERSION BE EDITED? — SETTLED 2026-10-23
+    ============================================================
+
+    THE CONTRADICTION, verified verbatim in the System PDF:
+
+        §26   "Published files should be treated as immutable."
+
+        §6    Published:
+                owner: read
+                ADMIN: READ/WRITE/DELETE
+                developers: read
+                "ordinary developers cannot overwrite/delete the published
+                 version"
+
+    That last line exempts ORDINARY developers specifically, which reads as an
+    admin being able to do it deliberately.
+
+    --- ONE WORD WAS DOING TWO JOBS ---
+
+        CORRECT IT   a new version. ALWAYS. A published version's files are never
+                     rewritten — a build may have been tested against them, and
+                     "the version I tested is the version I submitted" has to
+                     stay true. This is exactly the upload model settled above
+                     (A5/A10): the version IS the file set, so changing the set
+                     makes another version.
+
+        WITHDRAW IT  DELETION — a last resort, not maintenance. ALREADY DECIDED
+                     2026-10-02: admin may do it, behind deliberately heavy
+                     friction, and there are two designed routes
+                     (DELETE /assets/:assetId and .../versions/:versionId).
+                     NOT BUILT.
+
+    SO THE PERMISSION TABLE IS RIGHT ABOUT delete AND WRONG ABOUT write.
+
+    --- WHAT THE CODE DOES TODAY ---
+
+      NOTHING CAN REWRITE A VERSION, and nothing can delete one either:
+      backend/routes/game.js has no PUT, PATCH or DELETE route at all, and
+      assets.is_active IS NEVER WRITTEN.
+
+      SO IMMUTABILITY IS TRUE TODAY BY ABSENCE RATHER THAN BY DESIGN. That is
+      worth knowing before the delete routes are built: the guard has to be
+      written, because there is nothing to inherit.
+
+    CORRECTED IN dbspec01, which said only "immutable" and now says what that
+    means, what the alternative act is, and that the PDF's "write" should be
+    read as "withdraw". The PDF itself cannot be edited here.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -9073,8 +9122,7 @@ no upside. If something seems to need one of them, ask.
 
     B. THE SPECS CONTRADICT EACH OTHER OR THEMSELVES
       B1  where the game lives — SETTLED above (PDFs right in shape, wrong in tool)
-      B2  "published files should be treated as immutable" against a permission
-          table giving admin read/write/delete on a published version
+      B2  published immutability vs admin write/delete — SETTLED above
       B3  is state on the asset (assets.status) or the version
           (asset_versions.visibility)? Item 86 settled it per VERSION
       B4  does a second developer add a version to your asset (the Repository

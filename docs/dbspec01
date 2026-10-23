@@ -62,6 +62,21 @@ repository asset version
        ├── immutable
        ├── sequential
        └── version_note
+
+IMMUTABLE MEANS THE CONTENT NEVER CHANGES, NOT THAT IT CAN NEVER BE REMOVED.
+Those are two different acts and one word was doing both (settled 2026-10-23):
+
+    CORRECT IT   a new version. Always. A published version's files are never
+                 rewritten, because a build may have been tested against them
+                 and "the version I tested" has to stay true.
+
+    WITHDRAW IT  deletion, and a last resort rather than maintenance. Decided
+                 2026-10-02: admin may do it, behind deliberately heavy
+                 friction. NOT BUILT.
+
+The PDF permission table says "admin: read/write/delete" on a published
+version, which conflates them. Read it as "read, and may withdraw" — never
+"may rewrite", which the same document forbids three sections later.
 For each repository asset:
 
 ￼
