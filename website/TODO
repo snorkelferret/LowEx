@@ -9026,6 +9026,27 @@ no upside. If something seems to need one of them, ask.
       now says so where a reader of that file will see it. IF THE PDFs ARE TO
       STAND ALONE, SOMEBODY HAS TO EDIT THEM.
 
+    --- AND THE ASSETS THEMSELVES ARE IN NO REPOSITORY AT ALL (2026-10-23) ---
+
+      THE OWNER: *"also the game assets will be stored on some machine - but not
+      on github - there is too much stuff"*.
+
+      SO: NO LARGE CONTENT IN GIT, EVER. The library spec says the same — "the
+      website's source code and database design are kept in GitHub. The actual
+      large asset files are stored separately" — and the code already behaves
+      that way: backend/uploads/files/ and the database are both gitignored.
+
+      "SOME MACHINE" IS STILL OPEN, AND THE WORD MATTERS. The existing deferral
+      (see item 78's storage note) records the SPEC SAYING CLOUDFLARE R2 —
+      object storage — against the CODE USING LOCAL DISK, with the owner's
+      "storage is temp TBD" of 2026-10-09. A MACHINE IS NOT OBJECT STORAGE, so
+      today's wording may be a steer toward self-hosting rather than R2 — or it
+      may simply be the colloquial word for "somewhere". NOT SETTLED, and worth
+      one line when storage is decided rather than being read as an answer now.
+
+      IT DOES NOT CHANGE ANYTHING TODAY: nothing is in a repository either way,
+      and the deferral stands.
+
     --- A CONSEQUENCE STILL OPEN ---
 
       Specification_v04 §03's next bullet says "Logged-in web portal
