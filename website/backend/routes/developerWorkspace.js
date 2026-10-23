@@ -377,6 +377,47 @@ function readDownloads(developerId) {
 }
 
 // ============================================================
+/*
+ * Uploads the server REFUSED, because nothing in them had changed.
+ *
+ * A REFUSAL IS A THING THAT HAPPENED TO THE DEVELOPER'S WORK, and it is the
+ * one kind of upload that leaves no row anywhere else: nothing was stored,
+ * nothing was versioned, so the workspace has no trace of it. Without this, an
+ * upload refused for being identical would simply vanish — the developer is
+ * told once, at the moment it happens, and can never look it up again.
+ *
+ * Same shape as readDownloads above, and for the same reason.
+ */
+function readRefusedUploads(developerId) {
+    const rows = db.prepare(`
+        SELECT id, target, details, created_at
+        FROM audit_logs
+        WHERE actor_id = ?
+          AND action = 'workspace.upload_refused'
+        ORDER BY id DESC
+        LIMIT 50
+    `).all(developerId);
+
+    return rows.map(row => {
+        let details = {};
+
+        try {
+            details = JSON.parse(row.details || '{}');
+        } catch {
+            details = {};
+        }
+
+        return {
+            id: row.id,
+            asset_name: row.target,
+            version_number: details.version_number ?? null,
+            file_count: details.file_count ?? 0,
+            metadata_changed: details.metadata_changed ?? [],
+            created_at: row.created_at
+        };
+    });
+}
+
 // GET /api/developer/workspace/assets/history
 // ============================================================
 //
@@ -516,7 +557,12 @@ router.get(
                 // leaves no row anywhere else — it copies nothing, so the store
                 // has no record of it and the workspace has none either. The
                 // audit log is where it lives.
-                downloads: readDownloads(developerId)
+                downloads: readDownloads(developerId),
+
+                // AND WHAT WAS REFUSED. An upload that changed nothing leaves
+                // no other trace, so this is the only record that the developer
+                // tried.
+                refused_uploads: readRefusedUploads(developerId)
             });
 
         } catch (err) {
@@ -2570,6 +2616,106 @@ router.post(
             for (const item of processedFiles) {
                 item.sha256 =
                     await calculateSha256(item.file.path);
+            }
+
+
+            // ----------------------------------------------------
+            // HAS ANYTHING ACTUALLY CHANGED?
+            //
+            // THE RULE (TODO 87, A5/A10): A VERSION IS THE ASSET'S FILE SET.
+            // An upload whose components are identical to the newest version's
+            // makes no version — it is refused with an explanation, and the
+            // developer can INSIST, which is the one case where a version is
+            // created without a byte changing.
+            //
+            // HERE, BEFORE THE QUOTA CHECK AND BEFORE ANY WRITE, for the same
+            // reason the quota check is here: a refusal must leave no partial
+            // state and no changed metadata.
+            //
+            // CONTENT ONLY — path, name, hash. Metadata must never make
+            // identical files look changed, and files must never look changed
+            // because a description was edited.
+            // ----------------------------------------------------
+
+            const incomingHash = manifestHash(
+                processedFiles.map(item => ({
+                    relative_path: item.relativePath,
+                    filename: item.filename,
+                    sha256: item.sha256,
+                    size: item.file.size
+                }))
+            );
+
+            // A multipart body delivers strings. Named rather than a boolean
+            // because a browser sends "on" for a ticked box, not "true".
+            const forceNewVersion =
+                String(req.body?.force_new_version || '') === '1';
+
+            if (!forceNewVersion) {
+                const existing = db.prepare(`
+                    SELECT id, name, category, description
+                    FROM workspace_assets
+                    WHERE workspace_id = ?
+                      AND name = ?
+                      AND is_active = 1
+                `).get(workspace.id, assetName);
+
+                const latest = existing
+                    ? db.prepare(`
+                        SELECT id, version_number, manifest_hash
+                        FROM workspace_versions
+                        WHERE workspace_asset_id = ?
+                          AND is_active = 1
+                        ORDER BY version_number DESC
+                        LIMIT 1
+                    `).get(existing.id)
+                    : null;
+
+                if (latest && latest.manifest_hash === incomingHash) {
+                    // WHICH METADATA DIFFERS, SO THE EXPLANATION CAN BE
+                    // SPECIFIC. "Nothing has really changed except the
+                    // description you provided" is only honest if it is true,
+                    // and it is not when nothing at all differs.
+                    //
+                    // ONLY A VALUE THE DEVELOPER ACTUALLY SENT COUNTS. Both
+                    // fields are optional and an absent one leaves the asset's
+                    // value alone, so an absent one is not a change.
+                    const changed = [];
+
+                    if (description && description !== (existing.description || '')) {
+                        changed.push('description');
+                    }
+
+                    if (category && category !== (existing.category || null)) {
+                        changed.push('category');
+                    }
+
+                    // IN THE HISTORY, because a refusal the developer never sees
+                    // reads as a failed upload.
+                    audit.record(
+                        developerId,
+                        'workspace.upload_refused',
+                        assetName,
+                        {
+                            workspace_asset_id: existing.id,
+                            workspace_version_id: latest.id,
+                            version_number: latest.version_number,
+                            manifest_hash: incomingHash,
+                            file_count: processedFiles.length,
+                            metadata_changed: changed
+                        }
+                    );
+
+                    return res.status(409).json({
+                        error: changed.length
+                            ? `Nothing has really changed except the ${changed.join(' and ')} you provided.`
+                            : 'Nothing has changed: these are the components the latest version already holds.',
+                        nothing_changed: true,
+                        metadata_changed: changed,
+                        latest_version_number: latest.version_number,
+                        manifest_hash: incomingHash
+                    });
+                }
             }
 
 

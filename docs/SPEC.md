@@ -172,9 +172,20 @@ which are the developer's *proposal*. The studio may override them later.
 any content; a new version references the same rows. The same file uploaded a
 hundred times costs one blob.
 
-> **DECIDED, NOT BUILT:** the code creates a version on *every* upload and
-> compares nothing (TODO 87, A5/A10). `uploadmodel01` and `dbspec01` already
-> describe the rule above; they are the specification for the fix.
+**BUILT.** The upload hashes its components and compares that with the newest
+version's `manifest_hash` — **before the quota check and before any write**, so
+a refusal leaves no partial state and changes no metadata.
+
+**The refusal says which metadata differs**, and only counts a value the
+developer actually sent: an absent name/category/description leaves the asset's
+value alone, so it is not a change. That is what lets the popup say *"nothing
+has really changed except the description you provided"* honestly, and say
+*"nothing has changed"* when nothing did.
+
+**The developer can insist** (`force_new_version`), which is the one case where
+a version is created without a byte changing. The refusal is recorded in the
+developer's history, because an upload that stored nothing leaves no other
+trace.
 
 **The comparison is the deterministic manifest hash** — `filename + SHA256 +
 size`, sorted by canonical path, then hashed. One implementation serves three

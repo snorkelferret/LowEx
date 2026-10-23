@@ -1116,6 +1116,76 @@ async function uploadAsset() {
             await response.json();
 
 
+        // ====================================================
+        // NOTHING HAS CHANGED — a refusal with a way through.
+        // ====================================================
+        //
+        // A VERSION IS THE ASSET'S FILE SET (docs/SPEC.md §4). If the
+        // components are identical to the newest version's, no version is
+        // made — but the developer may have edited the description, and they
+        // can insist.
+        //
+        // THE SERVER SAYS WHICH METADATA DIFFERS, so this does not have to
+        // guess: it says "except the description you provided" only when a
+        // description really was provided and differs.
+        if (response.status === 409 && data.nothing_changed) {
+
+            const what =
+                Array.isArray(data.metadata_changed) &&
+                data.metadata_changed.length > 0
+                    ? `Nothing has really changed except the ` +
+                      `${data.metadata_changed.join(' and ')} you provided.`
+                    : 'Nothing has changed — these are the components the ' +
+                      'latest version already holds.';
+
+            const insist = window.confirm(
+                `${what}\n\n` +
+                `Version ${data.latest_version_number} of this asset already ` +
+                `holds exactly these files.\n\n` +
+                'OK — create a new version anyway (the files are the same; ' +
+                'only the details differ).\n' +
+                'Cancel — upload nothing.'
+            );
+
+            if (!insist) {
+                showUploadStatus(
+                    `${what} Nothing was uploaded.`,
+                    'secondary'
+                );
+
+                return;
+            }
+
+            // THE FILES ARE STILL IN formData, so the retry costs a second
+            // transfer rather than a second selection. Deliberate: keeping
+            // uploaded bytes on the server waiting for an answer would be
+            // state to expire, and this path is rare.
+            formData.append('force_new_version', '1');
+
+            const forced = await apiFetch(`${API_URL}/upload`, {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            });
+
+            const forcedData = await forced.json();
+
+            if (!forced.ok) {
+                throw new Error(forcedData.error || 'Upload failed');
+            }
+
+            showUploadStatus(
+                `Asset uploaded successfully — version ${forcedData.version.version_number}.`,
+                'success'
+            );
+
+            clearUpload();
+            await loadDeveloperWorkspace();
+
+            return;
+        }
+
+
         if (!response.ok) {
 
             throw new Error(

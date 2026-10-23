@@ -9461,6 +9461,66 @@ no upside. If something seems to need one of them, ask.
         concatenation would have got wrong.
 
     ============================================================
+    THE UPLOAD COMPARISON — BUILT 2026-10-23
+    ============================================================
+
+    THE RULE (A5/A10, docs/SPEC.md §4): a version IS the asset's file set, so
+    an upload whose components match the newest version's makes no version.
+
+    WHERE IT RUNS: AFTER THE HASHING PASS AND BEFORE THE QUOTA CHECK AND ANY
+    WRITE — the same place and for the same reason as the quota check, so a
+    refusal leaves no partial state and changes no metadata.
+
+    CONTENT ONLY: relative_path, filename, sha256. Metadata must never make
+    identical files look changed, and files must never look changed because a
+    description was edited.
+
+    --- THE REFUSAL SAYS WHICH METADATA DIFFERS ---
+
+      `metadata_changed: ['description']` lets the popup say "nothing has really
+      changed EXCEPT THE DESCRIPTION YOU PROVIDED" honestly — and say "nothing
+      has changed" when nothing did. ONLY A VALUE THE DEVELOPER ACTUALLY SENT
+      COUNTS, because both fields are optional and an absent one leaves the
+      asset's value alone.
+
+    --- AND IT IS IN THE HISTORY ---
+
+      workspace.upload_refused, read back by readRefusedUploads() and returned
+      as `refused_uploads`. An upload that stored nothing leaves no other trace
+      anywhere, so without this the developer is told once and can never look
+      it up again.
+
+    --- THE OVERRIDE ---
+
+      `force_new_version=1`. THE ONE CASE WHERE A VERSION IS CREATED WITHOUT A
+      BYTE CHANGING, and the reason the manifest hash must never be UNIQUE.
+
+      The client re-sends the same formData, so an override costs a second
+      transfer rather than a second selection. Deliberate: keeping uploaded
+      bytes on the server waiting for an answer would be state to expire, and
+      this path is rare.
+
+    --- THE POPUP IS window.confirm, AND THAT IS A COMPROMISE ---
+
+      It explains itself and maps the buttons in the text ("OK — create a new
+      version anyway ... Cancel — upload nothing"), but the labels are the
+      browser's. The store's download flow uses an in-page panel instead. Worth
+      matching if this path turns out to be common; it is not common by design,
+      which is why it was not built first.
+
+    --- VERIFIED AGAINST THE LIVE SERVER, ALL FOUR CASES ---
+
+      same files + a new description  409, "except the description you provided"
+      same files + no metadata        409, "Nothing has changed", metadata []
+      the refusal                     in refused_uploads, with its details
+      override                        created version 3
+      a file MOVED (artPics → images) created version 4, new identity,
+                                      and NO new blob — still 3 on disk
+
+      AND VERSIONS 28 AND 29 SHARE A MANIFEST HASH. That is the metadata-only
+      version working, and the reason the column is not UNIQUE.
+
+    ============================================================
     THE LIST, AND WHERE EACH ENTRY ENDED UP
     ============================================================
 
