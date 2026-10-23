@@ -3394,6 +3394,7 @@ router.post(
                     wv.created_by,
                     wv.created_at,
                     wv.creative_locked,
+                    wv.manifest_hash,
                     wa.name AS asset_name,
                     wa.workspace_id
                 FROM workspace_versions wv
@@ -3437,17 +3438,24 @@ router.post(
             // Create technical check run.
             // ----------------------------------------------------
 
+            // THE RECEIPT'S ASSET HALF, recorded when the run starts.
+            //
+            // The version's manifest hash is written with the run, so the
+            // record says WHICH CONTENT was tested rather than only which
+            // version number — and submission can check that they still agree.
             const runResult = db.prepare(`
                 INSERT INTO technical_check_runs (
                     workspace_asset_id,
                     workspace_version_id,
+                    manifest_hash,
                     started_by,
                     status
                 )
-                VALUES (?, ?, ?, 'running')
+                VALUES (?, ?, ?, ?, 'running')
             `).run(
                 assetId,
                 versionId,
+                version.manifest_hash,
                 developerId
             );
 
@@ -3904,6 +3912,7 @@ router.post(
                         id,
                         workspace_asset_id,
                         workspace_version_id,
+                        manifest_hash,
                         started_by,
                         status,
                         started_at,
@@ -3930,10 +3939,45 @@ router.post(
                 `).all(runId);
 
 
+            // ----------------------------------------------------
+            // THE TEST RECEIPT.
+            //
+            // What was tested, what it found, who ran it and when — bound to
+            // the CONTENT by the manifest hash rather than to a version number.
+            // Submission checks this hash against the version's (see the
+            // request-creative-approval route), which is what makes "the
+            // version I tested is the version I submitted" a fact rather than
+            // an assumption.
+            //
+            // `game` IS NULL AND THAT IS HONEST, NOT A PLACEHOLDER. The spec's
+            // receipt also identifies the game build — branch, build number,
+            // commit — and NO GAME BUILD EXISTS (TODO 87, E5; items 53, 60).
+            // A field that is absent says that; a field that is empty or
+            // fabricated would not.
+            // ----------------------------------------------------
+
+            const receipt = {
+                workspace_asset_id: completedRun.workspace_asset_id,
+                workspace_version_id: completedRun.workspace_version_id,
+                version_number: version.version_number,
+                asset_manifest_hash: completedRun.manifest_hash,
+                tested_by: completedRun.started_by,
+                result: completedRun.status,
+                tested_at: completedRun.completed_at,
+                checks: checkResults.map(result => ({
+                    name: result.check_name,
+                    status: result.status,
+                    message: result.message
+                })),
+                game: null
+            };
+
+
             return res.json({
                 status: finalStatus,
                 run: completedRun,
-                results: checkResults
+                results: checkResults,
+                receipt
             });
 
 
@@ -4031,6 +4075,7 @@ router.post(
                     wv.workspace_asset_id,
                     wv.version_number,
                     wv.creative_locked,
+                    wv.manifest_hash,
                     wa.name AS asset_name
                 FROM workspace_versions wv
                 JOIN workspace_assets wa
@@ -4068,7 +4113,7 @@ router.post(
 
             const technicalPass =
                 db.prepare(`
-                    SELECT id
+                    SELECT id, manifest_hash
                     FROM technical_check_runs
                     WHERE workspace_version_id = ?
                       AND status = 'passed'
@@ -4081,6 +4126,34 @@ router.post(
                 return res.status(409).json({
                     error:
                         'This version must pass Technical Validation before Creative Approval can be requested.'
+                });
+            }
+
+
+            // ----------------------------------------------------
+            // THE RECEIPT'S JOB (TODO 87, E1): the content that PASSED the
+            // test must be the content being submitted.
+            //
+            // The version id alone is not enough to say that. It is enough
+            // today, because a version's files are written once and cannot be
+            // edited — but that is a property of the current code, not of the
+            // record, and the moment a version can change or a test can be
+            // reported by an external harness, the version number stops being
+            // evidence.
+            //
+            // The manifest hash is evidence. It travels with the run and is
+            // compared here.
+            //
+            // THE GAME BUILD is the receipt's other half and is not checked,
+            // because no game build exists (E5). When it does, it belongs
+            // here, against the build required by the target release.
+            // ----------------------------------------------------
+
+            if (technicalPass.manifest_hash !== version.manifest_hash) {
+                return res.status(409).json({
+                    error:
+                        'The technical test passed against different content from this version. ' +
+                        'Run Technical Validation again before submitting.'
                 });
             }
 

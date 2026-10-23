@@ -239,7 +239,16 @@ PRIVATE → PUBLISHED → SUBMIT FOR GAME → TECHNICAL TEST → DIRECTOR REVIEW
   a correction is a new version.
 - **SUBMIT FOR GAME** — the owner decides when a version is ready to be
   considered.
-- **TECHNICAL TEST** — against an official game build (§8).
+- **TECHNICAL TEST** — and the **test receipt**. The run records the
+  `manifest_hash` of the content it tested, and submission refuses unless that
+  matches the version being submitted: *"the version I tested is the version I
+  submitted"*, as a fact rather than an assumption. The receipt is returned by
+  the check and names the version, the content, the checks, who ran it and when.
+
+  > **Half of it is missing, and says so.** The spec's receipt also identifies
+  > the **game build** — branch, build number, commit. No game build exists
+  > (§8), so the receipt carries `game: null`. An absent field says that; an
+  > empty or invented one would not.
 - **DIRECTOR REVIEW** — the artistic decision, recorded **separately** from the
   technical one. `prod` is the director (TODO 87, A6).
 
@@ -425,7 +434,7 @@ portal role does not carry over.
 |---|---|
 | permissions, licences, commercial-use provenance | nothing at all; a Steam release needs the right to use an asset |
 | game builds, branches, official builds | nothing |
-| the test receipt protocol | nothing — the only mechanism proving *the version tested is the version submitted* |
+| the test receipt protocol | **asset half BUILT** (§5); the game-build half waits on builds (§8) |
 | asynchronous processing with a visible state | hashing is synchronous inside the request |
 | AI classification and suggested tags | nothing |
 | signed upload URLs | uploads go through Express |

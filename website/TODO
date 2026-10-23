@@ -9521,6 +9521,53 @@ no upside. If something seems to need one of them, ask.
       version working, and the reason the column is not UNIQUE.
 
     ============================================================
+    E1. THE TEST RECEIPT — ASSET HALF BUILT 2026-10-23
+    ============================================================
+
+    THE SPEC'S RECEIPT identifies: asset manifest hash + game build ID/hash +
+    developer + result + timestamp. IT HAS TWO HALVES AND ONLY ONE CAN EXIST:
+
+        THE ASSET HALF   the portal knows what was tested. BUILT.
+        THE GAME HALF    requires game builds and branches, which do not exist
+                         (E5, items 53 and 60). NOT BUILT, and the receipt says
+                         so with `game: null` rather than an empty object.
+
+    --- WHAT THE ASSET HALF DOES ---
+
+      technical_check_runs.manifest_hash records the CONTENT the run tested —
+      not only the version number.
+
+      SUBMISSION REFUSES UNLESS IT MATCHES THE VERSION'S. That is the check the
+      spec asks for ("the tested asset version differs from the submitted asset
+      version" / "the manifest hash differs"), and it is what makes "the version
+      I tested is the version I submitted" a fact rather than an assumption.
+
+      IT IS REDUNDANT TODAY, AND THAT IS THE POINT. A version's files are
+      written once and cannot be edited, so the version id already implies the
+      content. But that is a property of the CURRENT CODE, not of the RECORD —
+      and the moment a version can change, or a test is reported by an external
+      harness rather than run here, the version number stops being evidence.
+
+      THE RECEIPT is returned by the check: asset and version ids, version
+      number, manifest hash, who tested, the result, when, every check with its
+      verdict, and `game: null`.
+
+    --- VERIFIED ---
+
+      * a check returns a receipt whose hash equals the version's;
+      * submission passes with it — approval 4;
+      * WITH THE RECEIPT'S HASH ALTERED, submission is refused: "The technical
+        test passed against different content from this version."
+
+    --- AND ONE THING THE SCHEMA CHECK CAUGHT ---
+
+      The ALTER patch was first declared with the other column patches, which
+      run BEFORE technical_check_runs is created in the same function. On the
+      live database it worked, because the table was already there; on a FRESH
+      database it failed with "no such table". check:schema builds a scratch
+      database precisely to catch that, and did.
+
+    ============================================================
     THE LIST, AND WHERE EACH ENTRY ENDED UP
     ============================================================
 
@@ -9555,8 +9602,9 @@ no upside. If something seems to need one of them, ask.
       D3  deploy-any-branch-to-a-sandbox — SUPERSEDED above
 
     E. THE SPEC DESCRIBES IT AND NOTHING IMPLEMENTS IT — RECORDED above
-      E2  THE MANIFEST HASH — BUILT above. No longer a pending item.
-      E1, E3-E13  listed in docs/SPEC.md §13. The one worth remembering is E3:
+      E1  THE TEST RECEIPT — asset half BUILT above; game half waits on E5.
+      E2  THE MANIFEST HASH — BUILT above.
+      E3-E13  listed in docs/SPEC.md §13. The one worth remembering is E3:
                   it carries a commercial consequence.
 
     ============================================================

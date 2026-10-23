@@ -82,6 +82,42 @@ function backfillManifestHashes(db) {
         );
     }
 
+    // ------------------------------------------------------------
+    // THE SAME FILL FOR CHECK RUNS — the receipt's content half.
+    // ------------------------------------------------------------
+    //
+    // A run recorded before the column existed tested whatever its version
+    // held, and the version's manifest hash IS that. It must happen after the
+    // loop above, or the versions have no hash to copy.
+    //
+    // WITHOUT IT, every older run has a NULL and submission cannot tell a
+    // legacy receipt from a mismatched one — which would either lock out work
+    // that is perfectly fine or wave through a receipt that proves nothing.
+    const staleRuns = db.prepare(`
+        SELECT r.id, v.manifest_hash
+        FROM technical_check_runs r
+        JOIN workspace_versions v ON v.id = r.workspace_version_id
+        WHERE r.manifest_hash IS NULL
+    `).all();
+
+    if (staleRuns.length > 0) {
+        const setRunHash = db.prepare(
+            'UPDATE technical_check_runs SET manifest_hash = ? WHERE id = ?'
+        );
+
+        db.transaction(() => {
+            for (const run of staleRuns) {
+                setRunHash.run(run.manifest_hash, run.id);
+            }
+        })();
+
+        written += staleRuns.length;
+
+        console.log(
+            `  manifest hashes backfilled: ${staleRuns.length} in technical_check_runs`
+        );
+    }
+
     return written;
 }
 

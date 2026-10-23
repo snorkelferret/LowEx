@@ -969,6 +969,16 @@ const applyAssetWorkflowSchemaPatches = () => {
       workspace_asset_id INTEGER NOT NULL,
       workspace_version_id INTEGER NOT NULL,
 
+      -- THE CONTENT THAT WAS TESTED — the version's manifest_hash at the
+      -- moment the check ran. This is the receipt's asset half: it is what
+      -- makes "the version I tested is the version I submitted" checkable
+      -- rather than assumed. See docs/SPEC.md §5 and TODO 87 (E1).
+      --
+      -- THE OTHER HALF — the game build — is not here because no game build
+      -- exists yet (E5). A receipt without it is still worth having: it binds
+      -- the test to the CONTENT, which is the half the portal can know.
+      manifest_hash TEXT,
+
       started_by INTEGER,
 
       status TEXT NOT NULL
@@ -997,6 +1007,24 @@ const applyAssetWorkflowSchemaPatches = () => {
         REFERENCES users(id)
     );
   `);
+
+  /*
+   * The receipt's content half, for databases that predate the column.
+   * Declared here rather than with the other ALTERs because the table is
+   * created in this function, further down — the first attempt ran before
+   * the CREATE and check:schema caught it on a fresh database.
+   */
+  const checkRunColumns = db
+    .prepare("PRAGMA table_info(technical_check_runs)")
+    .all()
+    .map(c => c.name);
+
+  if (!checkRunColumns.includes('manifest_hash')) {
+    db.exec(`
+      ALTER TABLE technical_check_runs
+      ADD COLUMN manifest_hash TEXT;
+    `);
+  }
 
 
   /*
