@@ -214,13 +214,26 @@ for nothing, which is exactly what dbspec01 says must not happen.
 
 Ordered cheapest-first. Each layer is independently useful.
 
-A. ASSET TYPE REGISTRY                                          SMALL
-   Replace free-text asset_type with a controlled vocabulary:
-   blend | nuke | unreal | maya | image | gltf.
-   Per type: allowed extensions, required companions, and validation rules.
-   Extend the technical-check suite with the spec's vetting-gate rules
-   (polygon limits, texture dimensions, naming conventions, format compliance).
-   This is where "upload types" actually lands.
+A. ASSET TYPE REGISTRY                                          BUILT, DIFFERENTLY
+   THIS ASKED TO "replace free-text asset_type with a controlled vocabulary".
+   THE VOCABULARY EXISTS AND IS DERIVED RATHER THAN TYPED, which is better
+   than what was asked for:
+
+     * assetTypeOf(filename) in shared/assetRules.mjs classifies every file
+       against TYPE_BY_EXTENSION — the controlled vocabulary.
+     * The client does NOT send asset_type at all, deliberately: the field
+       asked a human to choose between content types and TOOLS, and the tool
+       is a property of the file a verifier can read.
+     * The technical check RECORDS the type when every file in the version
+       agrees, with COALESCE so an ambiguous version cannot wipe a type an
+       earlier version established.
+     * The server stopped accepting asset_type from the request entirely
+       (2026-10-23), so there is one way to set it and no dead second one.
+
+   WHAT IS STILL MISSING FROM THIS PARAGRAPH: "required companions" per type,
+   and the vetting-gate rules below (polygon limits, texture dimensions,
+   naming conventions, format compliance). Only the format-compliance gate is
+   genuinely absent — the content checks exist.
 
 B. DOWNLOAD TO LOCAL WORKING COPY                               SMALL
    ZIP preserving relative_path (which exists in the schema for exactly this)

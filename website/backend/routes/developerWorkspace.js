@@ -2143,8 +2143,19 @@ router.post(
             // Metadata
             // ----------------------------------------------------
 
-            const assetType =
-                String(req.body.asset_type || '').trim();
+            // asset_type IS NOT READ FROM THE REQUEST.
+            //
+            // It is a property of the FILES, not a field a client chooses:
+            // assetTypeOf() classifies every file against TYPE_BY_EXTENSION,
+            // and the technical check records the type when every file in the
+            // version agrees — with COALESCE, so an ambiguous version cannot
+            // wipe a type an earlier one established. The client deliberately
+            // stopped sending one (see its own note in
+            // frontend/src/developerWorkspace.js).
+            //
+            // ACCEPTING IT HERE AS WELL WOULD BE A SECOND WAY TO SET IT, and
+            // the client never sends it, so the way nobody uses is the way
+            // nobody notices drifting. Removed 2026-10-23.
 
             // Which part of the game this belongs to. Normalised here so the
             // stored spelling is always canonical; an unknown value becomes
@@ -2793,7 +2804,8 @@ router.post(
                             `).run(
                                 workspace.id,
                                 assetName,
-                                assetType || null,
+                                // derived by the check, never from the client
+                                null,
                                 category,
                                 description || null
                             );
@@ -2871,7 +2883,8 @@ router.post(
 
                                 WHERE id = ?
                             `).run(
-                                assetType || null,
+                                // derived by the check, never from the client
+                                null,
                                 category,
                                 description || null,
                                 asset.id

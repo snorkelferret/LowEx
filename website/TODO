@@ -8932,6 +8932,42 @@ no upside. If something seems to need one of them, ask.
     rest as carefully as this one was checked.
 
     ============================================================
+    A8. asset_type — MOSTLY FOUND FALSE 2026-10-23
+    ============================================================
+
+    THE FINDING AS LISTED: "assettypes01 prescribes a controlled vocabulary for
+    asset_type; the column is still free text read raw from the request body."
+
+    THE VOCABULARY EXISTS AND IS DERIVED, WHICH IS BETTER THAN "TYPED":
+
+      * assetTypeOf(filename) classifies every file against TYPE_BY_EXTENSION
+        (shared/assetRules.mjs:134).
+      * THE CLIENT DOES NOT SEND asset_type AT ALL, and says why: "That field
+        asked the developer to choose between content types and TOOLS, when the
+        tool is a property of the file that a verifier determines."
+      * The technical check records the type WHEN EVERY FILE IN THE VERSION
+        AGREES, with COALESCE so an ambiguous version cannot wipe a type an
+        earlier version established. A .blend plus forty textures has no single
+        type, and "Image" would be a confident wrong answer.
+
+    SO THIS ONE IS ALSO THE AUDIT'S ERROR. The proposal was built, by a better
+    route than it sketched.
+
+    --- AND ONE REAL THING WAS LEFT, WHICH IS NOW FIXED ---
+
+    The server STILL READ req.body.asset_type (developerWorkspace.js:2146) even
+    though the client never sends it — so a client COULD set free text through
+    the API, and the way nobody uses is the way nobody notices drifting. That
+    is item 84's shape exactly: a second way to do one thing.
+
+    REMOVED 2026-10-23. The upload now writes asset_type as null, meaning "no
+    answer from this upload", and the check remains the only thing that sets it.
+
+    WHAT REMAINS GENUINELY UNBUILT from the paragraph: "required companions" per
+    type, and the format-compliance gate (polygon limits, texture dimensions,
+    naming conventions).
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -8943,7 +8979,7 @@ no upside. If something seems to need one of them, ask.
           the code is behind)
       A6  prod's category power, and the role model — SETTLED above
       A7  the board and revoke-sync — FOUND FALSE above
-      A8  assettypes01's controlled vocabulary for asset_type was never applied
+      A8  asset_type's vocabulary — MOSTLY FALSE, one real fix above
       A9  uploadmodel01 says filename_overrides is dead code; it is live
       A10 the upload still versions on every upload — SETTLED above
 
