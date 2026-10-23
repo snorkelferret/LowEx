@@ -8,42 +8,34 @@ the game.
 A **staging area** for game assets. You upload work, it is checked and reviewed,
 and approved work goes into the game's asset store.
 
-**Not everything you upload is a game asset.** Images and other source material
-belong in the library rather than the game — see the next section, which is worth
-reading before the first upload.
-
 It is not a file store you can lean on. Your workspace is meant to hold what you
 are working on now, not an archive of everything you have ever made. It has a
 size limit for that reason, and the panel says so rather than leaving you to
 discover it.
 
-## An image is not a game asset
+## Three places, and what each is for
 
-**An image never goes into the game on its own.** It goes into the **image
-library**, with the rest of the studio's source material, and it is in the game
-only by being *part of* something you build.
+| | what it holds | who sees it | ships? |
+|---|---|---|---|
+| **your workspace** | what you are working on now | only you | no |
+| **the library** | shared source material — reference, textures, scans, anything | the studio | not by itself |
+| **the game store** | content approved into the game | the studio | yes |
 
-An **asset** is the thing that ships — a unit of game content you assemble in
-your workspace, which may use images from the library, and which is checked,
-reviewed and approved into the game's asset store.
+**AN ASSET IS NOT DEFINED BY WHAT KIND OF FILE IT IS.** A texture or a photograph
+can be a game asset, and so can a Blender file. What decides is whether it is
+approved into the game — not whether it is an image.
 
-Two destinations, and they are not interchangeable:
+Use the **library** for material the studio should be able to find and reuse: a
+set of reference photographs, a scan, a texture nobody has built anything with
+yet. Use your **workspace** for the thing you are assembling and intend to
+submit.
 
-| | goes to | ships? |
-|---|---|---|
-| **an image** | the image library — shared with the studio | **no** |
-| **an asset** | the game's asset store | **yes** |
-
-It matters because it decides what you are doing when you upload. **A folder of
-reference photographs is not an asset and is not approved into anything** — it is
-material the studio can draw on, and it stays available to everyone. An asset is
-what you build *around* that material.
-
-AND THE WORD IS OVERLOADED, so it is worth being careful: an **asset** here means
-a unit of game content that a developer assembles and submits, which is not quite
-what an engine means by the word. A texture file can be an asset inside Unreal
-and still be a *library component* here, until it is part of something that
-ships.
+> **A NOTE ON WHERE THIS IS GOING.** The intended model is **one** library
+> holding everything, with the game's content as a tagged subset of it, and a
+> version moving through stages — private, published, submitted, tested,
+> approved. The three places above are what the portal does today; the stages
+> are decided and not built. Where the two differ, `docs/SPEC.md` is the
+> current statement and this page describes what you will actually see.
 
 ## Your workspace is private
 
@@ -70,8 +62,20 @@ bigTree_v04/          ->  asset "bigTree"
 The `_v04` is **your** labelling, your own iteration marker — not the system's
 version. Rename the folder as you iterate; `bigTree_v05` is still the same asset.
 
-The system keeps its own version counter per asset — upload 1, upload 2 — which
-is bookkeeping, shown under the asset's history.
+The system keeps its own version counter per asset — upload 1, upload 2 — shown
+under the asset's history. **A version is the asset's file set**, so it counts
+only when that set changes:
+
+- **Anything different** — a file added, removed, renamed, moved or changed —
+  makes the next version.
+- **Nothing different** — the same files at the same paths — makes **no
+  version**. The portal says so and uploads nothing.
+- If the files are identical but you have changed the description or category,
+  it offers to **create a new version anyway**. That version holds the same
+  files; only the details differ.
+
+Unchanged files are never stored twice: the portal already holds that content,
+so a new version references it rather than copying it.
 
 **The panel tells you what an upload will do before you do it:** which asset it
 will join, and which upload number it will become.
@@ -96,9 +100,11 @@ asset is yours to live with.
 
 ### Saying which part of the game it belongs to
 
-Every upload asks for a **category** — Character, Environment, Prop, Vehicle,
-Weapon, FX, Audio, UI, Other. It is a hint rather than a rule: type something
-else and it is kept as you wrote it.
+Every upload **offers** a **category** — Character, Environment, Prop, Vehicle,
+Weapon, FX, Audio, UI, Other. It is **optional**: leave it blank and the asset is
+simply uncategorised, which is a normal state rather than an error. It is a hint
+rather than a rule — type something else and it is kept as you wrote it — and
+production can change it later.
 
 This is the one question about an asset that no machine can answer.
 
@@ -108,8 +114,9 @@ This is the one question about an asset that no machine can answer.
 as you like. See below for what it looks at.
 
 **2. Submit for creative approval.** Only possible once the technical check has
-passed. This locks the version *and the asset*, so what a reviewer looks at
-cannot change underneath them. While it is pending you cannot change or delete
+passed **on exactly this content** — the check records what it tested, and a
+submission whose content differs is refused. This locks the version *and the
+asset*, so what a reviewer looks at cannot change underneath them. While it is pending you cannot change or delete
 the asset, and you cannot re-run the check.
 
 **3. Review.** **Production** — the `prod` role — approves or rejects it. Not an
@@ -186,13 +193,32 @@ kept alive by the store's own reference, and deleting your copy cannot remove it
 
 ## Getting your work back
 
-Not built yet, and listed here so you do not go looking:
+**The game store is a tab on your dashboard.** It lists everything approved into
+the game — including work by other developers — and it is searchable.
 
-- **Downloading.** There is no download button and no archive download. The
-  manifest that would drive it exists on the server and nothing uses it yet.
-- **Browsing the game store.** So there is no way to pick up your own approved
-  work as the basis for continuing. Deliberately deferred until the game itself
-  is being built.
+Two things you can do with a version:
+
+**Download** gives you the files. You choose the folder they belong in, and the
+portal reads that folder **in your browser** to see which files you already
+have, then fetches **only the missing ones**, as a single zip. Nothing is
+uploaded: only a list of hashes is sent to the server.
+
+> Your browser's folder dialog says **"Upload"**. That word is the browser's,
+> not the portal's — reading a folder is the one thing a browser only knows how
+> to do with its upload control. No file leaves your machine.
+
+Before anything is fetched you are shown **what will be downloaded, by name and
+size**, with a Cancel button. Files that would replace something you already
+have are listed separately, so they are never overwritten quietly. Every
+version's manifest names each file, its size and its SHA-256, so what arrived
+can be checked rather than trusted.
+
+**Import** takes a copy into your workspace and records which store asset and
+version it came from — so submitting it again becomes a **new version of that
+asset** rather than a second asset with the same name.
+
+**What you have downloaded is in your History tab**, so you can see what you
+took and when.
 
 ## Discussion
 

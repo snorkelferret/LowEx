@@ -150,7 +150,7 @@ search for. A tree is Environment *and* Vegetation; the second word is a tag.
 
 ## 4. Upload
 
-*State: BUILT, with the versioning rule DECIDED and not yet applied*
+*State: BUILT*
 
 The developer uploads a folder, a zip, or a selection of files. The request
 carries the components and, **optionally**, a name, category and description —
@@ -374,7 +374,7 @@ temp TBD", and the wording "some machine" suggests self-hosting may be preferred
 
 ## 10. Sessions and identity
 
-*State: BUILT; the idle model is DECIDED — not built*
+*State: BUILT as fixed 2-hour sessions; the idle model is DECIDED — not built*
 
 **Sessions expire on idleness, not on a fixed clock.**
 
@@ -426,9 +426,9 @@ portal role does not carry over.
 
 ---
 
-## 13. What is not built at all
+## 13. Specified and not built
 
-*State: DEFERRED — each was specified and none exists*
+*State: DEFERRED — specified and unbuilt, except the manifest hash (§4) and the receipt's asset half (§5), which are now in*
 
 | | |
 |---|---|

@@ -9568,6 +9568,64 @@ no upside. If something seems to need one of them, ask.
       database precisely to catch that, and did.
 
     ============================================================
+    THE VERIFICATION PASS — MANUAL, SPEC AND CODE CHECKED AGAINST EACH OTHER
+    2026-10-23
+    ============================================================
+
+    THE OWNER ASKED FOR THIS after the reconciliation: go through the manual,
+    the spec and the code and make sure they now agree, and then KEEP them
+    agreeing.
+
+    THE MANUAL WAS THE WORST OF THE THREE, and almost none of it was caught by
+    the reconciliation, because the reconciliation compared the PDFs and the
+    TODO — not the manual against the CODE. Corrected here:
+
+      session length        said 8 hours; the login issues 2. Now 2, with a
+                            note that the idle model is decided and not built.
+      prod's powers         said prod "manages asset categories and discussion
+                            boards"; it does neither. Now says approvals and
+                            comments, with the rest marked not built.
+      upload versioning     said the portal keeps "upload 1, upload 2" per
+                            asset, i.e. a version every time. It now refuses an
+                            upload that changes nothing. Rewritten with the
+                            rule, the popup and the override.
+      submission            now says the check must have passed ON EXACTLY THIS
+                            CONTENT — the receipt's guard.
+      the model             SAID AN IMAGE IS NOT A GAME ASSET AND NEVER GOES
+                            INTO THE GAME. That is false against the code: the
+                            test asset is an Image and it is in the store.
+                            Rewritten as three places, what each is for, and a
+                            note that the one-library model is the intended
+                            shape and the stages are unbuilt.
+      downloading           SAID "there is no download button and no archive
+                            download" AND that the store cannot be browsed. Both
+                            exist and were verified end to end this week.
+                            Rewritten.
+      category              said every upload ASKS for a category. It is
+                            optional, by the owner's decision.
+
+    AND SPEC.md's OWN STATE MARKERS were checked against the code:
+      §4 upload          was "BUILT, with the versioning rule not yet applied"
+                         -> BUILT, because it is.
+      §10 sessions       now says "BUILT as fixed 2-hour sessions", which is
+                         what exists, with the idle model marked DECIDED.
+      §13                retitled "Specified and not built" and its state line
+                         names the two things now in.
+
+    --- WHAT THIS PROVES ABOUT THE PROCESS ---
+
+      THE MANUAL ROTS FASTEST because nothing checks it. check:schema,
+      check:routes, check:dom and check:store all verify the CODE; nothing
+      verifies that a sentence a person will read is still true. The built
+      manual is generated from these files, so a stale sentence reaches people
+      looking confident.
+
+      SO: KEEP THE THREE IN SYNC, as the owner asked — SPEC.md is what is, this
+      file is why, the manual is what users see — and edit the manual whenever
+      behaviour changes, then regenerate it. Recorded in the memory note
+      keep-the-docs-in-sync.
+
+    ============================================================
     THE LIST, AND WHERE EACH ENTRY ENDED UP
     ============================================================
 
