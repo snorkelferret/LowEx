@@ -9828,3 +9828,77 @@ no upside. If something seems to need one of them, ask.
         checking every finding against the source rather than trusting the
         list — including this one.
 
+
+    ============================================================
+    OUTSTANDING — EVERYTHING THIS ITEM DECIDED AND DID NOT BUILD
+    ============================================================
+
+    GATHERED HERE because the reasoning is spread over 1,200 lines above, and a
+    decision nobody can find is a decision that gets re-made. Each line names
+    where the reasoning is.
+
+    --- IDENTITY AND ACCESS ---
+
+      [ ] MULTI-ROLE. sessions.active_role; an admin acts AS a role for
+          approvals, categories and comments. Needs the big "Acting as prod"
+          banner and a button returning to admin-only — which must NOT be
+          labelled "Sign out". (§6, A6)
+
+      [ ] IMPERSONATION. The only route to a developer's data: marked,
+          time-bounded, audit-logged. The columns exist and are never written,
+          and its entry point died with the superuser dashboard. (§6, item 86)
+
+      [ ] THE ROLE SWITCH, AS AN AUDIT EVENT. The audit trail is built; the
+          switch it should record is not. (§7)
+
+      [ ] IDLE SESSIONS. 2h / 30m / 24h caps, and the warning popup. Needs
+          sessions.last_seen_at, an indexed lookup in authenticateToken, and a
+          long-lived cookie — the current maxAge would fire first. (§10, A1)
+
+    --- THE MODEL NOT YET BUILT ---
+
+      [ ] THE PRIVATE AND PUBLISHED STAGES. There is still no way to make a
+          version visible to colleagues without submitting it for the game — the
+          middle stage the whole design hangs on. (§5)
+
+      [ ] RELEASES AND GAME VERSIONS. releases + release_assets, the store
+          selector, and prod's release management. Item 53 decided the model;
+          item 60 is the selector. (§8)
+
+      [ ] THE STUDIO'S OVERRIDE of a developer's metadata, at or after approval.
+          Approval copies ONLY category today; name and description are set
+          once and never updated. (§4, A5/A10)
+
+      [ ] asset_tags, AND normaliseTag INTO shared/. One category is which part
+          of the game; tags are what the thing is. (§3, C3)
+
+      [ ] stored_files FIRST UPLOADER — who brought each blob in, and when. (§2)
+
+      [ ] PROD'S CATEGORY POWER. The route is requireRole('admin'); item 51 says
+          categories belong to prod. (§6, A6)
+
+    --- SPECIFIED IN THE PDFs AND UNBUILT (the E list, §13) ---
+
+      [ ] the test receipt's GAME half      [ ] game builds and branches
+      [ ] permissions, licences, provenance [ ] notifications to the owner
+      [ ] async processing and its states   [ ] AI classification
+      [ ] signed upload URLs                [ ] a storage-provider abstraction
+      [ ] the Browser Sandbox as a consumer [ ] user-role access to assets
+
+      SUPERSEDED, NOT TO BE BUILT: anti-piracy (HWID, telemetry), and deploying
+      a branch to a shared sandbox.
+
+    --- LOOSE ENDS FROM THE TWO PASSES ---
+
+      [ ] REMOVE POST /api/auth/login. A1 decided it; it still exists, and now
+          reads the session setting like the others. (§10)
+
+      [ ] THE PDFs STILL SAY GITHUB, and still cannot be edited here. §15 of
+          SPEC.md is the list of every place they are superseded.
+
+    --- AND THE ONE THAT IS NOT A FEATURE ---
+
+      [ ] KEEP THE THREE IN SYNC. SPEC.md is what is, this file is why, the
+          manual is what a user sees. It is in the memory note
+          keep-the-docs-in-sync, and it is the reason the two systematic passes
+          found anything at all.
