@@ -8895,6 +8895,43 @@ no upside. If something seems to need one of them, ask.
         the ONLY route to a developer's data.
 
     ============================================================
+    A7. THE BOARD AND REVOKE-SYNC — FOUND FALSE 2026-10-23
+    ============================================================
+
+    THE FINDING AS LISTED: "the manual says revoking portal access revokes board
+    access, in the present tense."
+
+    IT WAS WRONG, AND CHECKED RATHER THAN TRUSTED. Both manuals are careful:
+
+        manual/20-getting-in.md   "Revoking your portal access WILL revoke your
+                                  board access too. That is BEING BUILT
+                                  deliberately ... NOT BUILT YET. The board has
+                                  not been chosen or configured."
+
+        manual/40-developing.md   "... will revoke your board access too —
+                                  assume that works FROM THE DAY THE BOARD
+                                  EXISTS."
+
+    Future tense, and both say plainly that it is not built. Nothing to correct
+    in the revoke claim, and the audit that produced this list overstated it.
+
+    --- BUT THE CHECK FOUND A SMALLER ONE, WHICH WAS FIXED ---
+
+    manual/40 OPENED THE SECTION IN THE PRESENT TENSE:
+
+        "THE TEAM TALKS ON A BOARD separate from this portal ... Your board
+         account IS separate: signing in here DOES NOT sign you in there, and
+         your role DOES NOT carry over."
+
+    That implies a board that exists, while manual/20 says it "has not been
+    chosen or configured" and discussionboard01 says only rung 1 (a link-out)
+    is built. Corrected to future tense throughout, and the manual rebuilt.
+
+    WORTH KEEPING: this is the one entry in the list that turned out to be the
+    AUDIT'S error rather than the documents'. Which is a reason to check the
+    rest as carefully as this one was checked.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -8905,7 +8942,7 @@ no upside. If something seems to need one of them, ask.
       A5  dbspec01's names — SETTLED with A10 above (the documents are right;
           the code is behind)
       A6  prod's category power, and the role model — SETTLED above
-      A7  the manual says revoking portal access revokes board access; unbuilt
+      A7  the board and revoke-sync — FOUND FALSE above
       A8  assettypes01's controlled vocabulary for asset_type was never applied
       A9  uploadmodel01 says filename_overrides is dead code; it is live
       A10 the upload still versions on every upload — SETTLED above

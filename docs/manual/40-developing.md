@@ -196,10 +196,10 @@ Not built yet, and listed here so you do not go looking:
 
 ## Discussion
 
-The team talks on a board separate from this portal — not built into it, and
-that is a decision rather than an oversight. See **Getting in → The discussion
+There will be a board separate from this portal — not built into it, and that
+is a decision rather than an oversight. See **Getting in → The discussion
 board**.
 
-Your board account is separate: signing in here does not sign you in there, and
-your role does not carry over. Revoking your portal access will revoke your board
-access too — assume that works from the day the board exists.
+Your board account will be separate: signing in here will not sign you in
+there, and your role will not carry over. Revoking your portal access will
+revoke your board access too — assume that works from the day the board exists.
