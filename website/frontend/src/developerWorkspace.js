@@ -1074,39 +1074,9 @@ async function uploadAsset() {
     );
 
 
-    // --------------------------------------------------------
-    // Filename overrides
-    // --------------------------------------------------------
-
-    const filenameOverrides = {};
-
-
-    selectedFiles.forEach(item => {
-
-        if (
-            item.filename !==
-            getFilename(item.originalPath)
-        ) {
-            filenameOverrides[
-                normalisePath(
-                    item.originalPath
-                )
-            ] = item.filename;
-        }
-    });
-
-
-    if (
-        Object.keys(filenameOverrides).length
-    ) {
-
-        formData.append(
-            'filename_overrides',
-            JSON.stringify(
-                filenameOverrides
-            )
-        );
-    }
+    // FILENAME OVERRIDES WERE REMOVED on 2026-10-23 — the server could never
+    // match them, and under the upload model a pathname change is a change,
+    // so the edited path in file_paths is the path that gets stored.
 
 
     // --------------------------------------------------------

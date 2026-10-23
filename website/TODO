@@ -8968,6 +8968,34 @@ no upside. If something seems to need one of them, ask.
     naming conventions).
 
     ============================================================
+    A9. filename_overrides — REMOVED 2026-10-23. CLOSES ITEM 17.
+    ============================================================
+
+    THE FINDING: uploadmodel01 says filename_overrides should be removed and is
+    dead code. IT WAS RIGHT, and the deadness is provable rather than asserted:
+
+        CLIENT  filenameOverrides[normalisePath(item.originalPath)] = ...
+        SENT    file_paths built from the EDITED filename:
+                  const filename = normalisePath(item.filename);
+        SERVER  filenameOverrides[logicalPath], where logicalPath comes from
+                file_paths — THE EDITED PATH.
+
+    The key is the original path; the lookup is the edited path. IT COULD NEVER
+    MATCH, and had never done anything.
+
+    AND IT HAS NO PLACE IN THE MODEL SETTLED ABOVE (A5/A10). A pathname change
+    IS a change and makes a new version, so the path the developer sends is the
+    path that gets stored. There is nothing to override — the rename IS the
+    change, and the UI's editing of a filename before upload keeps working
+    because it changes the path that is sent.
+
+    REMOVED FROM BOTH SIDES: the client's override map and the form field, and
+    the server's parse (developerWorkspace.js:2262-2303) and lookup
+    (:2412-2444), each replaced by a note saying why it is gone.
+
+    THIS CLOSES ITEM 17, which had been waiting on this decision.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -8980,7 +9008,7 @@ no upside. If something seems to need one of them, ask.
       A6  prod's category power, and the role model — SETTLED above
       A7  the board and revoke-sync — FOUND FALSE above
       A8  asset_type's vocabulary — MOSTLY FALSE, one real fix above
-      A9  uploadmodel01 says filename_overrides is dead code; it is live
+      A9  filename_overrides — REMOVED above; closes item 17
       A10 the upload still versions on every upload — SETTLED above
 
     B. THE SPECS CONTRADICT EACH OTHER OR THEMSELVES

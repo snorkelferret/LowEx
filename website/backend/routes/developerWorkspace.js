@@ -2260,41 +2260,13 @@ router.post(
                 classification.parsed;
 
 
-            // ----------------------------------------------------
-            // Filename overrides
-            //
-            // Optional JSON object:
-            //
-            // {
-            //   "models/OakTree.blend": "OakTree_LOD.blend"
-            // }
-            // ----------------------------------------------------
-
-            let filenameOverrides = {};
-
-            if (req.body.filename_overrides) {
-
-                try {
-                    filenameOverrides =
-                        JSON.parse(
-                            req.body.filename_overrides
-                        );
-                } catch (err) {
-                    throw new Error(
-                        'Invalid filename override information'
-                    );
-                }
-
-                if (
-                    typeof filenameOverrides !== 'object' ||
-                    Array.isArray(filenameOverrides) ||
-                    filenameOverrides === null
-                ) {
-                    throw new Error(
-                        'Invalid filename override information'
-                    );
-                }
-            }
+            // FILENAME OVERRIDES WERE REMOVED on 2026-10-23. The client keyed
+            // the map by the ORIGINAL path and this end looked it up by the
+            // EDITED path, so it could never match and had never done
+            // anything. Under the upload model in TODO 87 a pathname change IS
+            // a change — it makes a new version — so the path the developer
+            // sends is the path that is stored, and there is nothing left to
+            // override.
 
 
             // ----------------------------------------------------
@@ -2409,36 +2381,9 @@ router.post(
                 }
 
 
-                // ------------------------------------------------
-                // Optional filename override
-                //
-                // The key is the ORIGINAL logical path.
-                // ------------------------------------------------
-
-                const override =
-                    filenameOverrides[logicalPath];
-
-
-                let filename =
-                    originalFilename;
-
-
-                if (
-                    typeof override === 'string' &&
-                    override.trim()
-                ) {
-
-                    filename =
-                        path.posix.basename(
-                            override.trim()
-                        );
-
-                    if (!filename) {
-                        throw new Error(
-                            `Invalid filename override for ${logicalPath}`
-                        );
-                    }
-                }
+                // THE FILENAME AS SENT. There is no override: see the note
+                // where it used to be parsed, above.
+                const filename = originalFilename;
 
 
                 // ------------------------------------------------
