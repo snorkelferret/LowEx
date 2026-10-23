@@ -9389,7 +9389,7 @@ no upside. If something seems to need one of them, ask.
     mistake for built.
 
     ============================================================
-    STILL TO RULE ON
+    THE LIST, AND WHERE EACH ENTRY ENDED UP
     ============================================================
 
     A. THE SPEC IS WRONG
@@ -9422,19 +9422,28 @@ no upside. If something seems to need one of them, ask.
       D2  in-portal chat -> a separate board — covered by SPEC.md §12
       D3  deploy-any-branch-to-a-sandbox — SUPERSEDED above
 
-    E. THE SPEC DESCRIBES IT AND NOTHING IMPLEMENTS IT
-      E1  the test receipt protocol — harness, build id, manifest hash,
-          server-side validation of a submission
-      E2  a deterministic version manifest hash
-      E3  permissions, licences and commercial-use provenance
-      E4  notifications to the asset's OWNER on test/approval events
-      E5  branches and official builds
-      E6  game_branch_asset_versions — the version currently used PER BRANCH;
-          asset_recommended_versions is one row per asset and cannot express an
-          asset being in production and candidate dev at once
-      E7  asynchronous processing with a visible state
-      E8  AI classification tables and the "human wins" rule
-      E9  signed upload URLs
-      E10 a storage_provider abstraction
-      E11 the Browser Sandbox as an asset consumer
-      E12 user-role access to assets made available to users
+    E. THE SPEC DESCRIBES IT AND NOTHING IMPLEMENTS IT — RECORDED above
+      E1-E13  all thirteen, now listed in docs/SPEC.md §13. The two worth
+              remembering: E2 has three callers and should be built once, and
+              E3 carries a commercial consequence.
+
+    ============================================================
+    WHAT THIS RECONCILIATION PRODUCED
+    ============================================================
+
+      RULED AND WRITTEN INTO docs/SPEC.md      17
+      FOUND FALSE — the audit's error           2  (A7, A8)
+      BUILT during the pass                     2  (C1 audit trail, A9 removal)
+      CLOSED an older item                      1  (A9 closes item 17)
+      RECORDED AS SUPERSEDED                    1  (D3)
+
+    AND TWO THINGS THE PASS ITSELF PRODUCED, WHICH ARE THE REAL RESULT:
+
+      * A LIVING SPEC. docs/SPEC.md, with every section marked BUILT / DECIDED
+        / DEFERRED / OPEN / UNRECONCILED, and the three PDFs archived with a
+        README saying nothing there is current. The exercise that found 22
+        discrepancies also removed the reason they could accumulate.
+      * TWO ENTRIES THAT WERE THE AUDIT'S OWN ERROR. Which is the argument for
+        checking every finding against the source rather than trusting the
+        list — including this one.
+
