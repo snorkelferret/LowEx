@@ -8839,6 +8839,62 @@ no upside. If something seems to need one of them, ask.
     the description, and when" has no answer. C1's fix covers it.
 
     ============================================================
+    A6 AND THE ROLE MODEL — SETTLED 2026-10-23
+    ============================================================
+
+    A6. THE MANUAL WAS RIGHT AND THE CODE IS BEHIND. `prod` manages asset
+    categories — item 51 says so and the manual says so — but the route is
+    requireRole('admin') (developerWorkspace.js:563-566). THE FIX IS TO CHANGE
+    THE ROUTE TO PROD, not to add admin to it.
+
+    AND THE CATEGORY VOCABULARY IS A HARDCODED LIST in shared/assetRules.mjs, so
+    "creating a category" does not exist at all yet. That is item 52.
+
+    --- THE ROLE MODEL, RESTATED ---
+
+        admin      administers the SYSTEM and nothing else: accounts,
+                   invitations, reports, settings, audit, deactivation.
+                   CRAFT POWERS ARE NOT ADMIN'S OWN.
+        prod       the craft role: approvals, comments, categories, boards.
+        developer  a private workspace.
+        user       a tester.
+
+    TWO MECHANISMS, FOR TWO DIFFERENT KINDS OF THING:
+
+      MULTI-ROLE for anything PERMISSION-SHAPED — approvals, categories,
+      comments. The admin's own account acts as a role. The audit records the
+      REAL PERSON and the ROLE, which is better than impersonation in one
+      important way: you cannot act without knowing whose account it is.
+
+      IMPERSONATION for anything DATA-SHAPED — a developer's workspace, their
+      history, their uploads. ROLE-SWITCHING CANNOT REACH THESE: the data is
+      scoped WHERE developer_id = ?, so "acting as developer" sees nobody's
+      workspace.
+
+    --- THE UI RULES, WHICH ARE PART OF THE DECISION ---
+
+      * A BIG, OBVIOUS BANNER reading "Acting as prod" while a role is active.
+        NOT a subtle badge — the practical risk of multi-role is acting in the
+        wrong role without noticing.
+      * A BUTTON beside it that RETURNS TO ADMIN-ONLY. IT MUST NOT BE LABELLED
+        "Sign out": that already exists and means END THE SESSION, and a
+        second control with the same words doing something else is a way to
+        log people out by accident. The label has to say what pressing it does.
+      * The same treatment for impersonation: a banner naming the user being
+        impersonated, and a way back.
+
+    --- AND WHAT IT DEPENDS ON ---
+
+      * sessions.active_role. THE CHEAP SHAPE: admin IMPLICITLY HOLDS EVERY
+        ROLE, and the SESSION records which one is active. requireRole then
+        checks the session's active role rather than users.role — one column on
+        the table we are already building for A1's idle timeouts.
+      * C1, THE MISSING AUDIT TRAIL, IS A PREREQUISITE. A role switch that is
+        not audited is only a way of doing things invisibly.
+      * IMPERSONATION IS STILL NOT BUILT (item 86), and under this model it is
+        the ONLY route to a developer's data.
+
+    ============================================================
     STILL TO RULE ON
     ============================================================
 
@@ -8848,7 +8904,7 @@ no upside. If something seems to need one of them, ask.
       A4  assettypes01's current-state snapshot — SETTLED above
       A5  dbspec01's names — SETTLED with A10 above (the documents are right;
           the code is behind)
-      A6  the manual says prod manages asset categories and boards; it cannot
+      A6  prod's category power, and the role model — SETTLED above
       A7  the manual says revoking portal access revokes board access; unbuilt
       A8  assettypes01's controlled vocabulary for asset_type was never applied
       A9  uploadmodel01 says filename_overrides is dead code; it is live
