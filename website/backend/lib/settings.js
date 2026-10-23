@@ -107,6 +107,22 @@ const DEFINITIONS = {
               'from anyone.',
     },
 
+    session_hours: {
+        type: 'integer',
+        default: 2,
+        min: 1,
+        max: 24,
+        label: 'Session lifetime',
+        unit: 'hours',
+        // IT APPLIES TO THE NEXT SIGN-IN. An existing session keeps the expiry
+        // it was issued with, because the deadline is inside the token — the
+        // same property as the invitation window above, and the first thing
+        // anybody expects to be untrue.
+        note: 'How long a sign-in lasts before the portal asks you to sign in ' +
+              'again. Applies from the next sign-in; sessions already running ' +
+              'keep the expiry they were issued with.',
+    },
+
     usage_warning_percent: {
         type: 'integer',
         default: 85,

@@ -58,16 +58,20 @@ individually revocable yet.
 
 ### Being signed out without asking
 
-**A session lasts 2 hours.** After that the portal will bring you back to the
-sign-in page and tell you it expired — which is expected, not a fault, and you
-simply sign in again.
+**A session lasts 2 hours by default.** It is a setting an administrator can
+change — **Admin → Settings → Session lifetime** — so the figure you see is the
+portal's, not one you choose.
+
+After the time is up the portal brings you back to the sign-in page and tells
+you it expired — which is expected, not a fault, and you simply sign in again.
 
 Nothing is lost when it happens: work in progress stays where it is, and the
-2 hours restarts from each sign-in.
+window restarts from each sign-in.
 
-If you see *"Your session expired"* and did not expect it, it means more than
-2 hours passed since you last signed in — leaving a tab open overnight is the
-usual way.
+If you see *"Your session expired"* and did not expect it, it means longer than
+the current window has passed since you last signed in — leaving a tab open
+overnight is the usual way. A change an administrator makes applies from the
+**next** sign-in; a session already running keeps the expiry it was issued with.
 
 > **A longer, idle-based session is decided but not built**: signed out after a
 > period of *inactivity* rather than a fixed clock, with a warning first and a

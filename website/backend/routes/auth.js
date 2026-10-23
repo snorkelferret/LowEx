@@ -47,10 +47,16 @@ router.post('/login', async (req, res) => {
       role: user.role // One of the four in backend/lib/roles.js
     };
 
+    // THE SAME SETTING AS EVERY OTHER LOGIN PATH. This route is not used by
+    // the browser — it signs in WITHOUT the 2FA step — and it had its own
+    // hardcoded 8 hours, which was a third lifetime nobody had chosen. One
+    // number, one place.
+    const { getSetting } = require('../lib/settings');
+
     const token = jwt.sign(
       payload,
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: `${getSetting('session_hours')}h` }
     );
 
     // 7. Return Clean Response (Never return password_hash!)
@@ -62,7 +68,7 @@ router.post('/login', async (req, res) => {
       secure: process.env.NODE_ENV === 'production', // true in production
       sameSite: 'lax',
       path: '/',
-      maxAge: 8 * 60 * 60 * 1000 // 8 hours matching the JWT expiration
+      maxAge: getSetting('session_hours') * 60 * 60 * 1000 // matches the JWT
     });
       
     return res.json({

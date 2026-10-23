@@ -9568,6 +9568,47 @@ no upside. If something seems to need one of them, ask.
       database precisely to catch that, and did.
 
     ============================================================
+    A1, CONTINUED. THE SESSION LENGTH IS AN ADMIN SETTING — 2026-10-23
+    ============================================================
+
+    THE OWNER: "make sure that the session time is a configurable paramter set by
+    admin and it defaults to 2".
+
+    DONE. `session_hours` is a registry entry in backend/lib/settings.js —
+    integer, DEFAULT 2, bounds 1–24, label and unit so the admin page renders it
+    with no UI work at all (the settings page is definition-driven).
+
+    EVERY LOGIN PATH READS IT AT THE POINT OF USE, which is the rule that file
+    states and the reason it caches nothing:
+
+        server.js  Google callback
+        server.js  login-step2            the one the browser uses
+        routes/auth.js  POST /api/auth/login
+
+    THE THIRD ONE HAD ITS OWN HARDCODED 8 HOURS and was the last remaining copy
+    of the lifetime A1 was about. It is the route the browser does NOT use — it
+    signs in without the 2FA step — and it stays for now; A1's decision to
+    remove it has not been carried out, and it no longer disagrees with anything.
+
+    THE TOKEN AND THE COOKIE COME FROM ONE NUMBER. A cookie outliving its token
+    is a browser holding a credential the server refuses; one expiring first
+    signs the user out while the token is still good.
+
+    --- VERIFIED ---
+
+      * default 2 -> Set-Cookie Max-Age=7200 and exp - iat = 7200;
+      * admin sets 5 -> a NEW sign-in gets Max-Age=18000, life 5.0 hours;
+      * 999 -> refused, "Session lifetime must be between 1 and 24 hours.";
+      * back to 2 -> Max-Age=7200 again.
+
+    --- AND IT APPLIES FROM THE NEXT SIGN-IN ---
+
+      The deadline is inside the token, so a running session keeps the expiry it
+      was issued with. That is the same property as the invitation window, and
+      the same thing an administrator will expect to be untrue — so the setting
+      note and the manual both say it.
+
+    ============================================================
     THE VERIFICATION PASS — MANUAL, SPEC AND CODE CHECKED AGAINST EACH OTHER
     2026-10-23
     ============================================================

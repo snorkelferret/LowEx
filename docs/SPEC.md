@@ -376,7 +376,12 @@ temp TBD", and the wording "some machine" suggests self-hosting may be preferred
 
 *State: BUILT as fixed 2-hour sessions; the idle model is DECIDED — not built*
 
-**Sessions expire on idleness, not on a fixed clock.**
+**The current lifetime is a setting** — `session_hours`, default **2**, bounded
+1–24, edited by an admin at Admin → Settings. It applies from the next sign-in;
+a running session keeps the expiry it was issued with.
+
+**Sessions expire on idleness, not on a fixed clock.** *(The model below is
+decided and not built; the setting above is what exists today.)*
 
 | | |
 |---|---|

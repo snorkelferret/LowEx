@@ -26,6 +26,11 @@ const {
 const db = require('./db');
 const audit = require('./lib/audit');
 
+// A SETTING, NOT A CONSTANT — `session_hours`, default 2, admin-editable.
+// Read at the point of use in each login path rather than stored here, because
+// a value copied at require time stops changing when the admin saves a new one.
+const { getSetting } = require('./lib/settings');
+
 // DATA REPAIRS RUN ONCE THE DATABASE IS OPEN, not inside db.js — see that
 // file's note on why it may not require a sibling. This fills in the content
 // identity of any version created before the column existed, and does nothing
@@ -214,10 +219,14 @@ app.get('/api/auth/google/callback', (req, res, next) => {
       return res.redirect('/portal.html?error=oauth_failed');
     }
 
+    // THE LIFETIME IS A SETTING, read here rather than remembered at module
+    // scope — lib/settings.js explains why that distinction matters.
+    const hours = getSetting('session_hours');
+
     const sessionToken = jwt.sign(
       { sub: user.id, username: user.username, role: user.role },
       JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn: `${hours}h` }
     );
     res.redirect(`${CLIENT_URL}/portal.html?token=${sessionToken}&user=${encodeURIComponent(user.username)}`);
    // res.redirect(`/portal.html?token=${sessionToken}&user=${encodeURIComponent(user.username)}`);
@@ -407,6 +416,12 @@ app.post('/api/auth/login-step2', (req, res) => {
     queries.enable2FA.run(user.id);
   }
 
+  // THE LIFETIME IS A SETTING. The token and the cookie MUST agree: a cookie
+  // that outlives its token is a browser holding a credential the server will
+  // refuse, and one that expires first signs the user out while the token is
+  // still valid. Both come from one number, here.
+  const hours = getSetting('session_hours');
+
   const sessionToken = jwt.sign(
     {
       sub: user.id,
@@ -414,7 +429,7 @@ app.post('/api/auth/login-step2', (req, res) => {
       role: user.role
     },
     JWT_SECRET,
-    { expiresIn: '2h' }
+    { expiresIn: `${hours}h` }
   );
 
  // Cookie attributes must match res.clearCookie() in routes/auth.js or the
@@ -424,7 +439,7 @@ app.post('/api/auth/login-step2', (req, res) => {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',
   path: '/',
-  maxAge: 2 * 60 * 60 * 1000
+  maxAge: hours * 60 * 60 * 1000
 });
 
 res.json({
