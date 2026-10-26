@@ -170,9 +170,19 @@ const workspaceAssetByName = db.prepare(`
     WHERE workspace_id = ? AND name = ?
 `);
 
+// RESTORE, AND RECORD WHERE IT CAME FROM.
+//
+// repository_base_version_id is set here as well as by the fresh-insert branch,
+// because a restore IS an import — the row coming back from the bin says which
+// store version it was based on just as a new row does. It was missing, and the
+// import's own audit entry recorded a value the column never held: the record
+// claimed something the row did not say.
 const restoreWorkspaceAsset = db.prepare(`
     UPDATE workspace_assets
-    SET is_active = 1, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+    SET is_active = 1,
+        deleted_at = NULL,
+        updated_at = CURRENT_TIMESTAMP,
+        repository_base_version_id = ?
     WHERE id = ?
 `);
 
@@ -934,7 +944,7 @@ router.post(
                 // ------------------------------------------------
 
                 if (existing && !existing.is_active && existing.repository_asset_id === assetId) {
-                    restoreWorkspaceAsset.run(existing.id);
+                    restoreWorkspaceAsset.run(versionId, existing.id);
                     restoreWorkspaceVersions.run(existing.id);
 
                     const restoredLatest = latestWorkspaceVersion.get(existing.id);

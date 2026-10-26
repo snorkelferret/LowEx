@@ -9830,6 +9830,64 @@ no upside. If something seems to need one of them, ask.
 
 
     ============================================================
+    ITEM 85. THE PORTAL HALF OF THE ROUND TRIP — VERIFIED 2026-10-26
+    ============================================================
+
+    THE OWNER ASKED whether this could be done before the game exists. HALF OF IT
+    CAN, and that half is now verified.
+
+        THE PORTAL HALF   store -> workspace -> change -> upload -> submit ->
+                          approve -> THE STORE GAINS A VERSION. No game needed.
+                          VERIFIED below.
+
+        THE GAME'S HALF   which game version holds it, testing against a build,
+                          Perforce checkout and check-in. NEEDS THE GAME: items
+                          53, 60, E5.
+
+    --- THE RUN, ON THE REAL DATA ---
+
+      1. DELETE the workspace asset into the bin (its pending approval had to be
+         rejected first — it refused to delete under review, correctly).
+      2. IMPORT store asset 3 v2 into the workspace -> THE RESTORE BRANCH, which
+         had never executed: the asset, and all four of its old versions, came
+         back, and the imported store version was added on top.
+      3. UPLOAD a changed version (a component moved to artPics/v2/) -> v6.
+      4. TECHNICAL CHECK -> passed, with a receipt carrying the content hash.
+      5. SUBMIT -> approval 5.
+      6. APPROVE as prod.
+
+      THE ASSERTION HELD: the store still holds ONE asset, id 3, NOW WITH TWO
+      VERSIONS (numbers 1 and 2). IT DID NOT BECOME A SECOND ASSET. Item 59's
+      failure — two bigTrees and nobody can tell them apart — did not occur.
+
+      AND THE AUDIT TRAIL SHOWS THE WHOLE TRIP: import_from_store, upload,
+      technical_check.run, creative_approval.submit, creative_approval.approve.
+
+    --- AND THE RUN FOUND A BUG, WHICH IS THE POINT OF RUNNING IT ---
+
+      THE RESTORE BRANCH DID NOT RECORD THE BASE VERSION. Its audit entry claimed
+      `repository_base_version_id: <id>`, and the column was never written —
+      restoreWorkspaceAsset set is_active and deleted_at and stopped there. The
+      record said something the row did not.
+
+      FIXED: the statement now takes the version and sets it. Re-run and the row
+      carries repository_base_version_id = 3, which is the store version the
+      import was based on.
+
+      THE SAME SHAPE AS ITEM 82's bug — the restore restores, and forgets the
+      thing that made the restore meaningful — in a third file. Worth
+      remembering: every "restore" path in this project has had to be corrected
+      to complete the record it restores.
+
+    --- AND AN OBSERVATION, NOT A FIX ---
+
+      repository_base_version_id IS NEVER READ ANYWHERE. The link that actually
+      makes approval add a version rather than create an asset is
+      repository_asset_id, which approval does read. The base version is
+      PROVENANCE — which version you started from — and nothing displays it yet.
+      Worth a line on the asset's history when the UI next changes; not a defect.
+
+    ============================================================
     OUTSTANDING — EVERYTHING THIS ITEM DECIDED AND DID NOT BUILD
     ============================================================
 
