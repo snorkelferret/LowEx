@@ -10502,3 +10502,91 @@ no upside. If something seems to need one of them, ask.
 
       A SUBDOMAIN IS THE SAME SITE AS ITS PARENT. TREAT ANYTHING ON ONE AS
       ALREADY INSIDE THE OTHER'S SECURITY BOUNDARY, BECAUSE THE BROWSER DOES.
+
+    ============================================================
+    13. THE LOCAL SANDBOX — BUILT 2026-10-28
+    ============================================================
+
+    RUNNING NOW, ON THIS MACHINE. Not the production server (see §1 and item 72
+    for why off-site), and useful for exactly what it is: rehearsing the shape
+    and proving the mechanics.
+
+        server root   /jobs/LowEx/tmp/p4d          (gitignored — tmp/ is)
+        listening     127.0.0.1:1666
+        depot         //LowExpectations            STREAM depot
+        streams       //LowExpectations/main       mainline
+                      //LowExpectations/dev        development
+        client        val-sandbox                  root: game/LE001
+        submitted     change 3, 245 files
+
+    STARTED WITH:
+
+        NIXPKGS_ALLOW_UNFREE=1 nix build --impure --no-link --print-out-paths \
+            nixpkgs#p4d nixpkgs#p4
+        p4d -r /jobs/LowEx/tmp/p4d -p 127.0.0.1:1666 \
+            -J /jobs/LowEx/tmp/p4d/journal -L /jobs/LowEx/tmp/p4d/log -d
+
+    STOPPED WITH: p4 admin stop   (or kill the p4d process; the root persists).
+
+    ============================================================
+    WHAT IT PROVED
+    ============================================================
+
+      * THE TYPEMAP WORKS AND IS THE LOCKING. 245 files entered as 238
+        binary+l and 7 text. Every .uasset, .umap and image is EXCLUSIVE; the
+        .ini, .uproject and other text files merge. THIS IS THE PROPERTY ITEM 62
+        RESTS ON, and it was visible in `p4 opened` before the submit.
+
+      * THE CELL STRUCTURE IS REAL. The map is `Lvl_ThirdPerson` — the Unreal
+        template, not an open world yet — and its actors are already one file
+        per actor:
+
+            Content/__ExternalActors__/ThirdPerson/Lvl_ThirdPerson/A/IP/<hash>.uasset
+
+        Sixty-odd populated cells, one actor each. `p4 sync <cell>/...` fetches
+        one, exactly as §7 said it would.
+
+      * RECONCILE ADDS EXISTING FILES. 244 files went in with ONE command from
+        the workspace root. Nobody had to add them by hand.
+
+      * A SYNced file is byte-identical: deleted one, forced it back,
+        hash matched (d15aba6c…).
+
+    ============================================================
+    FOUR THINGS IT TAUGHT, WHICH BELONG IN THE REAL SETUP
+    ============================================================
+
+      1. `localhost` DOES NOT WORK; `127.0.0.1` DOES. p4d binds IPv4 only, and
+         `localhost` resolves to ::1 first — the client then hangs rather than
+         failing. THIS IS AN ARGUMENT FOR ITEM 72's DNS NAME rather than an
+         address: a name with correct A/AAAA records has no such trap. In the
+         sandbox, use 127.0.0.1.
+
+      2. `p4 sync` DOES NOT RESTORE A FILE DELETED LOCALLY. It compares the
+         depot against its HAVE LIST, not against the disk, so it reports
+         "up-to-date" and does nothing. `p4 sync -f` is the one that fetches it.
+         Worth telling developers, because "I deleted it and Perforce will get
+         it back" is the natural assumption and it is wrong.
+
+      3. `.p4ignore` IS ITSELF ADDED. Reconcile respects it, but adds the file —
+         which is right, because everybody should share the ignores. Its
+         patterns exclude Binaries/, Build/, DerivedDataCache/, Intermediate/,
+         Saved/ and the build junk; WITHOUT IT, 116 MB of Intermediate and Saved
+         would have gone into the depot.
+
+      4. nixpkgs' p4d IS UNFREE. `nix build nixpkgs#p4d` fails without
+         NIXPKGS_ALLOW_UNFREE=1 and --impure. THAT IS A DECISION RATHER THAN A
+         WORKAROUND: for the real server it belongs in the host's configuration,
+         not in an environment variable somebody remembered.
+
+    ============================================================
+    AND WHAT IT DOES NOT PROVE
+    ============================================================
+
+      LATENCY, EGRESS COST, BACKUPS, AND REACHABILITY FROM HOME — the four
+      things item 71 says decide the real hosting, and none of them can be seen
+      from a server on the same machine as the client.
+
+      AND THE MAP IS STILL `Lvl_ThirdPerson`. The game has not been divided into
+      an open world yet, so "sync the cells for North Forest" has nothing to
+      name. THAT IS A GAME-SIDE TASK, not a Perforce one.
