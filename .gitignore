@@ -16,12 +16,23 @@ Script/
 *.xcodeproj
 *.xcworkspace
 
-# Nested Unreal projects (e.g., inside /game)
-game/Binaries/
-game/Build/
-game/DerivedDataCache/
-game/Intermediate/
-game/Saved/
+# THE GAME IS NOT IN THIS REPOSITORY. For now, entirely.
+#
+# It is far too big to track, and the first export of it arrived on 2026-10-28.
+# This replaces the five per-directory rules that only excluded Unreal's BUILD
+# OUTPUT — those left game/Content/ and game/Source/ committable, which is the
+# part that is actually large.
+#
+# The game is versioned in PERFORCE, not here (TODO items 62 and 67). This
+# repository holds the PORTAL.
+#
+# TO PUSH SOMETHING FROM IT LATER — a plugin, a utility — un-ignore that path:
+#
+#     !game/Plugins/OurTool/
+#
+# and remember `git add -f` is not needed once the negation is in place, but a
+# file already tracked stays tracked until `git rm --cached`.
+game/
 
 # ==========================================
 # Emacs Temporary & Backup Files
