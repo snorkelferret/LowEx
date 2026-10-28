@@ -376,6 +376,48 @@ const applyAssetRepositorySchema = () => {
 
   /*
    * ----------------------------------------------------------
+   * asset_integrations — WHICH CHANGELIST PUT THIS INTO THE GAME
+   *
+   * THE PORTAL'S ONLY RECORD OF THE GAME ITSELF. Everything else it knows stops
+   * at the edge of its own store: it can say a version was approved, and until
+   * this table existed it could not say the version reached the game at all.
+   *
+   * A ROW PER INTEGRATION, NOT ONE PER VERSION. Integrating the same version
+   * twice — after a revert, say — is two facts about the same version, and the
+   * later one is the current answer. HISTORY RATHER THAN A FIELD, the same
+   * choice as creative_approvals and for the same reason.
+   *
+   * THE CHANGELIST IS PERFORCE'S OWN NUMBER (TODO 67, touchpoint 2). It is the
+   * link that answers "what created this in Unreal", and it lives here because
+   * UNREAL'S IMPORT METADATA DIES WITH THE MACHINE (item 61). The portal never
+   * talks to Perforce: it records what a person said, as an assertion.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS asset_integrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      asset_version_id INTEGER NOT NULL,
+
+      -- P4 changelist number: a positive integer, validated on write.
+      changelist INTEGER NOT NULL,
+
+      note TEXT,
+
+      integrated_by INTEGER,
+      integrated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (asset_version_id)
+        REFERENCES asset_versions(id),
+
+      FOREIGN KEY (integrated_by)
+        REFERENCES users(id)
+    );
+  `);
+
+  /*
+   * ----------------------------------------------------------
    * stored_files — THE PHYSICAL CONTENT, AND THE ONLY COPY OF IT
    *
    * THERE IS ONE AND ONLY ONE COPY OF ANY SHA-256 IN THE
@@ -639,6 +681,17 @@ const applyAssetRepositorySchema = () => {
     CREATE INDEX IF NOT EXISTS
       idx_asset_recommended_version
       ON asset_recommended_versions(version_id);
+
+    -- WHICH CHANGELIST PUT THIS INTO THE GAME. The version index answers
+    -- "where is this version in the game"; the changelist one answers the
+    -- reverse, "what is changelist N".
+    CREATE INDEX IF NOT EXISTS
+      idx_asset_integrations_version
+      ON asset_integrations(asset_version_id);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_asset_integrations_changelist
+      ON asset_integrations(changelist);
 
     -- The library is listed newest-first, and its blob link is
     -- looked up by the collector's NOT EXISTS and by the quota

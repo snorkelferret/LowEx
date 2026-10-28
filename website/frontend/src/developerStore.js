@@ -49,6 +49,18 @@ async function fetchJson(url, { raw = false, ...options } = {}) {
     return response.json();
 }
 
+// IS THE PERSON LOOKING AN ADMIN? From the profile the login stored, which is
+// cosmetic only — the server checks the role on every request, and this decides
+// whether to draw a button that would otherwise be refused.
+function isAdmin() {
+    try {
+        const raw = localStorage.getItem('user_info');
+        return raw ? JSON.parse(raw).role === 'admin' : false;
+    } catch {
+        return false;
+    }
+}
+
 const API = '/api/game';
 
 let allAssets = [];
@@ -122,6 +134,24 @@ function row(asset) {
     tr.appendChild(cell(formatBytes(asset.total_bytes), 'small text-secondary text-nowrap'));
     tr.appendChild(cell(formatWhen(asset.created_at), 'small text-secondary text-nowrap'));
 
+    // WHAT IS IN THE GAME — which is not necessarily the latest version, and
+    // is an ASSERTION somebody recorded rather than an observation: the portal
+    // cannot see Perforce (TODO 88 §8). A dash means "not known to be in the
+    // game", which honestly covers both "never integrated" and "nobody
+    // recorded it" — the portal cannot tell those apart.
+    const game = document.createElement('td');
+    game.className = 'small text-nowrap';
+
+    if (asset.game_changelist) {
+        game.textContent =
+            `v${asset.game_version_number} · CL ${asset.game_changelist}`;
+    } else {
+        game.className += ' text-secondary';
+        game.textContent = '—';
+    }
+
+    tr.appendChild(game);
+
     // WHAT YOU CAN DO WITH IT
     const actions = document.createElement('td');
     actions.className = 'text-end text-nowrap';
@@ -186,6 +216,22 @@ function row(asset) {
         'so approving it again becomes a new version of this asset';
     importButton.innerHTML = '<i class="bi bi-box-arrow-in-down"></i> Import';
     actions.appendChild(importButton);
+
+    // RECORDING AN INTEGRATION IS ADMIN'S, not the developer's — importing into
+    // Unreal and committing the changelist is engineering rather than craft
+    // (item 52). The server enforces it; this only avoids offering a button
+    // that would be refused.
+    if (isAdmin()) {
+        const integrate = document.createElement('button');
+        integrate.type = 'button';
+        integrate.className = 'btn btn-sm btn-outline-secondary py-0 px-2 ms-1';
+        integrate.dataset.integrate = String(asset.id);
+        integrate.dataset.name = asset.name;
+        integrate.title =
+            'Record the Perforce changelist that put this version into the game';
+        integrate.innerHTML = '<i class="bi bi-hash"></i>';
+        actions.appendChild(integrate);
+    }
 
     tr.appendChild(actions);
 
@@ -256,6 +302,7 @@ function render() {
           <th>Latest</th>
           <th>Size</th>
           <th>Approved</th>
+          <th>In the game</th>
           <th class="text-end"></th>
         </tr>
       </thead>
@@ -684,6 +731,71 @@ async function downloadAsset(assetId, versionId, name, button) {
 }
 
 // ------------------------------------------------------------
+// Recording an integration — admin only
+// ------------------------------------------------------------
+//
+// THE PORTAL CANNOT SEE PERFORCE, so this is an ASSERTION: an admin who has
+// just imported the asset into Unreal and committed it types the changelist
+// number, and the portal records what they said, who said it and when. It is
+// the link that answers "what is in the game" (TODO 67 touchpoint 2; TODO 88
+// §8) — and a bare number with nobody's name on it would be a claim without a
+// claimant.
+async function recordIntegration(assetId, versionId, name, button) {
+    const answer = window.prompt(
+        `Perforce changelist that put "${name}" into the game?\n\n` +
+        'Recorded as your assertion — the portal cannot see Perforce itself.',
+        ''
+    );
+
+    if (answer === null) return;
+
+    const changelist = String(answer).trim();
+
+    if (!/^[0-9]+$/.test(changelist)) {
+        showAlert('storeAlert', 'A changelist is a number. Nothing was recorded.', 'danger');
+        return;
+    }
+
+    button.disabled = true;
+    const original = button.innerHTML;
+
+    try {
+        const response = await apiFetch(
+            `${API}/${assetId}/versions/${versionId}/integrated`,
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ changelist: Number(changelist) })
+            }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not record it.');
+        }
+
+        showAlert(
+            'storeResult',
+            `${name} v${data.integration.version_number} recorded as in the game, ` +
+            `changelist ${data.integration.changelist}.`,
+            'success'
+        );
+
+        // The row now says something different, so it is rebuilt.
+        await load();
+
+    } catch (err) {
+        showAlert('storeAlert', err.message, 'danger');
+
+    } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+    }
+}
+
+// ------------------------------------------------------------
 // Importing
 // ------------------------------------------------------------
 
@@ -776,6 +888,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             downloadAsset(id, version, downloadButton.dataset.name, downloadButton);
+            return;
+        }
+
+        const integrateButton = event.target.closest('button[data-integrate]');
+
+        if (integrateButton) {
+            const id = Number(integrateButton.dataset.integrate);
+            const link = list.querySelector(`a[data-asset="${id}"]`);
+            const version = Number(link?.dataset.version);
+
+            if (!Number.isInteger(version)) {
+                showAlert('storeAlert', 'Still working out which version to record. Try again in a moment.', 'warning');
+                return;
+            }
+
+            recordIntegration(id, version, integrateButton.dataset.name, integrateButton);
             return;
         }
 

@@ -9921,6 +9921,62 @@ no upside. If something seems to need one of them, ask.
       Worth a line on the asset's history when the UI next changes; not a defect.
 
     ============================================================
+    THE INTEGRATION RECORD — BUILT 2026-10-28
+    ============================================================
+
+    THIS IS ITEM 67's TOUCHPOINT 2, AND THE LAST PIECE OF THE ROUND TRIP THE
+    PORTAL COULD OWN. Before it existed the portal could say a version was
+    approved and could not say it reached the game at all — so "which version
+    is in the game?" had no answer, and only a build behaving differently from
+    what was approved would notice a missed integration.
+
+        asset_integrations   asset_version_id, changelist, note,
+                             integrated_by, integrated_at
+
+    A ROW PER INTEGRATION, NOT ONE PER VERSION: integrating the same version
+    twice — after a revert — is two facts, and the later one is current.
+
+    --- IT IS AN ASSERTION, AND THE ROW SAYS SO ---
+
+      THE PORTAL CANNOT SEE PERFORCE. It records what an admin says after
+      importing into Unreal and committing — so the row carries WHO and WHEN
+      beside the number. A bare changelist with nobody's name on it would be a
+      claim without a claimant, which is the same discipline as the test receipt.
+
+    --- WHO MAY RECORD ONE ---
+
+      ADMIN, NOT PROD. Importing into Unreal and committing moves files and is
+      engineering rather than craft — item 52's own test. A developer cannot:
+      they have read, not write, on the depot. Verified: a developer's POST is
+      refused 403; an admin's is 201.
+
+    --- WHAT IT SHOWS, AND WHAT A DASH MEANS ---
+
+      The store's rows now carry an "In the game" column:
+
+          v2 · CL 15407        recorded, and by whom is in the table
+          —                    not known to be in the game
+
+      A DASH HONESTLY COVERS TWO THINGS THE PORTAL CANNOT TELL APART: never
+      integrated, and integrated but not recorded. Saying which would be
+      pretending to know something it does not.
+
+    --- VERIFIED, IN THE API AND IN A REAL BROWSER ---
+
+      * the route: developer 403, admin 201, a non-numeric changelist 400;
+      * the list: game_version_number 2, game_changelist 15407;
+      * the rendered table, as admin: the "IN THE GAME" header and the row
+        "v2 · CL 15407", with an integrate button;
+      * as a developer: the same row, and NO integrate button.
+
+    --- AND WHAT IS STILL NOT BUILT ---
+
+      THE RELEASES (item 53) ARE SEPARATE. This records an ASSET VERSION going
+      into the game; a RELEASE is a named build pinned to a changelist. They
+      meet at the changelist and they are not the same record — one answers
+      "what is in the game", the other "what shipped, when".
+
+    ============================================================
     OUTSTANDING — EVERYTHING THIS ITEM DECIDED AND DID NOT BUILD
     ============================================================
 

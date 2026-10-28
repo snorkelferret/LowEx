@@ -343,6 +343,15 @@ said twice.
 > actor and the approval routes admit `prod` only, so there is no ambiguity to
 > disambiguate.
 
+**After approval: the changelist.** Approval puts a version in the **store**, not
+in the **game**. Putting it into the game is an **admin's** work — importing into
+Unreal and committing a changelist — and the portal records **which changelist**,
+who said so, and when (`asset_integrations`).
+
+> **It cannot see Perforce**, so this is an **assertion**, kept as one: the store
+> shows `v2 · CL 15407`, or `—`. A dash covers both "never integrated" and
+> "nobody recorded it", and the portal does not pretend to tell them apart.
+
 ---
 
 ## 8. Releases, and the game's versions

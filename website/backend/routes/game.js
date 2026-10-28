@@ -84,7 +84,29 @@ const listAssets = db.prepare(`
 
         (SELECT MAX(av.version_number)
            FROM asset_versions av
-          WHERE av.asset_id = a.id) AS latest_version_number
+          WHERE av.asset_id = a.id) AS latest_version_number,
+
+        -- WHICH VERSION OF THIS ASSET IS IN THE GAME, and in which changelist.
+        -- The latest integration across all of the asset's versions — because
+        -- the game holds whatever was integrated most recently, which is not
+        -- necessarily the newest version (TODO 88 §8; SPEC.md §8).
+        --
+        -- NULL MEANS "NOT KNOWN TO BE IN THE GAME": either nothing was
+        -- integrated, or nobody recorded it. The portal cannot tell those
+        -- apart, and does not pretend to — see the route's note on assertions.
+        (SELECT av2.version_number
+           FROM asset_integrations ai
+           JOIN asset_versions av2 ON av2.id = ai.asset_version_id
+          WHERE av2.asset_id = a.id
+          ORDER BY ai.id DESC
+          LIMIT 1) AS game_version_number,
+
+        (SELECT ai.changelist
+           FROM asset_integrations ai
+           JOIN asset_versions av2 ON av2.id = ai.asset_version_id
+          WHERE av2.asset_id = a.id
+          ORDER BY ai.id DESC
+          LIMIT 1) AS game_changelist
 
     FROM assets a
     LEFT JOIN asset_recommended_versions arv ON arv.asset_id = a.id
@@ -855,6 +877,116 @@ router.post(
         }
     }
 );
+
+// ============================================================
+// POST /api/game/:assetId/versions/:versionId/integrated
+// ============================================================
+//
+// RECORD THAT A VERSION HAS BEEN PUT INTO THE GAME, AND IN WHICH CHANGELIST.
+//
+// THIS IS THE PORTAL'S ONLY RECORD OF THE GAME ITSELF (TODO 67, touchpoint 2;
+// TODO 88 §8). Everything else it knows stops at the edge of its own store: it
+// can say a version was approved, and without this it cannot say the version
+// reached the game at all — so "which version of this asset is in the game?"
+// has no answer, and the only thing that notices a missed integration is a
+// build that behaves differently from what was approved.
+//
+// ADMIN, NOT PROD. Importing into Unreal and committing is engineering rather
+// than craft — it moves files and commits them — which is item 52's own test.
+// The developer cannot: they have read, not write, on the depot.
+//
+// AN ASSERTION, NOT AN OBSERVATION. The portal does not talk to Perforce and
+// cannot see the changelist. It records what a person says, WHO said it and
+// WHEN — the same discipline as the test receipt, which is why the row carries
+// integrated_by and integrated_at rather than a bare number.
+// ============================================================
+
+const recordIntegration = db.prepare(`
+    INSERT INTO asset_integrations (
+        asset_version_id,
+        changelist,
+        note,
+        integrated_by
+    )
+    VALUES (?, ?, ?, ?)
+`);
+
+router.post(
+    '/:assetId/versions/:versionId/integrated',
+    authenticateToken,
+    requireRole('admin'),
+
+    async (req, res) => {
+        const assetId = Number(req.params.assetId);
+        const versionId = Number(req.params.versionId);
+        const actor = req.user?.id;
+
+        if (!actor) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        if (!Number.isInteger(assetId) || !Number.isInteger(versionId)) {
+            return res.status(400).json({ error: 'Invalid asset or version ID' });
+        }
+
+        // A PERFORCE CHANGELIST IS A POSITIVE INTEGER. Anything else is a typo
+        // or a stream name pasted into the wrong box, and recording it would
+        // make the one link to the game wrong rather than missing.
+        const changelist = Number(req.body?.changelist);
+
+        if (!Number.isInteger(changelist) || changelist < 1) {
+            return res.status(400).json({
+                error: 'changelist must be a positive integer — the Perforce changelist number.'
+            });
+        }
+
+        const note = String(req.body?.note || '').trim() || null;
+
+        try {
+            const asset = oneAsset.get(assetId);
+            const version = versionForDownload.get(versionId, assetId);
+
+            if (!asset || !version) {
+                return res.status(404).json({
+                    error: 'That version is not in the game store'
+                });
+            }
+
+            const result = recordIntegration.run(
+                versionId, changelist, note, actor
+            );
+
+            audit.record(actor, 'asset.integrate', asset.name, {
+                repository_asset_id: assetId,
+                repository_version_id: versionId,
+                version_number: version.version_number,
+                changelist,
+                note
+            });
+
+            return res.status(201).json({
+                integration: {
+                    id: result.lastInsertRowid,
+                    asset_version_id: versionId,
+                    version_number: version.version_number,
+                    changelist,
+                    note,
+                    integrated_by: actor
+                }
+            });
+
+        } catch (err) {
+            console.error('Could not record the integration:', err);
+
+            return res.status(500).json({
+                error: 'Could not record that integration'
+            });
+        }
+    }
+);
+
 
 // ============================================================
 // POST /api/game/:assetId/versions/:versionId/import
