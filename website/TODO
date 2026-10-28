@@ -10002,6 +10002,36 @@ no upside. If something seems to need one of them, ask.
           sessions.last_seen_at, an indexed lookup in authenticateToken, and a
           long-lived cookie — the current maxAge would fire first. (§10, A1)
 
+      [ ] ROTATE EVERY PASSWORD ON THE BOX, BEFORE THE PORTAL IS REACHABLE FROM
+          OUTSIDE THIS MACHINE. Checked 2026-10-28: ALL THREE ACCOUNTS ARE ON
+          KNOWN DEVELOPMENT PASSWORDS.
+
+              admin   (admin)       a value the owner supplied for local work
+              val     (developer)   a value used throughout the testing
+              prod    (prod)        a value used throughout the testing
+
+          NONE OF THEM IS RECORDED IN THIS REPOSITORY OR IN ANY NOTE, and none
+          should be: they exist as bcrypt hashes in the database and nowhere
+          else. Writing one into a file — a note, a memory, a comment — would be
+          the exact thing scripts/accounts.js refuses to do when it declines a
+          password on the command line.
+
+          THE ROTATION IS ONE COMMAND PER ACCOUNT, TYPED AT A TERMINAL:
+
+              node scripts/accounts.js --reset admin
+              node scripts/accounts.js --reset val
+              node scripts/accounts.js --reset prod
+
+          ON LOCALHOST A KNOWN PASSWORD IS A CONVENIENCE. The moment the portal
+          answers on lowexpectations.zone it is the whole system, because admin
+          is the top of the ladder — accounts, invitations, settings, audit,
+          deactivation — and `val`/`prod` between them can upload, approve and
+          put content into the game.
+
+          AND RUN `node scripts/accounts.js --list` AT THE SAME TIME: any
+          account created for testing should be deactivated rather than left
+          holding a password somebody remembers.
+
       [ ] CSRF PROTECTION. NOT A FEATURE — A HOLE. Added 2026-10-28 after
           checking: the portal has NO CSRF token anywhere, and SameSite=Lax is
           the entire defence.
