@@ -9960,3 +9960,291 @@ no upside. If something seems to need one of them, ask.
           manual is what a user sees. It is in the memory note
           keep-the-docs-in-sync, and it is the reason the two systematic passes
           found anything at all.
+
+88) STANDING UP PERFORCE — THE PLAN. 2026-10-28. NOTHING BUILT.
+
+    THE OWNER: *"Lets go for perforce - we can run for free initially?"* — YES.
+    Helix Core Server, self-hosted: five standard users and twenty workspaces.
+
+    THE GAME NOW EXISTS. The first export, LE001, arrived 2026-10-28 and is out
+    of git entirely. This is the plan for where it goes, written before anything
+    is installed so the shape is agreed first.
+
+    IT RESTS ON ITEMS 62 (Perforce, not git, and why), 65 (getting a piece of the
+    game is p4 sync, NOT a portal form), 67 (what identifies a release) and 71/72
+    (one server, depots, stream depot, self-hosted UK/EU).
+
+    ============================================================
+    1. WHAT IS BEING STANDED UP, AND WHAT IS NOT
+    ============================================================
+
+        ONE SERVER.  On it, DEPOTS. NOT a repository per developer — a developer
+        has a WORKSPACE, which maps part of a depot onto their disk (item 71).
+
+        THE GAME goes in.  //LowExpectations — Content/, Config/, Plugins/,
+        Source/, the .uproject.
+
+        THE PORTAL does not.  It is code: text, mergeable, reviewed as diffs,
+        and git is better at both. The portal OWNS its repository and its docs.
+
+    THE LINE BETWEEN THEM IS THE REASON, NOT A PREFERENCE:
+
+                       THE PORTAL                 THE GAME
+        churn          on submission              all day, every day
+        contents       curated approved sources   a huge tree of binary .uasset
+        conflicts      rare, one dev one asset    constant, two artists one level
+        needs          approval, provenance,      LOCKING, branching, merging,
+                       one-copy                   deltas
+
+    AND LOCKING IS THE DECIDING PROPERTY. Two people editing one level is not a
+    merge to resolve, it is corruption: "I have this checked out, nobody else
+    may touch it" is what Perforce is FOR, and a content-addressed store cannot
+    give it.
+
+    ============================================================
+    2. THE LICENCE, AND WHAT IT MEANS IN PRACTICE
+    ============================================================
+
+        FREE, SELF-HOSTED: 5 standard users, 20 workspaces.
+        (Helix Core CLOUD is the paid offering — self-hosting is how the free
+        tier is obtained. Item 72.)
+
+    AND THE USER COUNT IS NOT THE ONE THAT BITES — WORKSPACES ARE, because they
+    multiply where users do not: a laptop and a desktop are TWO.
+
+        the build machine   takes BOTH: a standard user AND a workspace. It
+                            cannot be an operator or a service user, because it
+                            syncs and runs commands, which is file work.
+
+        an admin who only   can be an OPERATOR type, which consumes NO licence.
+        administers
+
+    SO FIVE STANDARD USERS REALISTICALLY MEANS FOUR HUMANS PLUS THE BUILD
+    MACHINE, or five humans if the admin is an operator and no build machine
+    sits on the server.
+
+    AND GOING OVER DOES NOT STOP THE SERVER — IT CAPS THE DEPOT AT 1,000 FILES,
+    which for a game project is a hard stop, since a thousand files is nothing.
+    SO THE CEILING IS REAL, and it is a reason to keep the count deliberate.
+
+    ============================================================
+    3. THE DEPOT AND ITS STREAMS
+    ============================================================
+
+        //LowExpectations      a STREAM depot, not a classic one
+
+            mainline          //LowExpectations/main     the stable line
+            development       //LowExpectations/dev      where work happens
+            release           //LowExpectations/rel-0.1  cut for a release
+            experimental      //LowExpectations/exp-*    risky work, isolated
+
+    WHY STREAMS (item 71): streams ARE Perforce's branching model, and "which
+    line of development am I on" is what item 64 means by the question. A
+    CLASSIC depot can be turned into a stream depot later and the conversion is
+    unpleasant; creating it as one costs nothing today.
+
+        A DEVELOPMENT STREAM SHARES its parent's files and diverges where
+        somebody changes them. Cheap to create, which is the point.
+
+        A RELEASE STREAM IMPORTS a snapshot of its parent and does NOT take
+        later changes from it. That is what a release is: a line that stops
+        moving while it is stabilised.
+
+    AND THE DISTINCTION THAT KEEPS COMING UP: A STREAM IS NOT A RELEASE.
+    A stream is a line of development. A RELEASE is a named build — "0.4
+    Experimental, 12 Nov" — identified by a name, a CHANGELIST, who built it and
+    when (items 53, 67). Several releases come from one stream, each pinned to
+    the changelist it was built at. THIS is what the portal records; it is not
+    what Perforce stores.
+
+    --- THE SECOND DEPOT, NOT NOW ---
+
+      Epic recommends BULK PAYLOADS live in a separate depot so nobody syncs
+      them by accident (item 66). Virtualised bulk data, if it is used, gets its
+      own depot then. CREATING IT NOW WOULD BE SPECULATION.
+
+    ============================================================
+    4. FILE TYPES — WHERE THE LOCKING ACTUALLY COMES FROM
+    ============================================================
+
+    A "stream" and "locking" are different mechanisms and the locking is here.
+
+    PERFORCE TYPEMAP decides, per path, how a file is stored and whether a
+    checkout is EXCLUSIVE. The types that matter:
+
+        binary+l   binary, EXCLUSIVE LOCK. One person may have it checked out.
+                   This is the setting item 62's whole argument rests on.
+
+        binary     binary, no lock — merges are impossible but two people may
+                   both work, and the second loses. AVOID FOR ASSETS.
+
+        text       line-based, mergeable. Right for .ini, .usf/.ush, .cpp/.h,
+                   .json — things a person reads as text.
+
+    THE DEFAULT SHOULD BE `binary+l` FOR EVERYTHING THE ENGINE AUTHORS, and
+    text only where merging is genuinely safe:
+
+        binary+l   //LowExpectations/.../*.uasset
+        binary+l   //LowExpectations/.../*.umap
+        binary+l   //LowExpectations/.../*.ubulk
+        binary+l   //LowExpectations/.../*.uexp
+        binary+l   //LowExpectations/.../*.png
+        binary+l   //LowExpectations/.../*.fbx
+        text       //LowExpectations/.../*.ini
+        text       //LowExpectations/.../*.cpp
+        text       //LowExpectations/.../*.h
+        text       //LowExpectations/.../*.cs
+        text       //LowExpectations/.../*.json
+
+    THESE TYPES MATTER BECAUSE THEY ARE INVISIBLE UNTIL THEY ARE WRONG. A file
+    added as `binary` rather than `binary+l` looks identical, works alone, and
+    surfaces months later as an artist's work silently overwritten. SET THE
+    TYPEMAP BEFORE THE FIRST `p4 add`, because the type is fixed when a file
+    enters the depot and changing it afterwards means re-adding.
+
+    --- AND ONE-FILE-PER-ACTOR IS WHAT MAKES THE LOCK SMALL ---
+
+      With OFPA on, each actor is its own file, so a lock is per OBJECT rather
+      than per LEVEL. Two people on one map rarely collide at all. Without it,
+      one level is one file and one person holds the whole map.
+
+      NOTHING HERE TURNS IT ON — it is a project setting in the editor. It is
+      named because it decides how much the locking actually costs.
+
+    ============================================================
+    5. USERS, GROUPS AND THE FIVE LICENCES
+    ============================================================
+
+    USERS (`p4 user`) are accounts. GROUPS (`p4 group`) are what protections
+    are written against, so the count stays about people, not paths.
+
+        game-dev      the people who work in the editor
+        game-build    the build machine's account. Standard user, one workspace.
+        game-admin    an OPERATOR if they only administer — NO LICENCE
+
+    NAMES ONCE DECIDED GO INTO THE PROTECTIONS, so the list is deliberately
+    short. THE PORTAL IS NOT A USER: it never syncs, checks out or submits.
+
+    ============================================================
+    6. PROTECTIONS — WHO MAY WRITE WHAT
+    ============================================================
+
+    `p4 protect` is ordered, first match wins. The shape, not the final rules:
+
+        super   user game-admin * //...
+        write   group game-dev  * //LowExpectations/dev/...
+        write   group game-dev  * //LowExpectations/exp-*/...
+        write   group game-build * //LowExpectations/rel-*/...
+        read    group game-dev  * //...
+        list    group game-dev  * //...
+
+    THE POINTS BEHIND THAT SHAPE:
+
+      * DEVELOPERS WRITE IN `dev` AND `exp`, NOT IN `rel`. A release line is
+        changed by the build machine and by nobody else, so what shipped cannot
+        be quietly edited afterwards. That is the same rule as §5 of SPEC.md —
+        an approved, shipped thing is not rewritten — expressed in Perforce.
+
+      * NOTHING IS INHERITED BY BEING NUMERICALLY HIGHER. Perforce protections
+        are a LIST, like requireRole. A group not named somewhere gets nothing.
+
+      * `read` IS WIDER THAN `write`. Everyone sees the game; only some of it is
+        theirs to change.
+
+    ============================================================
+    7. WHAT A DEVELOPER'S WORKSPACE MAPS
+    ============================================================
+
+    A workspace (`p4 client`) maps depot paths to local ones:
+
+        //LowExpectations/dev/...   C:\Work\LE001\...
+
+    MAP THE WHOLE STREAM, SYNC A SUBSET. That is Perforce's normal shape and the
+    reason item 65 says no form is needed: `p4 sync //LowExpectations/dev/
+    Content/Environment/...` fetches a piece without asking anybody, and the
+    mapping does not have to change to do it.
+
+    THE ALTERNATIVE, FOR SOMEBODY WHO TRULY NEEDS ONLY A CORNER — a VIRTUAL
+    STREAM: a stream whose view shares only part of its parent. Right for a
+    contract artist working on one biome; unnecessary for the core team.
+
+    AND ONE PRACTICAL POINT: THE CURRENT `game/LE001` DIRECTORY BECOMES THE
+    WORKSPACE ROOT. The files already on this machine do not need moving — the
+    first client is mapped onto the directory that exists, and `p4 reconcile`
+    finds what is already there.
+
+    ============================================================
+    8. HOW THE PORTAL FITS — AND WHAT IT STILL DOES NOT DO
+    ============================================================
+
+    THE PORTAL RECORDS; PERFORCE MOVES BYTES. That division is items 62 and 67
+    and this plan does not change it.
+
+        upload → check → submit → prod approves → a version in the store
+                                                       │
+                                                       │  the developer, who has
+                                                       │  the game checked out,
+                                                       │  places the files
+                                                       ▼
+                                        p4 submit with a changelist number
+
+    AND THE CHANGELIST IS WHAT CONNECTS THEM. Item 67 decided a release is
+    identified by a name, a changelist, who built it and when — so the portal's
+    release record can name the changelist that contains the asset, and the two
+    systems describe one fact rather than two copies of it.
+
+    WHAT THE PORTAL MUST NEVER GROW: a version control system, a file lock, a
+    sync endpoint, or a way to check in. Every one of those is Perforce's, done
+    better, and building it here would be the duplication item 65 forbids — and
+    a gate in front of something free.
+
+    ============================================================
+    9. THE ROUND TRIP, WITH PERFORCE IN PLACE
+    ============================================================
+
+    THIS IS ITEM 85'S GAME HALF, now that the pieces exist:
+
+      1. A developer maps the stream and SYNCS THE PIECE THE ASSET AFFECTS:
+         `p4 sync //LowExpectations/dev/Content/Environment/...`
+      2. The portal's game store offers the approved version; they download it
+         (the negotiation) or import it into their workspace.
+      3. They place the files — the manifest says which path each goes to.
+      4. They CHECK OUT the affected files and check the new ones in, with a
+         changelist describing what changed.
+      5. The portal records the download and, when releases exist, the changelist
+         the version went in with.
+
+    STEP 1 IS THE ONE THAT WAS MISSING. Until Perforce exists there is no way to
+    get a piece of the game, which is why the round trip stopped where it did.
+
+    ============================================================
+    10. WHAT IS NEEDED BEFORE ANY OF THIS RUNS
+    ============================================================
+
+      [ ] A VPS in the UK/EU — items 62, 72. vcs.lowexpectations.zone.
+      [ ] p4d installed and configured: server, stream depot, typemap.
+      [ ] The typemap set BEFORE the first add (see §4 — the type is fixed on
+          entry).
+      [ ] Users and groups created; protections written.
+      [ ] The first client mapped onto game/LE001 and `p4 reconcile` run.
+      [ ] The Unreal project's source-control settings pointed at the server
+          (the editor speaks Perforce natively — no plugin).
+      [ ] A BACKUP REGIME. The depot is the game's only copy; item 62 is
+          explicit that owning the backups is part of why self-hosting wins.
+
+    ============================================================
+    11. OPEN — DECISIONS THIS PLAN DOES NOT MAKE
+    ============================================================
+
+      * THE VPS: where, and how big. DISK DECIDES THE COST — the project grows to
+        300 GB - 1 TB (item 71), and that figure dominates everything else.
+      * THE FIVE NAMES. Who holds a licence, and whether the admin is an
+        operator. This is a real ceiling, not a formality.
+      * STREAM NAMES. `main`/`dev`/`rel-0.1` above are sensible defaults and
+        nobody has chosen them.
+      * WHO SUBMITS: does the developer who uploaded the asset check it into the
+        game, or does somebody integrate? Item 64's territory, undecided.
+      * WHETHER `game/` IN THE REPOSITORY KEEPS ITS `.gitignore` RULE once the
+        workspace lives there. It should — but it is a loose end that will bite
+        if forgotten, because a `git add` in the wrong directory would try to
+        commit the whole game again.
