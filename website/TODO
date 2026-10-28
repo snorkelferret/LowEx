@@ -4010,6 +4010,39 @@ They MUST be dealt with before any real user data exists.
     board.manage), and nothing prod holds is system-shaped. If a proposed
     capability needs backend knowledge to use safely, it is not prod's.
 
+    --- AND ADDED 2026-10-28: ADMIN IS THE INTEGRATOR ---
+
+      PUTTING AN APPROVED ASSET INTO THE GAME IS ADMIN'S, NOT PROD'S.
+
+      It means importing the asset into Unreal, reimporting over the old one so
+      every placed copy updates (item 79, E4), and COMMITTING THE CHANGELIST.
+      BY THIS ITEM'S OWN TEST IT IS ENGINEERING: it moves files and commits them.
+      Prod decides whether a thing enters the game; admin makes it enter.
+
+      AND A DEVELOPER CANNOT DO IT EITHER — not for want of permission in the
+      PORTAL, but because they have no WRITE on the Perforce depot. A developer
+      syncs (read), works on their own copy, uploads, submits, and SUGGESTS
+      where it belongs (item 64's catalogue metadata). Somebody with write
+      finishes it.
+
+      SO THE HANDOVER IS EXPLICIT, which is what item 67's touchpoint 2 exists
+      to record: the approved asset stores the CHANGELIST that imported it, and
+      that number is how "what is in the game" is answered without the portal
+      keeping a second copy of Perforce's own manifest.
+
+    --- AND IT MAY NOT STAY A PERSON ---
+
+      AUTOMATION IS POSSIBLE AND NOT NOW. An integration process would need two
+      things that do not exist: write on the depot, and an Unreal import that
+      runs without somebody in the editor. Item 88 records it as unbuilt.
+
+      WHEN IT EXISTS, THE RECORD DOES NOT CHANGE — the changelist that imported
+      the asset is still the answer. WHAT CHANGES IS WHO HOLDS THE PEN: an
+      automated integrator writes as ADMIN, so it has to be a controlled,
+      audited account doing one thing, not a credential left lying around. THE
+      SAME RULE AS IMPERSONATION — a capability that acts on somebody's behalf
+      has to be visible in the record.
+
     --- ONE ADJACENT QUESTION, NOT DECIDED ---
 
     BUG REPORTS. Reading and resolving feedback is admin-gated today
@@ -10205,17 +10238,52 @@ no upside. If something seems to need one of them, ask.
     THIS IS ITEM 85'S GAME HALF, now that the pieces exist:
 
       1. A developer maps the stream and SYNCS THE PIECE THE ASSET AFFECTS:
-         `p4 sync //LowExpectations/dev/Content/Environment/...`
-      2. The portal's game store offers the approved version; they download it
-         (the negotiation) or import it into their workspace.
-      3. They place the files — the manifest says which path each goes to.
-      4. They CHECK OUT the affected files and check the new ones in, with a
-         changelist describing what changed.
-      5. The portal records the download and, when releases exist, the changelist
-         the version went in with.
+         `p4 sync //LowExpectations/dev/Content/Environment/...`. READ ONLY —
+         which is all they need and all they have.
+      2. They see the approved version in the portal's game store. They COPY THE
+         FILES onto their synced piece of the game — NOT into the depot — and
+         work on it there.
+      3. They upload the changed asset to the portal, submit, and prod approves.
+      4. AND HERE THE DEVELOPER STOPS. They have no write on the depot, so they
+         cannot put anything into the game. They SUGGEST where it belongs —
+         item 64's intended area or data layer, carried as catalogue metadata.
+      5. AN ADMIN INTEGRATES. They import the asset into Unreal, REIMPORT over the
+         old one so every placed copy updates (item 79, E4), and commit the
+         changelist.
+      6. The portal records THAT CHANGELIST against the asset (item 67,
+         touchpoint 2). That number is how "what is in the game" is answered —
+         without the portal keeping a copy of Perforce's own manifest.
 
     STEP 1 IS THE ONE THAT WAS MISSING. Until Perforce exists there is no way to
     get a piece of the game, which is why the round trip stopped where it did.
+
+    --- CORRECTED 2026-10-28 ---
+
+      THE FIRST VERSION OF THIS SECTION HAD THE DEVELOPER CHECKING IN. THEY
+      CANNOT: a developer has read, not write, on the depot — and item 52's own
+      test makes the integration ENGINEERING, which is admin's rather than
+      prod's. The step was written from the shape of the workflow rather than
+      from the permissions, which is how a plan tells somebody to do something
+      they are not allowed to do.
+
+    --- AUTOMATED INTEGRATION — POSSIBLE, NOT NOW ---
+
+      THE OWNER, 2026-10-28: the integrator "possibly becomes an auto process".
+
+      WHAT IT WOULD NEED, and neither exists:
+
+        * write on the depot, for a process rather than a person;
+        * an Unreal import that runs WITHOUT somebody in the editor — the
+          editor's import is interactive today, and a commandlet-based one would
+          have to be written and trusted.
+
+      WHAT IT WOULD NOT CHANGE: THE RECORD. The changelist that imported the
+      asset is still the answer, whoever produced it. That is the test of a good
+      record — it describes the fact, not the hand that made it.
+
+      AND IT WOULD HOLD ADMIN'S PEN, so the same rule as impersonation applies:
+      a controlled, audited account doing one thing. An automated integrator
+      with a general-purpose credential is an admin who never logs out.
 
     ============================================================
     10. WHAT IS NEEDED BEFORE ANY OF THIS RUNS
@@ -10242,8 +10310,9 @@ no upside. If something seems to need one of them, ask.
         operator. This is a real ceiling, not a formality.
       * STREAM NAMES. `main`/`dev`/`rel-0.1` above are sensible defaults and
         nobody has chosen them.
-      * WHO SUBMITS: does the developer who uploaded the asset check it into the
-        game, or does somebody integrate? Item 64's territory, undecided.
+      * WHO SUBMITS — ANSWERED 2026-10-28: AN ADMIN INTEGRATES. Not the
+        developer (no depot write) and not prod (engineering, by item 52's own
+        test). Automation is a possible future and is in its own item below.
       * WHETHER `game/` IN THE REPOSITORY KEEPS ITS `.gitignore` RULE once the
         workspace lives there. It should — but it is a loose end that will bite
         if forgotten, because a `git add` in the wrong directory would try to
