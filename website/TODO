@@ -10197,6 +10197,53 @@ no upside. If something seems to need one of them, ask.
     Content/Environment/...` fetches a piece without asking anybody, and the
     mapping does not have to change to do it.
 
+    --- WHAT A "CELL" IS ON DISK, AND HOW TO SYNC ONE — added 2026-10-28 ---
+
+    THE OWNER'S INTENT: *"download cells for the devs to work on"*. THIS IS HOW
+    THAT IS DONE, AND IT IS BOTH SIMPLER AND LESS OBVIOUS THAN IT SOUNDS.
+
+    WITH ONE FILE PER ACTOR, EVERY PLACED THING IN THE WORLD IS ITS OWN FILE:
+
+        Content/__ExternalActors__/<Map>/<X>/<Y>/<24-char-hash>.uasset
+
+    SO A CELL IS A FOLDER: `__ExternalActors__/LE001/A/16/` is one cell.
+
+        p4 sync //LowExpectations/dev/Content/__ExternalActors__/LE001/A/16/...
+
+    AND THE NAMES ARE NOT FOR READING. `<X>/<Y>` are the cell's grid coordinates
+    in hex, and the filename is a hash of the actor's own path. THEY CANNOT BE
+    DECODED BY HAND USEFULLY — the way to find an actor's cell is the editor's
+    right-click > Copy Actor Path, or the file list of the changelist that put it
+    there.
+
+    --- THE FOUR THINGS THIS SETTLES, AND ONE IT DOES NOT ---
+
+      * THE WORLD PLACEMENT LIVES IN `__ExternalActors__`, NOT IN `Content/`
+        ALONGSIDE THE ASSETS. The tree MESHES are assets under Content/; the
+        PLACED TREES are actors under __ExternalActors__. Downloading "the area"
+        needs both, and they are different paths.
+
+      * A CELL IS 2D. Cells are columns on a grid: NO Z. An actor 5,000 units up
+        is in the same cell as one at ground level in the same X/Y. That is
+        deliberate — vertical cells scale as n³, and players move on a ground
+        plane (see the note on that below).
+
+      * A DATA LAYER OR A LOCATION VOLUME CANNOT BE SYNCED. Neither maps to a
+        folder: a data layer's actors are scattered across cells, and a location
+        volume is editor metadata. Only cell folders are syncable, so "which
+        cells does North Forest cover" has to be answered in the editor.
+
+      * SYNC A MARGIN, NOT ONE CELL. With Lumen, lighting is computed from what
+        is present, so the edge of what you synced lights differently from the
+        rest. One ring of neighbours removes most of it. With baked lighting it is
+        worse — World Partition does not officially support static lighting, and
+        unloaded cells stream in unlit.
+
+      * AND WHAT IS NOT SETTLED: WHETHER THE DEVELOPER NEEDS THE CELLS AT ALL,
+        or only the asset. Placing new trees is cell work; changing a tree MESH
+        is asset work and needs no cells. Item 64's "suggest where it belongs"
+        covers the second. THE TWO DOWNLOADS SHOULD NOT BE CONFLATED.
+
     THE ALTERNATIVE, FOR SOMEBODY WHO TRULY NEEDS ONLY A CORNER — a VIRTUAL
     STREAM: a stream whose view shares only part of its parent. Right for a
     contract artist working on one biome; unnecessary for the core team.
@@ -10237,9 +10284,11 @@ no upside. If something seems to need one of them, ask.
 
     THIS IS ITEM 85'S GAME HALF, now that the pieces exist:
 
-      1. A developer maps the stream and SYNCS THE PIECE THE ASSET AFFECTS:
-         `p4 sync //LowExpectations/dev/Content/Environment/...`. READ ONLY —
-         which is all they need and all they have.
+      1. A developer maps the stream and SYNCS THE CELLS THEY NEED — the piece
+         of the WORLD, plus a margin:
+         `p4 sync //LowExpectations/dev/Content/__ExternalActors__/LE001/A/16/...`
+         READ ONLY — which is all they need and all they have. §7 above says
+         what a cell is and why the margin matters.
       2. They see the approved version in the portal's game store. They COPY THE
          FILES onto their synced piece of the game — NOT into the depot — and
          work on it there.
