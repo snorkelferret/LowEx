@@ -10366,3 +10366,116 @@ no upside. If something seems to need one of them, ask.
         workspace lives there. It should — but it is a loose end that will bite
         if forgotten, because a `git add` in the wrong directory would try to
         commit the whole game again.
+
+    ============================================================
+    12. THE DOMAIN — IMPORTANT. IT IS ALSO A POSSIBLE SECURITY HOLE.
+    ============================================================
+
+    ADDED 2026-10-28. The portal will be on lowexpectations.zone; Perforce on
+    vcs.lowexpectations.zone (item 72). THAT ARRANGEMENT IS CORRECT AND IS NOT
+    THE PROBLEM. What follows is, because the two share a REGISTRABLE DOMAIN
+    and the portal has exactly one thing standing between it and a request
+    forged by anything else on that domain.
+
+    ============================================================
+    IMPORTANT (1) — NEVER PUT THE SESSION COOKIE ON THE PARENT DOMAIN
+    ============================================================
+
+      THE PORTAL'S COOKIE IS HOST-ONLY TODAY. It sets `token` with no `domain`
+      attribute (server.js:437, routes/auth.js:66, clearCookie at :101), so the
+      browser sends it to lowexpectations.zone AND NEVER TO vcs.lowexpectations
+      .zone. That is the whole of what keeps the Perforce host from being handed
+      a portal session.
+
+      DO NOT ADD `domain=.lowexpectations.zone`. It looks like a harmless
+      convenience — "make the login work across the site" — and it would hand
+      every session to every subdomain, including one that serves something we
+      did not write.
+
+      IF A FUTURE FEATURE "NEEDS" IT, IT NEEDS SOMETHING ELSE. There is no
+      feature that requires a session cookie on the depot's hostname.
+
+    ============================================================
+    IMPORTANT (2) — SAMESITE DOES NOT SEPARATE SUBDOMAINS, AND THE PORTAL
+    HAS NO CSRF TOKEN
+    ============================================================
+
+      `SameSite` IS CALCULATED ON THE REGISTRABLE DOMAIN (eTLD+1), NOT THE HOST.
+      So
+
+          lowexpectations.zone        the portal
+          vcs.lowexpectations.zone    Perforce
+
+      ARE THE SAME SITE as far as the browser is concerned, and `SameSite=Lax`
+      therefore provides NO separation between them.
+
+      WHAT THAT MEANS CONCRETELY: a page served from vcs.lowexpectations.zone
+      can make a request to the portal, and THE BROWSER WILL ATTACH THE PORTAL'S
+      SESSION COOKIE — because a cookie is chosen by the DESTINATION host, not
+      by who sent the request. CORS prevents the attacker READING the response.
+      It does not prevent the request being MADE. A request that is authenticated
+      and unwanted is exactly what CSRF is.
+
+      AND THE PORTAL HAS NO CSRF TOKEN ANYWHERE. Verified 2026-10-28: nothing in
+      backend/ matches csrf/xsrf. SAMESITE=LAX IS THE ENTIRE DEFENCE, and this
+      arrangement removes it between the portal and the Perforce host.
+
+      TODAY THIS IS THEORETICAL, because Perforce serves NO HTML — it is a
+      proprietary protocol on :1666, not a website, so there is no origin there
+      to run a script.
+
+      IT STOPS BEING THEORETICAL THE MOMENT ANYTHING HTML-SERVING SITS ON A
+      SUBDOMAIN. HELIX SWARM — the web code-review UI — is the obvious one, and
+      the obvious thing to want. An XSS in Swarm would be same-site with the
+      portal and could drive it with the session cookie attached.
+
+      EITHER:
+        * PUT HTML-SERVING TOOLS ON A DIFFERENT REGISTRABLE DOMAIN, keeping the
+          depot protocol on vcs.; or
+        * ADD CSRF TOKENS to the portal's mutating routes.
+
+      THE SECOND IS WORTH DOING REGARDLESS. A single browser default change to
+      SameSite has already happened once (Chrome 2020), and an application whose
+      only CSRF defence is a browser default is one release note away from
+      having none. This is the same rule as item 82's: A THING THAT IS TRUE BY
+      ABSENCE IS NOT A CONTROL.
+
+    ============================================================
+    IMPORTANT (3) — A DANGLING DNS RECORD IS A SUBDOMAIN TAKEOVER
+    ============================================================
+
+      THE MIGRATION PLAN IS "MOVE DNS AND NOTHING ELSE CHANGES" (item 72, the
+      cheap migration). That deliberately relies on the NAME being stable while
+      the address moves — which means that during and after a move there is a
+      window where `vcs.lowexpectations.zone` resolves to an address the studio
+      no longer owns.
+
+      WHOEVER TAKES THAT ADDRESS RECEIVES TRAFFIC UNDER THE GAME'S DOMAIN. They
+      cannot read the depot — the protocol is authenticated — but they hold a
+      name under a domain the studio controls, which is the foothold any number
+      of other attacks start from: a convincing phishing page on a real studio
+      subdomain, a TLS certificate issued for that name, and — per IMPORTANT (2)
+      — a same-site origin for anything that runs HTML.
+
+      SO: REMOVE THE OLD RECORD AS PART OF THE MOVE, NOT AFTERWARDS. And prefer
+      moving the record rather than leaving it pointing at a decommissioned host
+      "for a while".
+
+    ============================================================
+    WHAT IS FINE, AND NOT WORTH WORRYING ABOUT
+    ============================================================
+
+      * TLS: a wildcard certificate or one per host; both ordinary. A wildcard
+        covers vcs. and the portal with one.
+      * PORTS: 443 for the portal, 1666 for p4d. Different ports, no conflict.
+      * HSTS: only affects HTTP, so the p4d protocol is untouched. If HSTS is
+        ever set with includeSubDomains, any web UI on vcs must be HTTPS too —
+        which is true anyway.
+      * COOKIE PATH: `/`, which is right for the portal and irrelevant to vcs.
+
+    ============================================================
+    THE RULE IN ONE LINE
+    ============================================================
+
+      A SUBDOMAIN IS THE SAME SITE AS ITS PARENT. TREAT ANYTHING ON ONE AS
+      ALREADY INSIDE THE OTHER'S SECURITY BOUNDARY, BECAUSE THE BROWSER DOES.
