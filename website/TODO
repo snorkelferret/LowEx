@@ -9946,6 +9946,29 @@ no upside. If something seems to need one of them, ask.
           sessions.last_seen_at, an indexed lookup in authenticateToken, and a
           long-lived cookie — the current maxAge would fire first. (§10, A1)
 
+      [ ] CSRF PROTECTION. NOT A FEATURE — A HOLE. Added 2026-10-28 after
+          checking: the portal has NO CSRF token anywhere, and SameSite=Lax is
+          the entire defence.
+
+          WHY IT MATTERS HERE SPECIFICALLY. A cookie is chosen by the
+          DESTINATION host, not by who sent the request — so a page served from
+          vcs.lowexpectations.zone can request the portal WITH THE SESSION
+          COOKIE ATTACHED. CORS stops the reply being READ; it does not stop the
+          request being MADE. SameSite does not separate subdomains either: it
+          is calculated on the registrable domain.
+
+          TODAY IT IS THEORETICAL, because Perforce serves no HTML. HELIX SWARM,
+          OR ANYTHING HTML-SERVING ON A SUBDOMAIN, MAKES IT REAL.
+
+          AND THE DEEPER REASON: an application whose only CSRF defence is a
+          browser default is one release note from having none — Chrome changed
+          that default in 2020. A THING TRUE BY ABSENCE IS NOT A CONTROL (item
+          82's rule, arriving in a different file).
+
+          WHAT IT TAKES: a token issued with the session and required on every
+          mutating request — the portal's routes are all cookie-authenticated
+          and none of them expects one today. Full reasoning in item 88 §12.
+
     --- THE MODEL NOT YET BUILT ---
 
       [ ] THE PRIVATE AND PUBLISHED STAGES. There is still no way to make a
