@@ -138,6 +138,65 @@ It exits non-zero and prints why. Collection refusing is *not* a failure — it 
 the safety catch working, and the fix is to run `npm run check:store`, deal with
 what it reports, and let the next run collect.
 
+## The Perforce sandbox
+
+The game is versioned in **Perforce**, not here — see TODO 62 and 88. That
+server does not exist yet, so there is a **local sandbox**: a Helix Core server
+on this machine holding a copy of the game, for rehearsing the workflow.
+
+**It is not the production server, and nothing depends on it.** It lives beside
+the portal so the mechanics could be proven before a VPS was paid for.
+
+Both `p4` (the client) and `p4d` (the server) are in the development shell.
+
+### Starting it
+
+```bash
+p4d -r tmp/p4d -p 127.0.0.1:1666 \
+    -J tmp/p4d/journal -L tmp/p4d/log -d
+```
+
+`-r` is the server root, `-p` the address it listens on, `-J` its journal, `-L`
+its log, and `-d` detaches it. The root sits under `tmp/`, which is gitignored —
+**the depot is never committed to this repository**, and must not be.
+
+**Use `127.0.0.1`, not `localhost`.** `p4d` listens on IPv4 only, and
+`localhost` resolves to `::1` first — the client then *hangs* rather than
+failing, which looks exactly like a broken server.
+
+### Using it
+
+```bash
+export P4PORT=127.0.0.1:1666 P4USER=val P4CLIENT=val-sandbox
+
+p4 info                                  # is it there, and who am I
+p4 sync //LowExpectations/dev/Content/... # fetch a piece of the game
+p4 opened                                # what have I got checked out
+```
+
+The depot is **`//LowExpectations`**, a *stream* depot, with `main` (the
+stable line) and `dev` (development). The sandbox client is mapped onto
+`game/LE001`.
+
+### Stopping it
+
+```bash
+p4 admin stop
+```
+
+The root persists. Starting it again brings everything back.
+
+### One thing that will catch you out
+
+**`p4 sync` does not restore a file you deleted locally.** It compares the depot
+against its *have list*, not against the disk — so it reports "up-to-date" and
+does nothing. `p4 sync -f` is the one that fetches the file back.
+
+### Where the reasoning is
+
+**TODO 88** — the plan for the real server, what a "cell" is on disk, who
+integrates, and the four things this sandbox taught.
+
 ## When something is wrong
 
 - **The server will not start.** Almost always a missing `JWT_SECRET`. It says
