@@ -10870,3 +10870,59 @@ no upside. If something seems to need one of them, ask.
             down, trigger failed — is VISIBLE rather than silently swallowed.
             A notification system with no cursor cannot tell "nothing happened"
             from "nothing was delivered".
+
+    ============================================================
+    16. THE DIRECTION IS ONE WAY — PERFORCE TELLS THE PORTAL
+    ============================================================
+
+    DECIDED 2026-10-29, in the owner's words: *"perforce to the portal - the
+    portal is only told stuff"*.
+
+    THE INVARIANT, AND IT IS AN INVARIANT RATHER THAN A PREFERENCE:
+
+        PERFORCE -> PORTAL     the post-commit notification (§15)
+        PORTAL -> PERFORCE     NOTHING. No query, no poll, no write.
+
+    THE PORTAL DOES NOT ASK PERFORCE ANYTHING. IT IS TOLD, OR IT DOES NOT KNOW.
+
+    --- WHAT THAT BUYS, IN THE ORDER IT MATTERS ---
+
+      1. THE PORTAL CANNOT BREAK PERFORCE. No write path, and nothing of the
+         portal's sits inside the server's submit path. §15's choice of
+         change-commit over change-submit is this same rule, arriving from the
+         other end.
+
+      2. THE PORTAL KEEPS WORKING WHEN PERFORCE IS DOWN. It stops hearing
+         things; nothing it already knows stops working.
+
+      3. THE DEPENDENCY RUNS FROM THE SMALL, FREQUENT THING TO THE BIG ONE.
+         Perforce is where the work stops if anything goes wrong; the portal is
+         a record. A RECORD MAY LAG; IT MUST NOT BE DEPENDED UPON.
+
+    --- THE CONSEQUENCES, TWO OF WHICH ARE ALREADY DECIDED ELSEWHERE ---
+
+      * THE ACCOUNTS RECONCILIATION (item 67, touchpoint 3) IS A LIST SOMEBODY
+        BRINGS. If it is ever automated it has to be a one-way EXPORT, not the
+        portal querying accounts — otherwise it is the first portal-to-Perforce
+        call, and the invariant is gone by a single convenience.
+
+      * THE CELL SIGNPOSTING FEATURE — *"North Forest is cells A/IP, A/JQ…"* —
+        is therefore A DUMP INTO THE PORTAL, not a live `p4 files`. The live
+        query is easier and is ruled out by this section.
+
+    --- AND THE THING THAT MAKES "ONLY TOLD" HONEST RATHER THAN FRAGILE ---
+
+      A PORTAL THAT CANNOT ASK MUST BE ABLE TO SAY WHAT IT LAST HEARD. That is
+      why §15 requires a cursor — the last changelist seen. WITHOUT ONE,
+      "NOTHING HAS HAPPENED" AND "NOTHING HAS BEEN DELIVERED" LOOK IDENTICAL,
+      and the portal would show the game as unchanged through a week of missed
+      notifications.
+
+      SO THE CURSOR IS NOT AN OPTIONAL DETAIL OF THE NOTIFICATION. IT IS WHAT
+      MAKES A ONE-WAY INTEGRATION HONEST.
+
+    --- AND IF IT IS EVER VIOLATED, IT IS A DESIGN CHANGE ---
+
+      Adding a portal-to-Perforce call "just to check" is a change to WHICH
+      SYSTEM DEPENDS ON WHICH. It deserves a decision with a reason, not a
+      convenience during an afternoon's work.
