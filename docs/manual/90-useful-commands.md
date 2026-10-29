@@ -108,6 +108,7 @@ npm run check:dom        # every element the client looks for exists
 npm run check:collector  # the nightly cleanup removes garbage and nothing else
 npm run check:preview    # the preview route serves prod, and nobody else
 npm run check:approval   # submit, lock, approve, reject and unlock behave
+npm run check:upload-pending  # an asset under review refuses changes
 
 npm run check            # all of the above, stopping at the first failure
 ```
@@ -115,7 +116,7 @@ npm run check            # all of the above, stopping at the first failure
 `check:store` reads only, so it is safe against a running server. It is the one
 to run before a backup and after anything that looks wrong.
 
-**Three of them run the thing they test**, on a database and directories of
+**Four of them run the thing they test**, on a database and directories of
 their own — never the real ones:
 
 - `check:collector` fills a throwaway database with a blob nothing references,
@@ -131,8 +132,13 @@ their own — never the real ones:
   same content, that a locked version cannot be deleted, that only production
   decides, that every decision is recorded, and that deleting an approved
   version from a workspace does not remove it from the store.
+- `check:upload-pending` uploads a real revision to an asset under review and
+  checks it is refused **and that nothing was left behind** — no version, no
+  stored file, no blob, no temporary file. It also checks that a different
+  asset is unaffected, and that the rejected asset accepts the upload once the
+  approval is decided.
 
-All three copy the schema from the live database, open it read-only, and delete
+All four copy the schema from the live database, open it read-only, and delete
 everything they made. None can change what the portal holds.
 
 Both `check:store` and the others accept `DB_PATH` and `STORE_DIR`, so a backup

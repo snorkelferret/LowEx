@@ -11385,3 +11385,72 @@ no upside. If something seems to need one of them, ask.
 
       The upload-while-pending case is the next one worth having: it is the
       other half of the freeze, and it is the one a developer would hit.
+
+94) AN ASSET UNDER REVIEW REFUSES UPLOADS — AND THE FREEZE IS TESTED WHERE IT
+    IS ENFORCED. 2026-10-29.
+    ============================================================
+
+    ASKED FOR after item 93, which ended by naming it: "the other half of the
+    freeze, and the one a developer would hit."
+
+    --- THE OWNER'S QUESTION, AND THE ANSWER, BECAUSE IT IS THE POINT ---
+
+    HE ASKED: "is this when the dev is uploading a revision while another
+    version is awaiting a tech check? why does this need a separate case?"
+
+    NO — AND THERE IS NO SUCH STATE TO PROTECT. A TECHNICAL CHECK IS
+    SYNCHRONOUS: the route writes a `running` row and updates it to passed or
+    failed inside the same request (developerWorkspace.js:3651-3660). Nobody
+    waits on one, and nothing refuses an upload because one is running. The
+    only "awaiting" state in the system is a PENDING CREATIVE APPROVAL, and
+    that is what freezes the asset.
+
+    AND IT IS A SEPARATE CHECK BECAUSE THE FREEZE IS ENFORCED IN TWO PLACES:
+
+        the delete routes      pending lookups + creative_locked
+        POST /upload           its OWN pending query, inside the upload
+                               transaction (developerWorkspace.js:3082-3100)
+
+    scripts/check-approval-path.js exercises the first and NEVER CALLS /upload.
+    Delete the upload route's guard tomorrow and the approval check stays
+    green. Two enforcement points, two tests; either can be removed alone.
+
+    --- AND IT TESTS SOMETHING ONLY AN UPLOAD CAN SHOW ---
+
+    THE REFUSAL HAPPENS INSIDE THE WRITE TRANSACTION, after the files have been
+    hashed and written. So the interesting question is not "does it 409" — it
+    is WHAT IS LEFT BEHIND, and the check asserts all four:
+
+        no new version         workspace_versions count unchanged
+        no stored file row     stored_files count unchanged
+        no blob on disk        the store directory count unchanged
+        no temp file           the upload temp directory is empty
+
+    A refusal that leaves a blob behind is disk spent on nothing; a refusal that
+    leaves a row behind is content nothing references. Neither is visible from
+    the response.
+
+    --- THE REST OF WHAT IT PROVES ---
+
+      * the refusal says "under review", so the developer is told why
+      * the approval is still pending and the version still locked afterwards
+      * a DIFFERENT asset still accepts the same upload — the freeze is scoped
+        to the asset, which is deliberate: a pending approval holds the whole
+        asset, not only the submitted version
+      * after production REJECTS it, the same asset accepts the upload and the
+        new version exists — the freeze lifts
+
+    --- PROVED IT CAN FAIL ---
+
+    The freezer's condition was disabled and the check run before restoring:
+    six failures — the refusal, its message, the version, the stored file, the
+    blob, and the post-rejection upload. Restored, green again.
+
+    --- WHAT IT DOES NOT COVER ---
+
+      * METADATA-ONLY changes while pending. The upload route is the only way
+        to change a name, category or description, so it is covered by the same
+        guard; there is no second path to test.
+      * a pending approval on one asset while ANOTHER developer uploads to
+        their own — covered in spirit by "a different asset still accepts an
+        upload", but not with a second developer's session.

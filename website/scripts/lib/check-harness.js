@@ -177,16 +177,23 @@ async function startCheckServer({ prefix, route, mount, seed }) {
         { expiresIn: '1h' }
     );
 
-    const request = async (method, url, { token, body } = {}) => {
+    const request = async (method, url, { token, body, form } = {}) => {
         const headers = {};
 
         if (token) headers.Cookie = `token=${token}`;
+
+        // A FormData SETS ITS OWN CONTENT-TYPE, boundary and all. Setting one
+        // here would cut the boundary off the end and multer would see an
+        // empty request — which fails as "No files uploaded" rather than as
+        // anything that names the real problem.
         if (body !== undefined) headers['Content-Type'] = 'application/json';
 
         const response = await fetch(base + url, {
             method,
             headers,
-            body: body === undefined ? undefined : JSON.stringify(body)
+            body: form !== undefined
+                ? form
+                : body === undefined ? undefined : JSON.stringify(body)
         });
 
         // THE BODY IS READ AS BYTES, not as text. A WebP is not UTF-8, and
@@ -215,6 +222,7 @@ async function startCheckServer({ prefix, route, mount, seed }) {
         tokenFor,
         get: (url, token) => request('GET', url, { token }),
         post: (url, body, token) => request('POST', url, { token, body }),
+        postForm: (url, form, token) => request('POST', url, { token, form }),
         del: (url, token) => request('DELETE', url, { token }),
         close: async () => {
             await new Promise(resolve => server.close(resolve));
