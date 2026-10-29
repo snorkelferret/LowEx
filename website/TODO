@@ -11228,3 +11228,88 @@ no upside. If something seems to need one of them, ask.
 
       NOT THE LAW. The TODO is. If the two disagree, the TODO wins and
       docs/RULES.md is corrected — the same relationship SPEC.md has with it.
+
+92) THE PREVIEW ROUTE HAD NO TEST. NOW IT HAS ONE, OVER HTTP. 2026-10-29.
+    ============================================================
+
+    THE SECOND of the three gaps item 90 listed: every check was static, and
+    the preview route's access rules had only ever been verified by hand.
+
+    THE STAKES ARE NOT THE PICTURE. The route serves developer content to a role
+    that is not supposed to have a read path into a workspace. If its scoping
+    breaks, EVERY REQUEST STILL ANSWERS 200 — there is no error, no crash, no
+    log line. The first symptom is a reviewer seeing something they should not,
+    and nobody would know it was possible.
+
+    --- WHAT WAS BUILT ---
+
+      scripts/check-preview-access.js — the FIRST HTTP CHECK in the repository.
+      It copies the schema from the live database into a temporary one, seeds
+      two submissions and three files, mounts THE REAL ROUTER on a throwaway
+      Express app, mints prod/developer/admin tokens, and asks twelve
+      questions:
+
+          prod, own file            200, image/webp, nosniff
+          prod, own file            the BODY IS THE PREVIEW, not the blob
+          prod, a file in another submission            404
+          prod, a file in this submission with no preview 404
+          developer                                      403
+          administrator                                  403
+          no session                                     401
+          malformed hash / approval id                   400, 400
+          missing approval                               404
+
+      TWO OF THOSE ARE DELIBERATE ASSERTIONS RATHER THAN COVERAGE:
+      the body comparison means a future "just serve the blob" cannot pass; and
+      the administrator refusal FAILS if somebody adds admin to requireRole,
+      which is a decision under RULES.md 7, not a patch.
+
+      IT IS MOUNTED IN PROCESS, not spawned: no port to collide with, no second
+      copy of server.js's middleware list to drift, and it refuses nothing the
+      real app would not refuse.
+
+    --- IT FORCED ONE PRODUCTION CHANGE, AND THAT IS THE INTERESTING PART ---
+
+      THE APPLICATION HAD NO WAY TO BE POINTED AT A THROWAWAY DATABASE. db.js
+      hardcoded backend/database.db and storagePaths.js hardcoded the three
+      uploads directories, so the only database a route could be tested against
+      was the live one.
+
+      So db.js now honours DB_PATH and storagePaths.js honours STORE_DIR,
+      TMP_DIR and THUMB_DIR — THE SAME NAMES THE MANUAL ALREADY DOCUMENTED for
+      checking a backup, rather than a second set. Unset, every path is exactly
+      what it was.
+
+      AND THAT CREATED A HAZARD WORTH RECORDING: scripts/check-schema-drift.js
+      copies db.js into a temp directory and requires it to build a scratch
+      schema. With DB_PATH honoured, running check:schema WITH DB_PATH SET IN
+      THE ENVIRONMENT would have opened THAT database, applied migrations to it
+      and compared it with itself — a check that always passes, against a file
+      it was told not to touch. The script now sets DB_PATH to its own scratch
+      path before requiring the copy. VERIFIED: a copied database passed via
+      DB_PATH keeps the same hash and gets no WAL file.
+
+      A rule for the future, because this will happen again: ANY MODULE THAT
+      READS CONFIGURATION AT REQUIRE TIME IS A MODULE SOMEONE ELSE'S CHECK CAN
+      REDIRECT. When a check copies code, it has to set every variable that
+      code reads.
+
+    --- PROVED IT CAN FAIL ---
+
+      A check that has only ever passed proves nothing. Both guards were
+      mutated in place and the check was run before restoring the file:
+
+          requireRole('prod', 'developer')   -> "a developer is refused" FAILED (200)
+          scoping skipped                    -> "another submission" FAILED (500)
+
+      Two failures, correctly named. Then restored; green again.
+
+    --- WHAT IT DOES NOT COVER ---
+
+      * CSRF — the route is a GET, and CSRF is not built (item 87)
+      * every other route. The upload, submit, approve and reject paths still
+        have no test, and they are the ones that WRITE.
+      * concurrency, rate limiting, and the request size limits above them
+
+      THE NEXT ONE SHOULD BE THE APPROVAL PATH: submit, approve and reject are
+      where state changes and where a mistake is expensive.

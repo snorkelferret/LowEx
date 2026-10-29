@@ -56,9 +56,27 @@ const path = require('path');
 // backend/lib/ -> backend/uploads/
 const UPLOADS_DIR = path.join(__dirname, '../uploads');
 
-const BLOB_DIR = path.join(UPLOADS_DIR, 'files');
-const TMP_DIR = path.join(UPLOADS_DIR, 'tmp');
-const THUMB_DIR = path.join(UPLOADS_DIR, 'thumbs');
+// THE THREE DIRECTORIES ARE RELOCATABLE, and the reason is the same as DB_PATH's
+// in db.js: a check has to run the real code against directories of its own,
+// and a check that writes into the live uploads directory is not a check.
+//
+// The names are the ones the manual already documents for checking a backup, so
+// there is one name per directory and the checks and the application agree on
+// it. Unset, every path is exactly what it was.
+//
+// STORE_DIR is the blob store; it keeps the name check:store gave it rather
+// than gaining a second one.
+const BLOB_DIR = process.env.STORE_DIR
+    ? path.resolve(process.env.STORE_DIR)
+    : path.join(UPLOADS_DIR, 'files');
+
+const TMP_DIR = process.env.TMP_DIR
+    ? path.resolve(process.env.TMP_DIR)
+    : path.join(UPLOADS_DIR, 'tmp');
+
+const THUMB_DIR = process.env.THUMB_DIR
+    ? path.resolve(process.env.THUMB_DIR)
+    : path.join(UPLOADS_DIR, 'thumbs');
 
 // ============================================================
 // THE KEY FORMAT, AND WHY IT IS CHECKED HERE

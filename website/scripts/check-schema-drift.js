@@ -59,14 +59,23 @@ if (!fs.existsSync(livePath)) {
 
 // ---------------------------------------------------------------- scratch DB
 
-// db.js hardcodes its database path relative to __dirname, so build a scratch
-// copy of it in a temp directory. Nothing in the repo is modified.
+// Build a scratch copy of db.js in a temp directory and let IT create the
+// database. Nothing in the repo is modified.
 const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lowex-schema-'));
 fs.copyFileSync(dbJsPath, path.join(scratchDir, 'db.js'));
 fs.symlinkSync(path.join(repoRoot, 'node_modules'),
                path.join(scratchDir, 'node_modules'), 'dir');
 
 const scratchPath = path.join(scratchDir, 'database.db');
+
+// DB_PATH POINTS THE SCRATCH COPY AT THE SCRATCH DATABASE, and this line is not
+// optional. db.js used to hardcode its path; it now honours DB_PATH so that a
+// check can run the real code against its own database (see
+// scripts/check-preview-access.js). Without this, running check:schema with
+// DB_PATH set in the environment would open THAT database, apply migrations to
+// it, and compare it with itself — a check that always passes, against a file
+// it was told not to touch.
+process.env.DB_PATH = scratchPath;
 
 // db.js logs its progress on load; keep this script's output readable.
 const realLog = console.log;

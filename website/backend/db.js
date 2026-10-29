@@ -4,7 +4,17 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'database.db');
+// THE DATABASE IS RELOCATABLE, and the only reason it needs to be: a check or a
+// sandbox has to run the REAL code — the routes, the middleware, the
+// statements — against a database of its own. Without this, the only way to
+// test a route is to point it at the live one.
+//
+// DB_PATH is the name check:store already documents, so there is one name for
+// one thing. Unset, the path is exactly what it was.
+const dbPath = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.join(__dirname, 'database.db');
+
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');

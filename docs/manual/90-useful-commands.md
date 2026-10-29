@@ -106,6 +106,7 @@ npm run check:schema     # the database matches the schema in code
 npm run check:naming     # the shared rules do what they say
 npm run check:dom        # every element the client looks for exists
 npm run check:collector  # the nightly cleanup removes garbage and nothing else
+npm run check:preview    # the preview route serves prod, and nobody else
 
 npm run check            # all of the above, stopping at the first failure
 ```
@@ -113,11 +114,19 @@ npm run check            # all of the above, stopping at the first failure
 `check:store` reads only, so it is safe against a running server. It is the one
 to run before a backup and after anything that looks wrong.
 
-**`check:collector` is the only one that runs the thing it tests.** It builds a
-throwaway database from the live schema, fills it with a blob nothing
-references, one the library holds, one released from the library and one inside
-the grace window, then runs the collector and checks what survived. It never
-writes to the real database, the real files or the real previews.
+**Two of them run the thing they test**, on a database and directories of their
+own — never the real ones:
+
+- `check:collector` fills a throwaway database with a blob nothing references,
+  one the library holds, one released from the library and one inside the grace
+  window, then runs the collector and checks what survived.
+- `check:preview` mounts the real routes on a throwaway server and asks the
+  preview route ten questions: prod sees its own submission and gets the
+  picture rather than the file; a file from another submission is a 404; a
+  developer, an administrator and nobody are refused; malformed input is a 400.
+
+Both copy the schema from the live database, open it read-only, and delete
+everything they made. Neither can change what the portal holds.
 
 Both `check:store` and the others accept `DB_PATH` and `STORE_DIR`, so a backup
 can be checked without touching the live one:
