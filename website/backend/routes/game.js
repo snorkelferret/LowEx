@@ -54,6 +54,9 @@ const audit = require('../lib/audit');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { blobPath } = require('../lib/storagePaths');
 const { buildVersionArchive } = require('../lib/assetArchive');
+// A version's content identity, computed the same way everywhere it is used —
+// including for a version that arrived by IMPORT, which used to get none.
+const { manifestHash } = require('../lib/manifestHash');
 
 const router = express.Router();
 
@@ -232,6 +235,38 @@ const insertWorkspaceVersion = db.prepare(`
     )
     VALUES (?, ?, ?, ?)
 `);
+
+// WHAT AN IMPORTED VERSION IS, CONTENT-WISE.
+//
+// insertWorkspaceVersion writes four columns and no identity, so a version
+// copied back from the store had NO manifest_hash — and "the version I tested
+// is the version I submitted" then has no evidence for the work the developer
+// is about to submit (TODO 87 E1). The store version carries one; the import
+// copies the same file REFERENCES, so the value must be identical.
+//
+// COMPUTED FROM THE ROWS JUST COPIED, in the same transaction that copied
+// them, so the two cannot disagree.
+const workspaceVersionFilesForHash = db.prepare(`
+    SELECT
+        f.relative_path,
+        f.filename,
+        sf.sha256,
+        sf.file_size AS size
+    FROM workspace_version_files f
+    JOIN stored_files sf ON sf.id = f.stored_file_id
+    WHERE f.workspace_version_id = ?
+`);
+
+const setVersionManifestHash = db.prepare(`
+    UPDATE workspace_versions SET manifest_hash = ? WHERE id = ?
+`);
+
+function recordImportedIdentity(versionId) {
+    setVersionManifestHash.run(
+        manifestHash(workspaceVersionFilesForHash.all(versionId)),
+        versionId
+    );
+}
 
 const insertWorkspaceVersionFile = db.prepare(`
     INSERT INTO workspace_version_files (
@@ -684,7 +719,12 @@ router.post(
                 assetName: asset.name,
                 versionNumber: version.version_number,
                 stripRoot,
-                manifestHash: version.manifest_hash
+                manifestHash: version.manifest_hash,
+                // SO THE ZIP SAYS WHAT IT LEFT OUT. The manifest inside the
+                // archive is the only channel back to a caller receiving a
+                // stream, and without this the route's promise that unknown
+                // hashes are "reported back" was only a console.warn.
+                unknown
             });
 
             const safeName = String(asset.name).replace(/[^A-Za-z0-9._-]+/g, '_');
@@ -1091,6 +1131,10 @@ router.post(
 
                     insertWorkspaceVersionFile.run(restoredVersion.lastInsertRowid, versionId);
 
+                    // The files are copied; the identity has to come with
+                    // them, or the restored version has none.
+                    recordImportedIdentity(restoredVersion.lastInsertRowid);
+
                     audit.record(developerId, 'workspace.import_from_store', asset.name, {
                         workspace_asset_id: existing.id,
                         repository_asset_id: assetId,
@@ -1159,6 +1203,11 @@ router.post(
                     wsVersion.lastInsertRowid,
                     versionId
                 );
+
+                // THE SAME IDENTITY AS THE STORE VERSION, because the files are
+                // the same rows. Computed rather than copied so the two cannot
+                // drift: if the computation ever changes, both sides change.
+                recordImportedIdentity(wsVersion.lastInsertRowid);
 
                 audit.record(developerId, 'workspace.import_from_store', asset.name, {
                     workspace_asset_id: wsAssetId,

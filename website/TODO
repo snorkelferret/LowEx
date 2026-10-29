@@ -11628,7 +11628,11 @@ no upside. If something seems to need one of them, ask.
 
       Four correctly named failures; restored, green again.
 
-    --- TWO THINGS THE CHECK FOUND, NOT FIXED ---
+    --- TWO THINGS THE CHECK FOUND, FIXED THE SAME DAY (2026-10-29) ---
+
+      THE ORIGINAL FINDINGS ARE KEPT BELOW, because they are why the fixes
+      exist and because a finding that is deleted reads like one that was never
+      real. What changed:
 
       1. UNKNOWN HASHES ARE NOT REPORTED TO THE CALLER, though the route's own
          comment says they are: "it is reported back so nothing is silently
@@ -11651,3 +11655,31 @@ no upside. If something seems to need one of them, ask.
       NEITHER IS A TEST GAP; both are recorded here because building the check
       is what made them visible, and a check that finds nothing is usually a
       check that is not looking.
+
+    --- AND WHAT WAS DONE ---
+
+      1. UNKNOWN HASHES ARE NOW IN THE MANIFEST. buildVersionArchive takes
+         `unknown` and writes it into the manifest inside the zip, and the
+         route passes what it computed. It is the only channel back to a caller
+         receiving a stream, so the route's comment is now true rather than
+         only a console.warn. The check asserts a request with one known and
+         one unknown hash still downloads and names the one it left out.
+
+      2. AN IMPORTED VERSION NOW HAS A manifest_hash. recordImportedIdentity()
+         recomputes it from the rows just copied, inside the same transaction,
+         on BOTH branches — the fresh import and the restore-from-bin path,
+         which had the same hole. Computed rather than copied from the store
+         version, so if the computation ever changes both sides change
+         together. The check asserts the imported version's hash equals the
+         store version's.
+
+      BOTH WERE PROVED BY MUTATION: removing `unknown` from the manifest and
+      removing the two recordImportedIdentity() calls produced exactly the two
+      failures, by name. Restored, green again.
+
+      THE SECOND ONE HAS A CONSEQUENCE WORTH KNOWING: until now a developer who
+      imported approved work and ran the technical check got a run recorded
+      with a NULL manifest_hash, and the submission compared NULL to NULL and
+      passed. It passed for the right reason — the content really was
+      unchanged — but with no evidence, which is the one thing the receipt
+      exists to provide (E1).

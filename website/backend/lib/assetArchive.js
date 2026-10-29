@@ -191,7 +191,8 @@ function buildVersionArchive(files, {
     assetName,
     versionNumber,
     stripRoot = null,
-    manifestHash = null
+    manifestHash = null,
+    unknown = []
 } = {}) {
 
     const refused = [];
@@ -278,6 +279,16 @@ function buildVersionArchive(files, {
         // "files must land in the right places". The ZIP is flat-ish and the
         // MANIFEST is what says where things go, so a developer can check an
         // archive without unpacking it.
+        // HASHES THE CALLER ASKED FOR THAT ARE NOT IN THIS VERSION.
+        //
+        // THE CALLER'S OWN LIST IS THE ONLY PLACE THIS IS KNOWN, which is why
+        // it arrives as an argument rather than being derived here. A client
+        // working from a manifest it fetched a moment ago can be slightly out
+        // of date; the download goes ahead with what it can, and this says what
+        // was left out — otherwise the subset is silently incomplete and the
+        // receiver has no way to tell a stale manifest from a corrupt one.
+        unknown: (unknown || []).map(String),
+
         files: planned.map(({ file, name }) => ({
             path: name,
             sha256: file.sha256,

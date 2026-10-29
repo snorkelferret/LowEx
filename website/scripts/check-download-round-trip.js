@@ -193,6 +193,9 @@ async function main() {
 
     const [A, B] = files;
 
+    // A hash that is a real SHA-256 and is not in the version.
+    const MISSING = sha256(Buffer.from('not in this version'));
+
     // -----------------------------------------------------------------
     // MANIFEST
     // -----------------------------------------------------------------
@@ -300,10 +303,30 @@ async function main() {
     report.check('a list of non-hashes is a 400', notHashes.status === 400,
         `expected 400, got ${notHashes.status}`);
 
-    const absent = await server.post('/1/versions/1/archive',
-        { only: [sha256(Buffer.from('not in this version'))] }, dev);
+    const absent = await server.post('/1/versions/1/archive', { only: [MISSING] }, dev);
     report.check('a hash that is not in the version is a 404', absent.status === 404,
         `expected 404, got ${absent.status}`);
+
+    // A STALE LIST STILL DOWNLOADS, AND SAYS WHAT IT LEFT OUT. Without this
+    // the caller gets a subset and nothing in the response says so.
+    const mixed = await server.post('/1/versions/1/archive',
+        { only: [A.sha256, MISSING] }, dev);
+
+    report.check('a known hash alongside an unknown one still downloads',
+        mixed.status === 200, `expected 200, got ${mixed.status}`);
+
+    let mixedManifest = null;
+
+    try {
+        const mixedEntries = readZip(mixed.body);
+        const entry = mixedEntries.find(e => e.name === 'manifest.json');
+        if (entry) mixedManifest = JSON.parse(entry.data.toString('utf8'));
+    } catch { /* reported below */ }
+
+    report.check('and the manifest reports the hash it could not include',
+        Array.isArray(mixedManifest?.unknown) && mixedManifest.unknown.length === 1
+        && mixedManifest.unknown[0] === MISSING,
+        `manifest.unknown was ${JSON.stringify(mixedManifest?.unknown)}`);
 
     // -----------------------------------------------------------------
     // ONE FILE
@@ -364,6 +387,14 @@ async function main() {
     const importedFiles = db.prepare(`
         SELECT * FROM workspace_version_files WHERE workspace_version_id = ?
     `).all(imported.json?.workspace_version_id);
+
+    const importedVersion = db.prepare(`
+        SELECT * FROM workspace_versions WHERE id = ?
+    `).get(imported.json?.workspace_version_id);
+
+    report.check('the imported version carries the store version\'s identity',
+        importedVersion?.manifest_hash === VERSION_HASH,
+        `imported manifest_hash was ${importedVersion?.manifest_hash}, expected ${VERSION_HASH} — an imported version used to have none at all`);
 
     report.check('and its files are REFERENCES to the same stored rows',
         importedFiles.length === files.length

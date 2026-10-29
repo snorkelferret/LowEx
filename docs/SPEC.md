@@ -235,6 +235,18 @@ returned by the manifest endpoint and written into every archive manifest.
 >
 > Equal means the zip is the whole version; different means it is a subset. No
 > flag is needed, because the comparison says it exactly.
+>
+> **And a subset says what it left out.** A caller with a slightly stale list
+> still gets everything that matches, and the manifest names every requested
+> hash the version does not hold (`unknown`) — otherwise the delivery is
+> silently incomplete and the receiver cannot tell a stale manifest from a
+> corrupt one.
+
+**An imported version carries the same identity as the version it came from.**
+Import copies the file *references*, then recomputes the manifest hash from the
+rows it just copied — so work brought back from the store has a `manifest_hash`
+even though no upload created it, and the test receipt for it can be compared
+to what was approved.
 
 **Tech check at upload.** Nothing enters the store untested (TODO 86). File
 contents *are* inspected — the first 512 bytes against a signature table — so a
