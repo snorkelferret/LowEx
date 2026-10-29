@@ -35,7 +35,8 @@ npm run check:store` passes.
 | `git check-ignore .env` prints `.env` | It holds the session secret and mail credentials. If it is ever committed, the secret is in the history for ever. |
 | Generate a **new** `JWT_SECRET`: `openssl rand -hex 32` | Every session token is signed with it. A development value that has been in a shell or a note is a value somebody may have. Rotating also signs everyone out — which is what you want before opening the doors. |
 | `NODE_ENV=production` | The session cookie is only marked **Secure** when this is set (`routes/auth.js:68`, `server.js:439`). Without it the cookie will travel over plain HTTP. |
-| `CLIENT_URL=https://lowexpectations.zone` | It is the CORS origin and the OAuth redirect (`server.js:51,68,231`). Wrong, and sign-in fails in a way that reads like a login bug. |
+| `CLIENT_URL=https://lowexpectations.zone` | It is the CORS origin and the address invitations and sign-in links point at. Wrong, and sign-in fails in a way that reads like a login bug. |
+| `PUBLIC_URL=https://lowexpectations.zone` | The address Google sends the OAuth callback to. It is **not** the bind address — in production the socket is on `127.0.0.1:5000` while this is the public origin. |
 | `SMTP_*` set, or accept invitation links by hand | With no mail configured, invitations are created and the link comes back in the response for the inviter to pass on. That is a working behaviour, not a fault — but it must be the intended one. |
 
 **Proof** — prints values that are safe, never the secret itself:
@@ -46,6 +47,8 @@ node -e "require('dotenv').config({quiet:true}); console.log({
   secure_cookie: process.env.NODE_ENV === 'production',
   secret_length: (process.env.JWT_SECRET || '').length,
   client_url: process.env.CLIENT_URL,
+  public_url: process.env.PUBLIC_URL,
+  bind: process.env.BIND || '127.0.0.1 (default)',
   smtp: !!process.env.SMTP_HOST
 })"
 ```
@@ -87,16 +90,14 @@ written down** — not in this file, not in a note, not in a commit.
 
 ## 3. Exposure
 
-**The application currently listens on every interface.** `app.listen(PORT)` is
-called with no host argument (`server.js:489`), so `ss -ltn` shows `*:5000`.
-The `HOST` value in `.env` is printed at startup and **does not control
-this** — it builds the OAuth callback and nothing else. That is TODO 44, decided
-and not yet built.
+**The application binds loopback by default now.** `app.listen(PORT, BIND)` with
+`BIND` defaulting to `127.0.0.1`, so only this machine can reach it and the proxy
+is the only front door. `npm run check:bind` starts the real server and proves
+both halves: it answers on 127.0.0.1 and **not** on the machine's network
+address. This was TODO 44, built 2026-10-29.
 
-So, one of:
-
-- **Implement the loopback bind** (`127.0.0.1:5000`) — TODO 44 — or
-- **Firewall port 5000** so that only the proxy can reach it.
+Check `BIND` has not been set to `0.0.0.0` in `.env` — that is every interface,
+which is the state this used to be in by accident.
 
 Then:
 
@@ -109,6 +110,7 @@ Then:
 
 **Proof:** from another machine, only 443 answers; `curl http://<ip>:5000`
 fails; `/backend/database.db` and `/backend/uploads/files/<sha>` return 404.
+`npm run check:bind` covers the first two from this machine.
 
 ---
 
@@ -180,7 +182,7 @@ One row per deployment. A row with "accepted" and no reason is not a record.
 | 1 | 0. Backup taken | not run | — | — | |
 | 2 | 1. Environment | not run | — | — | |
 | 3 | 2. Passwords rotated | **outstanding** | — | — | all three accounts are on development passwords |
-| 4 | 3. Exposure | **outstanding** | — | — | the app binds `*:5000` today (TODO 44) |
+| 4 | 3. Exposure | not run | — | — | loopback bind is built and checked; the proxy is not placed yet |
 | 5 | 4. Decisions | **outstanding** | — | — | CSRF, sessions, impersonation, multi-role, Perforce |
 | 6 | 5. Backups and job | not run | — | — | |
 | 7 | 6. Prove it | not run | — | — | |

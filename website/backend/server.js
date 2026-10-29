@@ -47,7 +47,34 @@ const app = express();
 // CONFIGURATION CONSTANTS (Loaded from environment)
 
 const PORT = process.env.PORT ;
-const HOST = process.env.HOST;
+
+// WHERE THE SOCKET LISTENS, AND HOW THE WORLD ADDRESSES IT ARE TWO THINGS.
+//
+// BIND is the interface the listening socket is attached to. 127.0.0.1 is
+// LOOPBACK: reachable only from this machine, so nothing on the network can
+// reach the application directly. The reverse proxy faces the world on 443,
+// terminates TLS and forwards here — the proxy is where TLS, rate limiting and
+// "admin routes only from the studio" live, and the app should not be the thing
+// facing the network.
+//
+// IT USED TO BE app.listen(PORT) WITH NO HOST, which binds EVERY INTERFACE
+// (*:5000) — and .env carried HOST=localhost, which looked like it controlled
+// that and did not (TODO 44).
+const BIND = process.env.BIND || '127.0.0.1';
+
+// PUBLIC_URL is the address a browser or Google uses to reach the portal. It
+// is NOT derived from BIND and must not be: in production it is
+// https://lowexpectations.zone while the socket is on 127.0.0.1:5000, and in
+// development it is http://localhost:5000 while CLIENT_URL (the Vite origin) is
+// a different port again.
+//
+// THE OAUTH CALLBACK IS BUILT FROM THIS, not from HOST as it used to be. That
+// was the trap: binding with HOST would have set the callback to 127.0.0.1,
+// which Google can never reach, and leaving it set the callback to localhost in
+// production, which Google also cannot reach.
+const PUBLIC_URL = (process.env.PUBLIC_URL || `http://localhost:${PORT}`)
+  .replace(/\/+$/, '');
+
 const CLIENT_URL = process.env.CLIENT_URL ;
 const JWT_SECRET = process.env.JWT_SECRET ;
 
@@ -61,7 +88,7 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-console.log("ENV CONFIG PORT ", PORT, "HOST ", HOST, "CLIENT URL ", CLIENT_URL);
+console.log("ENV CONFIG PORT ", PORT, "BIND ", BIND, "PUBLIC ", PUBLIC_URL, "CLIENT URL ", CLIENT_URL);
 
 
 // Enable CORS dynamically for client URL
@@ -161,7 +188,7 @@ const queries = {
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || 'MOCK_GOOGLE_CLIENT_ID',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'MOCK_GOOGLE_CLIENT_SECRET',
-    callbackURL: `${HOST}:${PORT}/api/auth/google/callback` // Configured dynamically
+    callbackURL: `${PUBLIC_URL}/api/auth/google/callback` // the PUBLIC origin, never the bind address
     //callbackURL: 'http://localhost:5000/api/auth/google/callback'
   },
   (accessToken, refreshToken, profile, done) => {
@@ -486,7 +513,9 @@ app.get('/*splat', (req, res) => {
 });
 
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on ${HOST}:${PORT}`);
- 
+// LOOPBACK, EXPLICITLY. If this ever loses its address argument the app goes
+// back to listening on every interface without saying so — and check:bind
+// exists to catch exactly that.
+app.listen(PORT, BIND, () => {
+    console.log(`🚀 Server running on ${BIND}:${PORT} — public at ${PUBLIC_URL}`);
 });

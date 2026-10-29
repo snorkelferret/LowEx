@@ -231,4 +231,6 @@ async function startCheckServer({ prefix, route, mount, seed }) {
     };
 }
 
-module.exports = { Reporter, startCheckServer, Database };
+// copySchema is exported for the one check that does not mount routes: it
+// starts the WHOLE server instead, and needs the same throwaway database.
+module.exports = { Reporter, startCheckServer, copySchema, Database };

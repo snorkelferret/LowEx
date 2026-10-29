@@ -110,6 +110,7 @@ npm run check:preview    # the preview route serves prod, and nobody else
 npm run check:approval   # submit, lock, approve, reject and unlock behave
 npm run check:upload-pending  # an asset under review refuses changes
 npm run check:round-trip      # a version downloads as approved, and comes back
+npm run check:bind            # the server starts, and listens on loopback only
 
 npm run check            # all of the above, stopping at the first failure
 ```
@@ -117,7 +118,7 @@ npm run check            # all of the above, stopping at the first failure
 `check:store` reads only, so it is safe against a running server. It is the one
 to run before a backup and after anything that looks wrong.
 
-**Five of them run the thing they test**, on a database and directories of
+**Six of them run the thing they test**, on a database and directories of
 their own — never the real ones:
 
 - `check:collector` fills a throwaway database with a blob nothing references,
@@ -144,8 +145,12 @@ their own — never the real ones:
   confirms the manifest it produces cannot disagree with the version it names.
   Then it imports the version back into a workspace and checks the files
   arrived as references, not copies.
+- `check:bind` starts the **whole backend** as a child process on a throwaway
+  database and a port the operating system chooses, and checks that it answers
+  on 127.0.0.1 and **not** on the machine's network address. It is also the only
+  check that notices the server failing to boot.
 
-All five copy the schema from the live database, open it read-only, and delete
+All six copy the schema from the live database, open it read-only, and delete
 everything they made. None can change what the portal holds.
 
 Both `check:store` and the others accept `DB_PATH` and `STORE_DIR`, so a backup

@@ -29,7 +29,10 @@ mail credentials. Three values matter:
 | Key | What it is |
 |---|---|
 | `JWT_SECRET` | Signs every session. **The server refuses to start without it** — deliberately, because a fallback secret in the repo is not a secret. |
-| `PORT` | Where the backend listens. Default 5000. |
+| `PORT` | Which port the backend listens on. Default 5000. |
+| `BIND` | **Which address** it listens on. Default **127.0.0.1**, which is loopback: only this machine can reach it. Behind a proxy that is right; on a network without one, nothing else can reach the portal either. `0.0.0.0` is every interface — readable by anyone who can route to the machine, over plain HTTP — and is not the default for that reason. |
+| `PUBLIC_URL` | **How the portal is addressed** — the address a browser and Google's OAuth callback use. Not the bind address: in production it is `https://lowexpectations.zone` while the socket sits on `127.0.0.1:5000`. |
+| `SERVER_URL` | Where the **development** frontend proxies `/api` — the backend's own address. Default `http://127.0.0.1:5000`. Use `127.0.0.1`, not `localhost`: the backend binds IPv4 loopback, and `localhost` can resolve to `::1` first. |
 | `VITE_PORT` | Where the dev frontend listens. Default 5173. |
 
 Mail is optional. With no SMTP settings the portal behaves exactly as it did
@@ -51,6 +54,12 @@ npm run build
 npm run start:backend
 ```
 
+The backend listens on **127.0.0.1** by default, which means *only this machine*
+can reach it. Something has to sit in front — a reverse proxy on 443 terminating
+TLS and forwarding to `127.0.0.1:5000` — which is where TLS, rate limiting and
+"admin routes only from the studio" belong. That is deliberate: the application
+should not be the process facing the network. `npm run check:bind` proves it.
+
 The build matters. Several pages are generated rather than committed, so
 running the backend without building first serves a site with pages missing.
 
@@ -70,10 +79,10 @@ content that is not there. Nothing else on disk is worth keeping.
 
 ## Keeping it healthy
 
-Ten checks, safe against a running server, and one command to run them all:
+Eleven checks, safe against a running server, and one command to run them all:
 
 ```bash
-npm run check            # all ten, stopping at the first failure
+npm run check            # all eleven, stopping at the first failure
 ```
 
 | Check | What it proves |
@@ -88,11 +97,14 @@ npm run check            # all ten, stopping at the first failure
 | `check:approval` | submit, lock, approve, reject and unlock behave |
 | `check:upload-pending` | an asset under review refuses changes |
 | `check:round-trip` | a version downloads as approved and imports back as references |
+| `check:bind` | the server starts, and listens on loopback only |
 
-**Four of them start the real routes against a throwaway database and
+**Five of them start the real code against a throwaway database and
 directories** — they never touch the live data, but they do need `JWT_SECRET`
-and a free local port. `check:collector` runs the cleanup code the same way,
-without a server. The rest read only.
+and a free local port. `check:collector` runs the cleanup code without a
+server; `check:bind` starts the whole backend as a child process, which is also
+the only thing that notices the server failing to boot at all. The rest read
+only.
 
 Run them after a migration and before a backup. `check:store` is the one to
 trust when something looks wrong — it re-hashes every stored file and will tell

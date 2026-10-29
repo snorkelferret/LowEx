@@ -37,7 +37,9 @@ export default defineConfig(({ mode }) => {
       port: parseInt(env.VITE_PORT || '5173', 10),
       proxy: {
         '/api': {
-          target: env.SERVER_URL,
+          // 127.0.0.1 rather than localhost: the backend binds IPv4 loopback
+          // and `localhost` can resolve to ::1 first — see .env.example.
+          target: env.SERVER_URL || 'http://127.0.0.1:5000',
           changeOrigin: true,
         },
       },

@@ -11683,3 +11683,81 @@ no upside. If something seems to need one of them, ask.
       passed. It passed for the right reason — the content really was
       unchanged — but with no evidence, which is the one thing the receipt
       exists to provide (E1).
+
+98) THE LOOPBACK BIND, AND TWO THINGS THAT WERE WEARING ONE NAME. 2026-10-29.
+    ============================================================
+
+    TODO 44, DECIDED 2026-10-05 AND BUILT TODAY. `app.listen(PORT)` had no host
+    argument, so the portal listened on EVERY INTERFACE — `ss` showed `*:5000`,
+    plain HTTP, reachable from the network around whatever proxy was meant to
+    be in front. Meanwhile `.env` carried `HOST=localhost`, which looked like a
+    restriction and was used for exactly one thing: the OAuth callback URL.
+
+    --- THE TRAP, WHICH IS WHY THIS WAS NOT A ONE-ARGUMENT CHANGE ---
+
+    THE BIND ADDRESS AND THE PUBLIC ADDRESS ARE DIFFERENT THINGS WEARING THE
+    SAME NAME.
+
+        bind     where the listening socket is attached — 127.0.0.1
+        public   how a browser and Google reach the portal —
+                 https://lowexpectations.zone in production
+
+    Binding with HOST would have made the OAuth callback
+    `127.0.0.1:5000/...`, which Google can never reach. Leaving HOST as it was
+    made the callback `localhost:5000`, which Google also cannot reach in
+    production. One of the two was wrong whatever was done with it.
+
+    So there are three values now:
+
+        BIND        default 127.0.0.1 — loopback only
+        PUBLIC_URL  default http://localhost:${PORT} — the OAuth callback base
+        HOST        RETIRED. Nothing reads it. A stale value in .env is inert.
+
+    THE OAUTH CALLBACK IS BUILT FROM PUBLIC_URL, so the two can no longer be
+    confused for one another.
+
+    --- AND THE IPv6 TRAP, FOUND BY RUNNING IT ---
+
+    THIS MACHINE RESOLVES `localhost` TO ::1, AND THE SERVER BINDS 127.0.0.1.
+    The moment the bind changed, the development proxy could no longer reach
+    the backend: vite.config.mjs proxied /api to `env.SERVER_URL`, which was
+    `http://localhost:5000` — IPv6 loopback — and nothing was listening there.
+
+    Fixed in three places, all of them the same lesson p4d taught last week:
+
+      * .env and .env.example: SERVER_URL=http://127.0.0.1:5000, with the reason
+        beside it. SERVER_URL had been dropped from the template while the
+        config still read it; it is back.
+      * vite.config.mjs: the proxy falls back to 127.0.0.1:5000 rather than
+        leaving `undefined` when the variable is absent.
+      * the manual's .env table says why.
+
+    --- THE CHECK ---
+
+    scripts/check-bind.js, the first check that starts the WHOLE backend (a
+    child process on a throwaway database and an OS-chosen port, with BIND
+    REMOVED from its environment so the default is what is tested). It proves:
+
+      * the server starts at all — nothing else in the suite would notice a
+        boot failure
+      * it answers on 127.0.0.1
+      * its own startup line names 127.0.0.1 as the bind
+      * and, WHEN THE MACHINE HAS A NON-LOOPBACK IPv4, that address is refused
+
+    That last one ran here: 10.1.1.34:port refuses. Where a machine has no
+    other address, the check says it skipped that half and relies on the
+    startup line.
+
+    PROVED IT CAN FAIL: the default bind changed to 0.0.0.0 produced exactly
+    two failures — the startup line, and the LAN address answering.
+
+    --- WHAT IT DOES NOT DO ---
+
+      * it does not put a proxy in front. Nothing faces 443 yet; DEPLOY §3 is
+        still the place that says so.
+      * it does not firewall anything. The loopback bind is the control; a
+        firewall rule is defence in depth, not a substitute.
+      * BIND=0.0.0.0 IS STILL POSSIBLE, deliberately — a proxy on another
+        machine needs it, and then the firewall is the control. It is just no
+        longer the default, and check:bind would fail on a machine configured
+        that way, which is the right moment to have the conversation.
