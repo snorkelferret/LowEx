@@ -6151,7 +6151,14 @@ no upside. If something seems to need one of them, ask.
          the "accounts not accounted for" check for exactly this reason (it now
          needs a counterpart list from Perforce). SEE ALSO item 42.
 
-      4. AND THE HUMAN WORKFLOW IN BETWEEN, WHICH IS THE REAL ANSWER:
+      4. (ADDED 2026-10-29) A POST-COMMIT NOTIFICATION. The portal is TOLD about
+         every submit — changelist, user, stream, files — so it can record the
+         candidate and match it to an approved version. NOT a gate: the
+         pre-commit trigger was declined because task streams and protections
+         already make a bypass impossible, and a pre-commit trigger would stop
+         the studio working whenever the portal was down. See item 88 §15.
+
+      5. AND THE HUMAN WORKFLOW IN BETWEEN, WHICH IS THE REAL ANSWER:
 
             Blender -> portal workspace -> tech check -> creative approval
                                                             |
@@ -10797,3 +10804,69 @@ no upside. If something seems to need one of them, ask.
     EACH STEP IS TAKEN WHEN THE ONE BEFORE IT IS COMPLAINED ABOUT. The known
     mistake in both directions is picking the cheap one where an edge is needed,
     or standing up an edge for five people.
+
+    ============================================================
+    15. HOW THE PORTAL LEARNS ABOUT A SUBMIT — CHANGE-COMMIT ONLY
+    ============================================================
+
+    DECIDED 2026-10-29. THE PORTAL IS NOTIFIED. IT DOES NOT GATE.
+
+    PERFORCE CAN RUN A SCRIPT ON SUBMIT, IN TWO PLACES, AND THEY ARE NOT THE
+    SAME DECISION:
+
+        change-submit   BEFORE the commit.  CAN REJECT ONE.  -> NOT USED
+        change-commit   AFTER the commit.   CANNOT UNDO.     -> THE ONE
+
+    SO THE PORTAL RECEIVES, ON EVERY SUBMIT:
+
+        { changelist, user, stream, files[], time }
+
+    --- AND THE PRE-COMMIT GATE IS DECLINED, DELIBERATELY, FOR TWO REASONS ---
+
+      1. IT WOULD BE REDUNDANT. With task streams (§3), a developer has write
+         on their own stream and READ ONLY on main. THERE IS NO BYPASS TO GATE,
+         because a developer never had write to the game in the first place.
+         The wall is Perforce's protections, not a script.
+
+      2. IT WOULD MAKE THE PORTAL AN AVAILABILITY DEPENDENCY. A pre-commit
+         trigger that fails or hangs stops the whole studio from submitting. A
+         POST-commit one loses an event when the portal is down and nothing
+         else — the difference between a nuisance and an outage.
+
+      SO "WHAT STOPS A BYPASS" IS ANSWERED BY §6's PROTECTIONS AND BY NOTHING
+      ELSE. This section does not add a second answer; it adds a RECORD.
+
+    --- WHAT THE NOTIFICATION BUYS ---
+
+      * THE CANDIDATE. "Val submitted changelist 15407 to task-val-1847" is the
+        first half of item 60's candidate build; the build machine is the
+        second, and neither is enough alone.
+
+      * A MATCH TO THE APPROVED ASSET. The trigger gives FILE PATHS; the portal
+        knows which approved version holds those paths, so it can say "this is
+        TestUpload v2 being tested" rather than listing files nobody recognises.
+
+      * A VIEW OF MAIN. Submits to main are notified too, so an integrator's
+        act is visible — and a bypass WOULD show up here as a changelist to
+        main with no approval behind it. NOT PREVENTED, BUT SEEN, which is what
+        a record is for.
+
+    --- AND IT AMENDS ITEM 67, WHICH SAID THEY BARELY NEED TO TALK ---
+
+      THIS IS A FIFTH TOUCHPOINT, and narrower than it sounds: the portal never
+      moves bytes and never asks Perforce for a file. It is TOLD that something
+      happened. THE COUPLING RUNS ONE WAY AND CANNOT STOP A SUBMIT, which is why
+      it does not contradict the "barely need to talk" rule — it obeys it.
+
+    --- NOT BUILT, AND WHAT IT NEEDS ---
+
+        [ ] A POST ENDPOINT on the portal to receive a submit. AUTHENTICATED
+            WITH A CREDENTIAL THAT CAN DO ONLY THIS — write notification rows,
+            not an admin account. The trigger runs on the Perforce server; a
+            token with admin rights sitting in a trigger script is the same
+            mistake as a password in a shell history.
+        [ ] THE TRIGGER SCRIPT itself, installed on the server.
+        [ ] A RECORD OF THE LAST CHANGELIST SEEN, so a missed event — portal
+            down, trigger failed — is VISIBLE rather than silently swallowed.
+            A notification system with no cursor cannot tell "nothing happened"
+            from "nothing was delivered".
