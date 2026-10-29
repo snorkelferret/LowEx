@@ -11087,3 +11087,91 @@ no upside. If something seems to need one of them, ask.
          fixed. Its status line, §1 B, §3 C, §6 Q2/Q3 and §7 carry the preview
          state; `docs/SPEC.md` §7 and §13 carry it for the living spec; manual
          pages 40, 45 and 50 carry what a reader sees.
+
+90) THE COLLECTOR HAD NO TEST, AND HAD A BUG. BUILT 2026-10-29.
+    ============================================================
+
+    ASKED FOR while listing the holes in the process: every check we have is
+    static — schema drift, route order, DOM ids, naming, store integrity — and
+    NONE of them runs the portal. The collector is the one thing in the system
+    that destroys content, and the only proof it worked was a throwaway script
+    in /tmp, written the same morning to confirm that previews are collected
+    with their blob.
+
+    --- WHAT WAS BUILT ---
+
+      * backend/lib/collector.js. The collector moved out of the job, with its
+        dependencies as arguments: db, blobPath, thumbPath, say. The job passes
+        the real ones; the check passes a throwaway database and two throwaway
+        directories. Same code, same statements, same ordering.
+
+        THIS IS THE ARRANGEMENT storeIntegrity ALREADY HAS with check:store,
+        and for the same reason: two implementations of "what is garbage" would
+        eventually disagree, and the one that agreed with itself would be
+        whichever ran last.
+
+      * scripts/check-collector.js, and `npm run check:collector`. It copies
+        the schema from the LIVE database's sqlite_master into an IN-MEMORY
+        database — so it cannot drift from the real schema, and cannot write to
+        it — then plants:
+
+            garbage               unreferenced, old              -> goes
+            held                  an active library item       -> survives
+            released              is_active = 0, old            -> goes
+            young                 inside the grace window       -> survives
+            malformed key         not a SHA-256                 -> refused, reported
+            garbage's preview     a file_thumbnails row         -> goes with it
+
+        Seventeen assertions, including that a report-only run changes nothing
+        and a second run removes nothing.
+
+      * `npm run check` — all six, stopping at the first failure. There was no
+        aggregate command, so "run the checks" was six commands somebody had to
+        remember.
+
+    --- IT FOUND A BUG THE SAME MINUTE IT RAN ---
+
+      THE COLLECTOR COULD NOT COLLECT A BLOB RELEASED FROM THE LIBRARY. The
+      documented rule (see the query's comment) is that a soft-deleted library
+      item does NOT protect its blob: removing something from the library is
+      the act of releasing it. The query implements that — `is_active = 1`.
+
+      BUT THE ROW STAYS, and library_items.stored_file_id is NOT NULL with a
+      foreign key that is not cascaded. So DELETE FROM stored_files hit a
+      constraint error, the transaction rolled back, and THE WHOLE DAILY JOB
+      THREW. Not one blob: every collection from then on, until somebody read
+      a log nobody reads.
+
+      THE RULE AS WRITTEN WAS ALSO IMPOSSIBLE. "The row survives to say it was
+      there" cannot hold once the blob is gone: the row would point at a
+      stored_files ID that no longer exists, and every JOIN through
+      library_items would be one dangling reference. So the collector now
+      deletes the RELEASED row before the blob's row, scoped to
+      `is_active = 0` — an active item can never be removed by the same
+      statement — and the comment says the rule that is actually true.
+
+      NOTHING IN PRODUCTION HAD TRIGGERED IT: the library is empty and no blob
+      has ever been released. It would have triggered on the first one.
+
+    --- AND ONE MORE, FOUND WRITING THE FIXTURE AND NOT FIXED ---
+
+      library_items.content_state is `NOT NULL DEFAULT 'unverified'`, and its
+      own CHECK allows only 'confirmed', 'contradicted', 'unverifiable'. The
+      DEFAULT IS UNREACHABLE AND WRONG: any insert that omits the column fails.
+      routes/library.js always supplies it, which is why nobody has noticed.
+
+      NOT FIXED HERE, because the repair is a table rebuild (SQLite cannot
+      change a DEFAULT in place) and that deserves its own change with its own
+      test, not a line slipped into this one. The check supplies content_state
+      explicitly and says why. THE FIX IS ONE WORD — 'unverifiable' — plus the
+      rebuild migration.
+
+    --- WHAT IT DOES NOT COVER ---
+
+      * the purge (backend/lib/wastebin.js) — the other half of the job, and
+        the other thing that deletes rows
+      * HTTP BEHAVIOUR ANYWHERE. The routes still have no tests; the preview
+        route's five answers were verified by hand and are not guarded.
+      * the audit record written by each run — asserted nowhere
+
+      Those are the next three, in that order.

@@ -105,10 +105,19 @@ npm run check:routes     # no route is shadowed by a catch-all
 npm run check:schema     # the database matches the schema in code
 npm run check:naming     # the shared rules do what they say
 npm run check:dom        # every element the client looks for exists
+npm run check:collector  # the nightly cleanup removes garbage and nothing else
+
+npm run check            # all of the above, stopping at the first failure
 ```
 
 `check:store` reads only, so it is safe against a running server. It is the one
 to run before a backup and after anything that looks wrong.
+
+**`check:collector` is the only one that runs the thing it tests.** It builds a
+throwaway database from the live schema, fills it with a blob nothing
+references, one the library holds, one released from the library and one inside
+the grace window, then runs the collector and checks what survived. It never
+writes to the real database, the real files or the real previews.
 
 Both `check:store` and the others accept `DB_PATH` and `STORE_DIR`, so a backup
 can be checked without touching the live one:

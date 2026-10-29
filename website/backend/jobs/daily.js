@@ -34,8 +34,6 @@
  * boring about that.
  */
 
-const fs = require('fs');
-
 const db = require('../db');
 const audit = require('../lib/audit');
 const { findProblems } = require('../lib/storeIntegrity');
@@ -48,6 +46,8 @@ const { retentionDays } = require('../lib/retention');
 // is the only thing in the system that deletes content, so it is the last place
 // that should be deriving the path for itself.
 const { BLOB_DIR: STORE_DIR, blobPath, thumbPath } = require('../lib/storagePaths');
+// The collector itself — shared with the check, see the note over section 2.
+const { createCollector } = require('../lib/collector');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const COLLECT = process.argv.includes('--collect');
@@ -140,184 +140,26 @@ function runPurge() {
 // ============================================================
 // 2. The collector
 // ============================================================
+//
+// THE CODE IS IN backend/lib/collector.js, and that is for the check's sake as
+// much as the job's: a check can only test what a throwaway database can be
+// pointed at. Everything below this line in the original — what counts as
+// garbage, the files-first ordering, why previews do not protect a blob — moved
+// there with it.
+//
+// The paths are the REAL ones. The check passes its own, which is the only
+// difference between the two callers.
 
-// A stored file is garbage when NO table points at it. ALL THREE are checked:
-// a workspace can reference content the store has never seen, the store can
-// reference content no workspace holds any more, and the LIBRARY holds content
-// that is in neither — the overlap is exactly where the interesting cases live.
-//
-// ============================================================
-// THE LIBRARY CLAUSE IS NOT OPTIONAL, AND ITS ABSENCE IS SILENT
-// ============================================================
-//
-// library_items is the THIRD referencer of stored_files. Before it existed, this
-// query was complete. With it, a missing clause here means EVERY LIBRARY BLOB
-// becomes collectable the moment it ages past the grace window — the library
-// empties itself on a schedule, with no error, and the first symptom is a page
-// of broken thumbnails and a store that has "lost" files nobody deleted.
-//
-// SO IF A FOURTH REFERENCER EVER APPEARS, IT BELONGS IN THIS LIST, and the same
-// is true of the quota exclusion in backend/lib/workspaceUsage.js. Those two are
-// the only places that enumerate what may reference a blob.
-//
-// A SOFT-DELETED LIBRARY ITEM DOES NOT PROTECT ITS BLOB. Removing something from
-// the library is the act of releasing it, so `is_active = 1` is deliberate: the
-// row survives to say it was there, and the blob is freed when nothing else
-// holds it.
-//
-// FILE_THUMBNAILS IS THE FIRST REFERENCER THAT DOES NOT BELONG IN THE LIST
-// ABOVE. A preview is produced FROM a blob — derived content, named from its
-// hash — so it does not keep the blob alive, and a preview row must never stop
-// a blob being collected. What it does mean is that the collector has to clear
-// the rows and the preview files itself, because they are not cascaded: see
-// removePreviews() and the delete below.
-const unreferenced = db.prepare(`
-    SELECT id, storage_key, file_size, created_at
-    FROM stored_files sf
-    WHERE sf.created_at <= datetime('now', '-' || ? || ' hours')
-      AND NOT EXISTS (
-          SELECT 1 FROM workspace_version_files WHERE stored_file_id = sf.id
-      )
-      AND NOT EXISTS (
-          SELECT 1 FROM asset_version_files WHERE stored_file_id = sf.id
-      )
-      AND NOT EXISTS (
-          SELECT 1 FROM library_items
-          WHERE stored_file_id = sf.id
-            AND is_active = 1
-      )
-    ORDER BY sf.id
-    LIMIT ?
-`);
-
-const previewKindsFor = db.prepare(
-    'SELECT kind FROM file_thumbnails WHERE stored_file_id = ?'
-);
-
-// THE PREVIEWS GO WHEN THE BLOB GOES.
-//
-// They are derived content and their names are derived from the hash, so once
-// the blob has been collected nothing can reach them again — leaving them would
-// be a slow leak of files nothing will ever ask for. ENOENT is fine here for the
-// same reason it is fine for a blob: the file may already be gone, and the row
-// is what this call is clearing the way for.
-function removePreviews(storageKey, storedFileId) {
-    for (const { kind } of previewKindsFor.all(storedFileId)) {
-        const preview = thumbPath(storageKey, kind);
-
-        if (!preview) continue;
-
-        try {
-            fs.unlinkSync(preview);
-        } catch (err) {
-            if (err.code !== 'ENOENT') {
-                say(`  collector : could not remove preview ${preview}: ${err.message}`);
-            }
-        }
-    }
-}
+const collector = createCollector({ db, blobPath, thumbPath, say });
 
 function runCollector(sound) {
-    const garbage = unreferenced.all(GRACE_HOURS, COLLECT_LIMIT);
-
-    if (garbage.length === 0) {
-        say('  collector : nothing to collect');
-        return { blobs: 0, bytes: 0 };
-    }
-
-    const bytes = garbage.reduce((total, row) => total + (row.file_size || 0), 0);
-
-    // Not enabled, or the store is not sound: report and stop.
-    if (!COLLECT || DRY_RUN || !sound) {
-        const why = DRY_RUN ? 'dry run'
-            : !COLLECT ? 'report only — pass --collect to remove'
-            : 'store is not sound';
-
-        say(`  collector : would remove ${garbage.length} blob(s), ${bytes} bytes (${why})`);
-
-        for (const row of garbage.slice(0, 10)) {
-            say(`              ${row.storage_key} (${row.file_size} bytes, written ${row.created_at})`);
-        }
-
-        if (garbage.length > 10) {
-            say(`              ... and ${garbage.length - 10} more`);
-        }
-
-        return { blobs: 0, bytes: 0, wouldRemove: garbage.length };
-    }
-
-    // FILES FIRST, ROWS SECOND, and the order is deliberate.
-    //
-    // Unlinking first means a failure leaves the row intact — a blob that is
-    // still referenced and still present, which is the consistent state. Doing
-    // it the other way round and failing in between would leave a ROW WITH NO
-    // FILE, which is worse than an orphan: it is a download that fails, and
-    // every reference to it is broken.
-    let removed = 0;
-    let freed = 0;
-    const gone = [];
-
-    for (const row of garbage) {
-        // blobPath() returns null for a key that is not a plain SHA-256. There
-        // should never be one — the collector refuses to run on a store that
-        // fails its integrity check, which reports a malformed key as fatal —
-        // but this is the line that destroys data, and a null here means
-        // "nothing to delete" rather than a path built from a bad string.
-        const blob = blobPath(row.storage_key);
-
-        if (!blob) {
-            say(`  collector : REFUSING malformed storage_key ${row.storage_key}`);
-            continue;
-        }
-
-        try {
-            fs.unlinkSync(blob);
-        } catch (err) {
-            if (err.code !== 'ENOENT') {
-                say(`  collector : could not remove ${row.storage_key}: ${err.message}`);
-                continue;
-            }
-            // ENOENT is fine — the blob was already gone, and the row is stale.
-        }
-
-        removePreviews(row.storage_key, row.id);
-
-        gone.push(row);
-        removed++;
-        freed += row.file_size || 0;
-    }
-
-    if (gone.length) {
-        db.transaction(() => {
-            const drop = db.prepare('DELETE FROM stored_files WHERE id = ?');
-            const dropReferences = db.prepare(
-                'DELETE FROM asset_version_files WHERE stored_file_id = ?'
-            );
-            // The FK to stored_files is not cascaded, on purpose: nothing in the
-            // schema may quietly destroy a row. file_thumbnails is derived, so
-            // its rows go here, before the blob's row can be refused.
-            const dropPreviews = db.prepare(
-                'DELETE FROM file_thumbnails WHERE stored_file_id = ?'
-            );
-
-            for (const row of gone) {
-                // Belt and braces. The query above proved nothing referenced
-                // these, but a reference added between then and now would
-                // otherwise be silently orphaned by the delete below.
-                dropReferences.run(row.id);
-                dropPreviews.run(row.id);
-                drop.run(row.id);
-            }
-        })();
-    }
-
-    say(`  collector : removed ${removed} blob(s), ${freed} bytes freed`);
-
-    if (garbage.length === COLLECT_LIMIT) {
-        say(`              hit the ${COLLECT_LIMIT} limit — more is due, run again`);
-    }
-
-    return { blobs: removed, bytes: freed };
+    return collector.collect({
+        graceHours: GRACE_HOURS,
+        limit: COLLECT_LIMIT,
+        dryRun: DRY_RUN,
+        remove: COLLECT,
+        sound
+    });
 }
 
 

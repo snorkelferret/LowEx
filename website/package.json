@@ -10,6 +10,8 @@
     "check:naming": "node scripts/check-naming.js",
     "check:dom": "node scripts/check-dom-ids.js",
     "check:store": "node scripts/check-store.js",
+    "check:collector": "node scripts/check-collector.js",
+    "check": "npm run check:routes && npm run check:schema && npm run check:naming && npm run check:dom && npm run check:store && npm run check:collector",
     "predev": "npm run generate:pages && npm run generate:manual",
     "prebuild": "npm run generate:pages && npm run generate:manual",
     "build": "vite build",
