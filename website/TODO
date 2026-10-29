@@ -1073,6 +1073,11 @@ They MUST be dealt with before any real user data exists.
      - no archive download. A single zip is a convenience for someone without a
        working copy; deliberately not built yet (see docs/assettypes01 layer B
        for why a manifest-and-per-file shape was chosen first).
+
+       CORRECTED 2026-10-29: BUILT 2026-10-15 (commit c275ca4).
+       POST /:assetId/versions/:versionId/archive builds the zip from the
+       version's own rows and is given only the hashes the developer does not
+       already have. See item 79's correction for what the download is now.
      - GAME-SPACE READ — DEFERRED BY DECISION, bundled with building the game.
        See the dedicated entry below; it is deliberately not being built yet.
 
@@ -2282,6 +2287,28 @@ They MUST be dealt with before any real user data exists.
 
     There is also a "Game store" stub, which is item 25 — browsing what is
     already approved rather than re-uploading it.
+
+    ============================================================
+    CORRECTED 2026-10-29 — ALL OF THE ABOVE IS NOW BUILT.
+    ============================================================
+
+    Kept rather than rewritten, because "the download is a stub" is what
+    somebody reading the archive will find, and a record that is quietly
+    edited is one nobody can date.
+
+      * THE DOWNLOAD WORKS. The dashboard's Download entry opens a real flow
+        (frontend/src/storeDownload.js); nothing reports itself as not built.
+      * THE MANIFEST IS CALLED. storeDownload.js:228 fetches it — the sentence
+        above, "has never been called by anything", stopped being true when
+        this was written.
+      * THE ZIP IS POST .../archive (commit c275ca4, 2026-10-15): the hashes
+        the developer already has are read from their folder IN THE BROWSER,
+        and only the rest are fetched.
+      * THE GAME STORE TAB EXISTS (frontend/src/developerStore.js): approved
+        content is browsable, downloadable and importable.
+
+    WHAT THE PREDICTION GOT RIGHT: a per-file download was not the answer, and
+    a manifest plus a selective archive was.
 
     AND THE PER-VERSION FILE RECORD IS NOT THERE YET, because nothing drops
     file rows yet. When files are dropped, the history should show what was
@@ -11004,3 +11031,59 @@ no upside. If something seems to need one of them, ask.
       * NOT EVERYWHERE YET. The library has had thumbnails since it was built;
         the prod queue has them now. The game store, the developer's own
         versions and the admin views still show filenames only.
+
+    --- ADDED THE SAME DAY, AFTER CHECKING THE DOCS AGAINST THE CODE ---
+
+      1. A FORMAT FALLBACK, BECAUSE THE FIRST VERSION WAS NOT AS TRUE AS ITS
+         DOCUMENTS. sharp cannot decode everything `assetTypeOf()` calls an
+         Image: TGA and EXR are ordinary texture and render formats in game
+         art, and this libvips reads neither. So the manual said "images show a
+         thumbnail" and, for a TGA, that was false. The image branch now falls
+         back to the ffmpeg frame path — one still, no seek, because `-ss`
+         before `-i` discards an image demuxer's only frame — and then the same
+         resize. TGA and EXR verified: 64x64 WebP, 902 and 908 bytes.
+
+      2. ITEM 35 WAS CROSSED, DELIBERATELY, AND THAT DESERVES THE RECORD.
+         Item 35 — "NOTHING UPLOADED EVER RUNS" — names the risk exactly:
+
+             "NO SERVER-SIDE CONVERSION. A thumbnailer, a video transcoder, an
+              archive extractor: each one opens a file we did not write with a
+              parser we did not write. That is the definition of the risk this
+              rule exists to prevent, and it deserves its own decision rather
+              than being added as a convenience."
+
+         THIS IS THAT DECISION. libvips and ffmpeg are parsing developer
+         content, which is the thing the rule warns about, and it was taken
+         because the owner asked for previews — an approver who cannot see the
+         work is not approving it.
+
+         WHAT MAKES IT DEFENSIBLE, and none of these is a proof:
+
+           * THE BROWSER NEVER RECEIVES THE DEVELOPER'S BYTES. It receives a
+             WebP we encoded, always, with `image/webp` and `nosniff`. The rule
+             against rendering developer-supplied SVG or HTML inline is not
+             weakened, because nothing of theirs is ever served back.
+           * FFMPEG RUNS WITH A 15-SECOND TIMEOUT and a 64 MB output cap, so a
+             malformed container cannot wedge an upload.
+           * sharp's default input-pixel limit refuses decompression bombs.
+           * A PREVIEW IS OUTSIDE THE TRANSACTION AND NEVER FAILS AN UPLOAD.
+
+         WHAT IT DOES NOT HAVE, and should be said before somebody assumes it:
+
+           * no process sandbox — both run in the server's process (ffmpeg as a
+             child, sharp inside libvips) with the server's privileges
+           * no memory ceiling beyond the pixel limit, so a very large EXR is a
+             large allocation
+           * no fuzzing, no corpus, and no independent review of the decoders
+
+         IF THE PORTAL EVER TAKES UPLOADS FROM PEOPLE OUTSIDE THE STUDIO, THIS
+         DECISION SHOULD BE REOPENED. On five trusted artists' machines it is a
+         calculated risk; on the open internet it is item 35's example.
+
+      3. THE DOCUMENTS THAT SAID IT WAS NOT BUILT NOW SAY IT IS — and the pass
+         found one more stale claim next to them, in `docs/assettypes01` §4:
+         "EVERY upload creates a new version". That stopped being true on
+         2026-10-23 (A5/A10) and the row was still arguing for the fix. Marked
+         fixed. Its status line, §1 B, §3 C, §6 Q2/Q3 and §7 carry the preview
+         state; `docs/SPEC.md` §7 and §13 carry it for the living spec; manual
+         pages 40, 45 and 50 carry what a reader sees.

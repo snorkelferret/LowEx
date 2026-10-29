@@ -333,6 +333,12 @@ of a model needs a renderer and none is connected, so `model_preview` exists in
 the schema and is never produced. A version without one is still judged from
 what was submitted, by whom, and what they said.
 
+Images are decoded by `sharp` — JPEG, PNG, WebP, TIFF, GIF, AVIF — **falling
+back to `ffmpeg` for the formats libvips does not read**, TGA and EXR among
+them, which are ordinary texture and render formats in game art. That fallback
+is the same frame path the video posters use, not a second preview system. What
+neither can read gets no preview and no error.
+
 **A preview is derived content, not store content.** It is made from the blob
 and written outside the store (`THUMB_DIR`), gets no `stored_files` row, is
 counted against no quota, and is never collected as authored work; deleting
@@ -483,10 +489,11 @@ portal role does not carry over.
 
 ## 13. Specified and not built
 
-*State: DEFERRED — specified and unbuilt, except two that are now built: the manifest hash (§4) and the receipt's asset half (§5)*
+*State: DEFERRED — specified and unbuilt, except three that are now built: the manifest hash (§4), the receipt's asset half (§5) and image/video previews (§7)*
 
 | | |
 |---|---|
+| previews of models and scene files | images and video are built (§7); a picture of a model needs a renderer, and none is connected |
 | permissions, licences, commercial-use provenance | nothing at all; a Steam release needs the right to use an asset |
 | game builds, branches, official builds | nothing |
 | the test receipt protocol | **asset half BUILT** (§5); the game-build half waits on builds (§8) |

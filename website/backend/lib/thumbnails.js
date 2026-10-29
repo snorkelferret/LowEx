@@ -97,20 +97,32 @@ async function makePreview(sourcePath, storageKey, kind) {
     if (!destination) return null;
 
     if (kind === 'image') {
-        // `rotate()` with no argument applies EXIF orientation, so a photograph
-        // taken sideways appears the right way up. `failOn: 'none'` lets a
-        // slightly damaged file yield a picture rather than throwing — for a
-        // thumbnail that is the right trade.
-        const info = await sharp(sourcePath, { failOn: 'none' })
-            .rotate()
-            .resize(THUMB_SIZE, THUMB_SIZE, {
-                fit: 'inside',
-                withoutEnlargement: true
-            })
-            .webp({ quality: 80 })
-            .toFile(destination);
+        try {
+            return await toWebp(sourcePath, destination, kind);
 
-        return { kind, createdPath: destination, width: info.width, height: info.height };
+        } catch (err) {
+            // SHARP CANNOT DECODE EVERY IMAGE THE SYSTEM CALLS AN IMAGE. TGA and
+            // EXR are ordinary texture and render formats in game art, and this
+            // build of libvips reads neither — so the first attempt would throw
+            // and the artist would get no picture for the most common kinds of
+            // file they send.
+            //
+            // FFMPEG CAN READ BOTH, and the frame path the videos already use
+            // is exactly the right tool: one still decoded to PNG, then the
+            // same resize. The fallback is not a second preview system; it is
+            // the same one, reaching the formats sharp cannot.
+            // A STILL HAS NO SECOND TO SEEK TO: `-ss` before `-i` makes ffmpeg
+            // discard the only frame an image demuxer has, so the fallback asks
+            // for the picture without a seek. A video is a different question
+            // and keeps the 1s-then-0s rule below.
+            const frame = await firstFrame(sourcePath, [null]);
+
+            // Nothing read it. Throw the ORIGINAL error rather than returning
+            // null, so the caller logs the format that actually failed.
+            if (!frame) throw err;
+
+            return await toWebp(frame, destination, kind);
+        }
     }
 
     if (kind === 'video_frame') {
@@ -118,21 +130,33 @@ async function makePreview(sourcePath, storageKey, kind) {
 
         if (!frame) return null;
 
-        // SHARP DOES THE RESIZING FOR BOTH KINDS, so an image preview and a
-        // video poster are the same format, the same size and the same code
-        // path from here down.
-        const info = await sharp(frame, { failOn: 'none' })
-            .resize(THUMB_SIZE, THUMB_SIZE, {
-                fit: 'inside',
-                withoutEnlargement: true
-            })
-            .webp({ quality: 80 })
-            .toFile(destination);
-
-        return { kind, createdPath: destination, width: info.width, height: info.height };
+        return await toWebp(frame, destination, kind);
     }
 
     return null;
+}
+
+/**
+ * The one place a picture is resized, encoded and written.
+ *
+ * BOTH KINDS GO THROUGH HERE, so an image preview and a video poster are the
+ * same format, the same size and the same code path. `rotate()` with no
+ * argument applies EXIF orientation, so a photograph taken sideways appears the
+ * right way up, and does nothing to a buffer that has no EXIF — which is every
+ * frame ffmpeg hands over. `failOn: 'none'` lets a slightly damaged file yield
+ * a picture rather than throwing; for a thumbnail that is the right trade.
+ */
+async function toWebp(input, destination, kind) {
+    const info = await sharp(input, { failOn: 'none' })
+        .rotate()
+        .resize(THUMB_SIZE, THUMB_SIZE, {
+            fit: 'inside',
+            withoutEnlargement: true
+        })
+        .webp({ quality: 80 })
+        .toFile(destination);
+
+    return { kind, createdPath: destination, width: info.width, height: info.height };
 }
 
 /**
@@ -142,22 +166,38 @@ async function makePreview(sourcePath, storageKey, kind) {
  * a slate, or the encoder's first keyframe. Falling back to the very start
  * covers clips shorter than that, which would otherwise have no frame at or
  * after one second and produce nothing.
+ *
+ * `offsets` also serves the still-image fallback in makePreview(), which passes
+ * [null] — no seek at all. `-ss` placed before `-i` drops a still's only frame,
+ * so a seek is wrong for anything that is not a moving picture.
  */
-async function firstFrame(sourcePath) {
-    for (const offset of ['1', '0']) {
+async function firstFrame(sourcePath, offsets = ['1', '0']) {
+    for (const offset of offsets) {
+        const seek = offset === null ? [] : ['-ss', offset];
+
         try {
             const { stdout } = await run(
                 'ffmpeg',
                 [
                     '-v', 'error',
-                    '-ss', offset,
+                    ...seek,
                     '-i', sourcePath,
                     '-frames:v', '1',
                     '-f', 'image2',
                     '-vcodec', 'png',
                     'pipe:1'
                 ],
-                { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 }
+                {
+                    encoding: 'buffer',
+                    maxBuffer: 64 * 1024 * 1024,
+                    // A TIME LIMIT, because this reads a file the studio did
+                    // not write. ffmpeg on a malformed container can loop for
+                    // as long as nobody stops it; the preview is worth ten
+                    // seconds and not a wedged upload. On timeout execFile
+                    // kills the child and rejects, which lands in the catch
+                    // below — no preview, and the upload is unaffected.
+                    timeout: 15000
+                }
             );
 
             if (stdout && stdout.length > 0) return stdout;

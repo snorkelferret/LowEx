@@ -124,6 +124,11 @@ administrator: approving work is a judgement about the work, and administration
 is a different job. A rejection carries a reason. If it is rejected the lock is
 released and you can work on it again.
 
+**The reviewer sees a thumbnail of every image and video in your submission**,
+and cannot open the files themselves. That is the whole of what they see, which
+is worth knowing when you choose what to send: for a model or a scene file
+there is no picture at all, so your note is the only description they have.
+
 **4. Approved.** Your version is moved into the game's asset store. The store
 holds the content; your workspace version keeps a pointer to it and is marked as
 being in the game store. **Ownership passes to the game at this point** — but you

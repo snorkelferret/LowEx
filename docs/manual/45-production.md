@@ -31,6 +31,11 @@ The list is the whole job. There is no separate "review" screen to open.
 **Images and videos show a thumbnail** under the asset name, taken from the
 submitted files. Click one to open it at full size in a new tab.
 
+That covers the formats the portal can decode, which includes the usual ones —
+JPEG, PNG, WebP, TIFF — and the texture and render formats artists actually
+send, TGA and EXR. A format this machine cannot read gets no thumbnail, and
+shows nothing rather than a broken picture.
+
 That is deliberate, and it is new. Production normally does not have Blender,
 Nuke or Unreal installed, so a download would be useless even where one is
 allowed. A reviewer who cannot see the work is not reviewing it.

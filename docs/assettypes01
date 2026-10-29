@@ -1,9 +1,9 @@
 ASSET TYPES, PREVIEW AND LOCAL DISTRIBUTION
 Design note — v0.1 — 2026-09-29
 Status: PARTLY BUILT — see the divergence table in section 4. The check set,
-the download and the library's image thumbnails exist; upload types, preview
-for game assets and format compliance do not. Decisions still open are marked
-in section 6.
+the download, and PREVIEW for images and video exist (library and approval
+queue, TODO 89); upload types, model preview and format compliance do not.
+Decisions still open are marked in section 6.
 
 ================================================================================
 1. WHAT THIS SECTION COVERS
@@ -21,13 +21,22 @@ Three related capabilities, raised together but separable:
   B. Preview — seeing the asset on the website, so an approver can judge it
      without downloading.
 
+     BUILT 2026-10-29 for IMAGES AND VIDEO (TODO 89): the approval queue and
+     the library show a 320px WebP, images through sharp and stills it cannot
+     read (TGA, EXR) through ffmpeg; a video's preview is a frame at 1s.
+     Nothing here yet for models — see section 5 C.
+
   C. Download to the approver's machine — where they have a working copy of
      the game in development, so they can review the asset in situ.
 
-The immediate driver: the approval workflow is now reachable (Phase 1) but
-still BLIND. An approver sees an asset name, a version note, a file list with
-sizes and hashes — and cannot look at the actual bytes. Reviewing a submission
-is currently an act of faith. See TODO item 6.
+The immediate driver: the approval workflow was reachable (Phase 1) but
+BLIND. An approver saw an asset name, a version note, a file list with sizes and
+hashes — and could not look at the actual bytes. Reviewing a submission was an
+act of faith. See TODO item 6.
+
+  CORRECTED 2026-10-29: no longer blind for images and video. The queue shows
+  a thumbnail of every one (TODO 89), scoped to the approval. It is still blind
+  for models and scene files, which is section 5 C's remaining work.
 
 ================================================================================
 2. THE SPEC ALREADY DESIGNS MOST OF THIS
@@ -170,10 +179,17 @@ That is a direct trade-off and needs an explicit decision, not a default.
   or the custom UE Python plugin               GitHub stub in routes/superuser.js
                                                (/github/sync, /github/deploy
                                                dispatching repository_dispatch)
-  "Uploading identical content does not        EVERY upload creates a new
-   create a pointless new version"             version: versionNumber = MAX+1,
-                                               with no content comparison.
-                                               (developerWorkspace.js ~1040)
+  "Uploading identical content does not        FIXED 2026-10-23 (TODO 87,
+   create a pointless new version"             A5/A10). An upload whose
+                                               components are identical to the
+                                               newest version's is REFUSED with
+                                               an explanation and recorded in
+                                               the history; the developer can
+                                               insist, which is the one case
+                                               that makes a version with no
+                                               byte changed. Compared by the
+                                               manifest hash, before any
+                                               write.
   A control file the repository never          Not implemented
   auto-modifies
   Dependency discovery; missing deps           Not implemented
@@ -204,9 +220,11 @@ That is a direct trade-off and needs an explicit decision, not a default.
                                                build a check that already
                                                exists
 
-The identical-content row is a small bug worth fixing regardless of this
-section: re-uploading byte-identical content currently bumps the version number
-for nothing, which is exactly what dbspec01 says must not happen.
+The identical-content row is fixed: re-uploading byte-identical content no
+longer bumps the version number, which is what dbspec01 says must not happen.
+
+The remaining rows are unchanged and still describe the gap this section is
+about.
 
 ================================================================================
 5. PROPOSED BREAKDOWN
@@ -252,14 +270,21 @@ B. DOWNLOAD TO LOCAL WORKING COPY                               SMALL
        it originated client-side and is now being used to build entry names.
 
 C. PREVIEW, TIERED BY WHAT IS ACTUALLY RENDERABLE                MEDIUM
-     images (.png/.jpg/.exr/.tga)  inline. Verify magic bytes; serve with a
-                                   safe content type rather than the
-                                   client-supplied one.
-     .glb/.gltf                    three.js viewer. Real 3D, cheap.
+   BUILT 2026-10-29 for the first two rows, except glTF; TODO 89.
+
+     images (.png/.jpg/.exr/.tga)  DONE — a 320px WebP. sharp reads the common
+                                   formats; TGA and EXR go through ffmpeg.
+                                   The browser is sent OUR WebP with an
+                                   image/webp type and nosniff, never the
+                                   developer's bytes or their mime.
+     video                         DONE — a frame at 1s, or 0s if the clip is
+                                   shorter, through the same encoder.
+     .glb/.gltf                    three.js viewer. Real 3D, cheap. NOT BUILT.
      .blend/.nk/.ma/.uasset        none render in a browser. Options:
                                    artist-uploaded renders, offline conversion
                                    to GLB (Blender does this headlessly), or
-                                   download-only for now.
+                                   download-only for now — which is where it
+                                   stands.
 
 D. THE "SEE IT IN THE GAME" LAYER                               LARGE
    Pick one of the three options in 3.2. If turntables: an OFFLINE render
@@ -284,9 +309,15 @@ Q2. Which preview approach?
     different projects. Pixel Streaming additionally requires accepting a
     continuously running GPU server, against spec 05.
 
+    PARTLY ANSWERED 2026-10-29: the question is now only about MODELS. Images
+    and video are settled — a still frame, regenerated from the blob, with no
+    browser-side viewer involved.
+
 Q3. Which asset types first?
-    Working assumption: images and GLB (both renderable), with .blend/.nk/
-    .uasset treated as download-only until a conversion pipeline exists.
+    ANSWERED 2026-10-29 for the first tier: images and video, because they are
+    the types that need no renderer. `.blend`/`.nk`/`.uasset` remain
+    download-only, and `.glb` is the next candidate — it is the one 3D format
+    that renders without a GPU pipeline.
 
 Q4. Restore recommended_version_id?
     Recommendation: yes, as part of this section. See 3.1.
@@ -298,6 +329,9 @@ Q4. Restore recommended_version_id?
 Layer B. It is unambiguous, small, needed under every answer to Q1 and Q2, and
 it is the one thing that immediately turns approval review from guesswork into
 something real. Layers C and D are the parts that depend on Q2.
+
+  DONE for images and video, 2026-10-29 — TODO 89. What remains of layer B is
+  the glTF viewer, which is layer C's question wearing layer B's clothes.
 
 TODO item 6 (the approval workflow being API-only) should be read as belonging
 to this section.

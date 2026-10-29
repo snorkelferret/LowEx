@@ -235,6 +235,11 @@ something outside the portal watching it, which is not built.
 not for anyone. If one is needed, it is done by **impersonation**, which is
 marked, time-bounded and audit-logged — and impersonation is not built yet.
 
+**Production does see a thumbnail of each submitted image and video**, in the
+approval queue. That is not an exception: a preview is a picture the portal made
+from the content, not the content, and it is reachable only through the approval
+it belongs to. The files themselves stay as private as they were.
+
 The workspace is private because developers need to be able to make a mess while
 they work, and that only works if nobody is watching over their shoulder.
 

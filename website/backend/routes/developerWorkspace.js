@@ -1772,7 +1772,11 @@ router.get(
             }
 
             // `res.sendFile` handles range requests and caching, and the type
-            // is safe to declare: these are always the WebP this system wrote.
+            // is safe to declare: these are always the WebP this system wrote,
+            // never the developer's bytes — which is what makes an inline
+            // preview safe here at all (TODO item 35). nosniff says so to the
+            // browser as well, as the download route does.
+            res.setHeader('X-Content-Type-Options', 'nosniff');
             res.type('image/webp');
 
             return res.sendFile(previewPath);
