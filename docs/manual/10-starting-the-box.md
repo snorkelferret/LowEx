@@ -79,10 +79,10 @@ content that is not there. Nothing else on disk is worth keeping.
 
 ## Keeping it healthy
 
-Eleven checks, safe against a running server, and one command to run them all:
+Twelve checks, safe against a running server, and one command to run them all:
 
 ```bash
-npm run check            # all eleven, stopping at the first failure
+npm run check            # all twelve, stopping at the first failure
 ```
 
 | Check | What it proves |
@@ -98,6 +98,7 @@ npm run check            # all eleven, stopping at the first failure
 | `check:upload-pending` | an asset under review refuses changes |
 | `check:round-trip` | a version downloads as approved and imports back as references |
 | `check:bind` | the server starts, and listens on loopback only |
+| `check:config` | no port or address is defined outside `shared/config.mjs` |
 
 **Five of them start the real code against a throwaway database and
 directories** — they never touch the live data, but they do need `JWT_SECRET`

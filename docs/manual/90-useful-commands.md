@@ -111,6 +111,7 @@ npm run check:approval   # submit, lock, approve, reject and unlock behave
 npm run check:upload-pending  # an asset under review refuses changes
 npm run check:round-trip      # a version downloads as approved, and comes back
 npm run check:bind            # the server starts, and listens on loopback only
+npm run check:config          # one place defines the ports and addresses
 
 npm run check            # all of the above, stopping at the first failure
 ```
@@ -149,6 +150,11 @@ their own — never the real ones:
   database and a port the operating system chooses, and checks that it answers
   on 127.0.0.1 and **not** on the machine's network address. It is also the only
   check that notices the server failing to boot.
+
+`check:config` is static and scans the source: every port, hostname and domain
+must come from `shared/config.mjs`, and it names the file and line of any that
+does not. Comments are allowed to mention them; the test scripts are exempt,
+because a test must know what it expects.
 
 All six copy the schema from the live database, open it read-only, and delete
 everything they made. None can change what the portal holds.

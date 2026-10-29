@@ -99,6 +99,12 @@ this file an image" list, a second definition of "what counts as garbage".
 TODO 84. `backend/lib/thumbnails.js` and `backend/lib/collector.js` are the
 arrangements this rule produces: one implementation, dependencies as arguments.
 
+**The system's own addresses and ports are one instance of this.** Every port,
+hostname and domain comes from `shared/config.mjs`; the backend and the Vite
+config both resolve from it, and `npm run check:config` fails on any literal
+found anywhere else. It was five defaults for three values in four files until
+2026-10-29, and they agreed by coincidence until one of them did not.
+
 ## 6. The library is the whole system; the game is a tagged subset
 
 **One store.** The game's content is a subset of it, marked as in the game.

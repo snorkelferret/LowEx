@@ -46,36 +46,22 @@ const app = express();
 
 // CONFIGURATION CONSTANTS (Loaded from environment)
 
-const PORT = process.env.PORT ;
+// EVERY ADDRESS AND PORT COMES FROM ONE PLACE. See shared/config.mjs for what
+// each one means and why they are not derived from each other.
+const { resolveConfig } = require('../shared/config.mjs');
+const config = resolveConfig(process.env);
 
-// WHERE THE SOCKET LISTENS, AND HOW THE WORLD ADDRESSES IT ARE TWO THINGS.
-//
-// BIND is the interface the listening socket is attached to. 127.0.0.1 is
-// LOOPBACK: reachable only from this machine, so nothing on the network can
-// reach the application directly. The reverse proxy faces the world on 443,
-// terminates TLS and forwards here — the proxy is where TLS, rate limiting and
-// "admin routes only from the studio" live, and the app should not be the thing
-// facing the network.
-//
-// IT USED TO BE app.listen(PORT) WITH NO HOST, which binds EVERY INTERFACE
-// (*:5000) — and .env carried HOST=localhost, which looked like it controlled
-// that and did not (TODO 44).
-const BIND = process.env.BIND || '127.0.0.1';
+const PORT = config.port;
 
-// PUBLIC_URL is the address a browser or Google uses to reach the portal. It
-// is NOT derived from BIND and must not be: in production it is
-// https://lowexpectations.zone while the socket is on 127.0.0.1:5000, and in
-// development it is http://localhost:5000 while CLIENT_URL (the Vite origin) is
-// a different port again.
-//
-// THE OAUTH CALLBACK IS BUILT FROM THIS, not from HOST as it used to be. That
-// was the trap: binding with HOST would have set the callback to 127.0.0.1,
-// which Google can never reach, and leaving it set the callback to localhost in
-// production, which Google also cannot reach.
-const PUBLIC_URL = (process.env.PUBLIC_URL || `http://localhost:${PORT}`)
-  .replace(/\/+$/, '');
+// WHERE THE SOCKET LISTENS — loopback by default, so nothing on the network
+// can reach the application directly; the proxy is the only front door.
+const BIND = config.bind;
 
-const CLIENT_URL = process.env.CLIENT_URL ;
+// The OAuth callback is built from this, never from the bind address: Google
+// cannot reach 127.0.0.1, and in production it must be the public origin.
+const PUBLIC_URL = config.publicUrl;
+
+const CLIENT_URL = config.clientUrl;
 const JWT_SECRET = process.env.JWT_SECRET ;
 
 // Fail fast. Without a secret every session would be signed with a value that

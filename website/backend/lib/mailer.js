@@ -21,7 +21,10 @@ const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_SECURE = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true';
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
-const MAIL_FROM = process.env.MAIL_FROM || 'Low Expectations <no-reply@lowexpectations.zone>';
+// FROM THE ONE CONFIG, which owns the default and the domain in it
+// (shared/config.mjs).
+const { resolveConfig } = require('../../shared/config.mjs');
+const MAIL_FROM = resolveConfig(process.env).mailFrom;
 
 // Host and from-address are the minimum. A local relay may need no auth at
 // all, so user/pass are optional — but if one is set the other must be, or the

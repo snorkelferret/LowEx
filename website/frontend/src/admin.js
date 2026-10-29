@@ -4,15 +4,10 @@ import { apiFetch } from './api.js';
 // were only used by the dead block removed below.
 
 // ==========================================
-// 1. Strict Module-Level Configuration
+// 1. Module-Level Configuration
 // ==========================================
-//const apiUrl = import.meta.env.VITE_API_URL;
-/*
-if (!apiUrl) {
-  throw new Error('FATAL: VITE_API_URL is missing from environment variables.');
-}
-*/
-
+// RELATIVE, because the frontend is served BY the backend: there is no second
+// origin to name, and VITE_API_URL was removed (shared/config.mjs).
 const API_URL = '/api';
 
 

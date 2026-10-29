@@ -11761,3 +11761,63 @@ no upside. If something seems to need one of them, ask.
         machine needs it, and then the firewall is the control. It is just no
         longer the default, and check:bind would fail on a machine configured
         that way, which is the right moment to have the conversation.
+
+99) ONE PLACE DEFINES THE ADDRESSES AND PORTS. 2026-10-29.
+    ============================================================
+
+    ASKED FOR: "check that there is only one place where the addresses and ports
+    are defined - not hardwired in code - one place where defined only."
+
+    THERE WERE FIVE DEFAULTS FOR THREE VALUES, IN FOUR FILES:
+
+      backend/server.js              PORT, BIND, PUBLIC_URL, CLIENT_URL
+      backend/routes/inviteDevs.js   CLIENT_URL AGAIN, with its own default
+      backend/lib/invites.js         a third default, http://localhost:5173
+      backend/lib/mailer.js          the domain, in the From: address
+      vite.config.mjs                VITE_PORT and SERVER_URL, two more defaults
+
+    They agreed by coincidence. The IPv6 incident earlier today is what that
+    costs: the backend moved to IPv4 loopback, the dev proxy still said
+    "localhost", and on this machine `localhost` resolves to ::1 — nothing
+    connected, and the reason was three files apart.
+
+    --- WHAT WAS BUILT ---
+
+      shared/config.mjs — DEFAULTS and resolveConfig(env). The backend passes
+      process.env; Vite passes what loadEnv found. Both get the same answers
+      from the same defaults.
+
+      THE FOUR ADDRESSES ARE DELIBERATELY NOT DERIVED FROM EACH OTHER. BIND,
+      PUBLIC_URL, SERVER_URL and CLIENT_URL answer different questions and are
+      often the same value; sharing one setting is how the OAuth callback
+      nearly became 127.0.0.1.
+
+      VITE_API_URL IS GONE. It was injected by vite.config, had no reader (the
+      frontend calls /api relatively, because the backend serves it), and yet
+      was REQUIRED to build — a second place an address could be set wrongly,
+      guarding nothing.
+
+      scripts/check-config.js — the guard. It scans backend/, frontend/src/,
+      shared/, vite.config.mjs and build.js for 5000, 5173, 5174, localhost,
+      127.0.0.1 and lowexpectations.zone, skips comment lines (the code
+      explains these values in prose and should keep doing so), and names the
+      file and line of anything found outside shared/config.mjs.
+
+      scripts/ IS EXEMPT, DELIBERATELY. A test must know what it expects
+      independently of the code it tests: check:bind asserting "127.0.0.1"
+      would be worthless if it imported the default, because it would agree
+      with a default that had changed to 0.0.0.0.
+
+      PROVED IT CAN FAIL: a line `const HARDWIRED = 'http://localhost:5000'`
+      appended to invites.js produced one correctly named failure.
+
+    --- WHAT IT DOES NOT COVER ---
+
+      * IT IS A TEXT SCAN. A value built at runtime — from three concatenated
+        pieces — would pass. It catches the ordinary mistake, which is what
+        actually happens.
+      * the CDN URLs in build.js and scripts/build-manual.js are NOT portal
+        addresses; they are where the page fetches Bootstrap from, and the scan
+        ignores them because they match none of the patterns.
+      * .env and .env.example are where the values are SET, which is the point.
+        The guard is about where they are DEFINED in code.

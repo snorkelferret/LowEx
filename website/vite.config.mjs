@@ -15,31 +15,32 @@
 // this file's own directory, which is what __dirname meant.
 import { defineConfig, loadEnv } from 'vite';
 
-
 import path from 'path';
+
+// THE SAME CONFIG THE BACKEND USES. Vite is a Node program too, so it reads
+// the same defaults from the same file rather than keeping a private copy of
+// the development port and the proxy target (shared/config.mjs).
+import { resolveConfig } from './shared/config.mjs';
 
 export default defineConfig(({ mode }) => {
   const rootDir = import.meta.dirname;
   const env = loadEnv(mode, rootDir, '');
 
-  // Strict config-time check
-  if (!env.VITE_API_URL) {
-    throw new Error('FATAL: VITE_API_URL is missing from environment configuration.');
-  }
+  // process.env first, then what .env contributes, so either source works.
+  const config = resolveConfig({ ...process.env, ...env });
 
   return {
       root: path.resolve(rootDir, 'frontend'),
     envDir: rootDir, // <-- Forces Vite's bundler to look in this exact folder for .env
-    define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL), // <-- Force-injects the variable
-    },
+    // VITE_API_URL IS GONE. The frontend calls /api RELATIVELY — it is served
+    // by the backend, so there is no other origin to name — and the variable
+    // had no reader while still being REQUIRED to build. Removing it removes a
+    // second place an address could be set wrongly.
     server: {
-      port: parseInt(env.VITE_PORT || '5173', 10),
+      port: config.vitePort,
       proxy: {
         '/api': {
-          // 127.0.0.1 rather than localhost: the backend binds IPv4 loopback
-          // and `localhost` can resolve to ::1 first — see .env.example.
-          target: env.SERVER_URL || 'http://127.0.0.1:5000',
+          target: config.serverUrl,
           changeOrigin: true,
         },
       },

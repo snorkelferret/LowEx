@@ -110,8 +110,12 @@ const DISPLAY_STATUS_SQL = `
     END
 `;
 
+const { resolveConfig } = require('../../shared/config.mjs');
+
+// The fallback comes from the ONE config module, not from a third copy of the
+// development address (shared/config.mjs).
 const inviteLinkFor = (clientUrl, token) =>
-    `${clientUrl || 'http://localhost:5173'}/register?token=${token}`;
+    `${clientUrl || resolveConfig(process.env).clientUrl}/register?token=${token}`;
 
 // May this invitation still be used to register?
 //

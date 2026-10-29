@@ -39,7 +39,9 @@ const audit = require('../lib/audit');
 
 const router = express.Router();
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+// FROM THE ONE CONFIG, not a second copy with its own default (shared/config.mjs).
+const { resolveConfig } = require('../../shared/config.mjs');
+const CLIENT_URL = resolveConfig(process.env).clientUrl;
 
 const linkFor = (token) => inviteLinkFor(CLIENT_URL, token);
 
