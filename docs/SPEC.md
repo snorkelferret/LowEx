@@ -12,6 +12,10 @@ way* — the decisions, the alternatives rejected, and the mistakes. When a
 section here says something surprising, the reasoning is in the TODO, by item
 number.
 
+**`docs/RULES.md` holds the ten standing rules** — the things that must not be
+broken while changing any of this, and which nothing mechanically catches. Read
+it before a change that touches uploads, storage, permissions or Perforce.
+
 **Every section carries a state:**
 
 | state | meaning |

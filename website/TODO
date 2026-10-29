@@ -11175,3 +11175,56 @@ no upside. If something seems to need one of them, ask.
       * the audit record written by each run — asserted nowhere
 
       Those are the next three, in that order.
+
+91) THE STANDING RULES, IN ONE PLACE. 2026-10-29.
+    ============================================================
+
+    THE PRECEDENT, which is why this exists at all: previews crossed item 35 —
+    "NOTHING UPLOADED EVER RUNS", which names a thumbnailer as exactly the kind
+    of thing that needs its own decision — and nobody noticed for hours. The
+    collector bug found the same day (item 90) was the same shape from the other
+    side: a documented rule that had never been exercised.
+
+    NOTHING WAS MISSING FROM THE RECORD. Both rules were written down. What was
+    missing was any moment at which a change was held against them.
+
+    --- WHAT WAS BUILT ---
+
+      docs/RULES.md — TEN rules, one page, each with what a breach looks like
+      and the TODO item that reasons it out:
+
+        1  nothing uploaded ever runs                 item 35
+        2  Unreal, Blender, Maya, Nuke are off limits  the game-project section
+        3  images are not game assets                 item 58
+        4  authoring is outside the engine            item 61
+        5  one mechanism, not one per space           item 84
+        6  the library is the whole system            item 86
+        7  no read path into a workspace              items 85, 86
+        8  Perforce tells the portal, never the reverse  item 88 §16
+        9  a thing true by absence is not a control   item 87
+       10  the docs move with the code                items 78, 87
+
+      THE CUT IS THE POINT. Sixteen rule-like statements were found by reading
+      the TODO. Six were left out because something already enforces them —
+      UNIQUE(sha256), storagePaths, roles.js, the checks — or because they are
+      visible the moment they break. A list nobody reads enforces nothing, and
+      a list of sixteen gets skimmed.
+
+      AND ONE LINE PER COMMIT, which is the only part that does any work:
+
+          Rules touched: none
+          Rules touched: item 35 — see TODO 89
+
+      WHY THE COMMIT MESSAGE rather than a checklist or a document to consult:
+      this repository commits directly, there are no pull requests, so the
+      commit is the only place every change passes through. Writing "none" is a
+      claim the author has to have checked, at the moment they know the answer.
+
+    --- WHAT IT IS NOT ---
+
+      NOT ENFORCEMENT. Nothing runs, nothing fails. A rule can still be crossed
+      and a commit can still lie; what changes is that crossing it now has to be
+      done on purpose, in writing, beside the change.
+
+      NOT THE LAW. The TODO is. If the two disagree, the TODO wins and
+      docs/RULES.md is corrected — the same relationship SPEC.md has with it.
