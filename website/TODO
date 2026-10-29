@@ -11313,3 +11313,75 @@ no upside. If something seems to need one of them, ask.
 
       THE NEXT ONE SHOULD BE THE APPROVAL PATH: submit, approve and reject are
       where state changes and where a mistake is expensive.
+
+93) THE APPROVAL PATH, CHECKED END TO END. 2026-10-29.
+    ============================================================
+
+    THE THIRD of the three gaps item 90 listed, and the one item 92 ended by
+    recommending: "submit, approve and reject are where state changes and where
+    a mistake is expensive."
+
+    --- WHAT IT PROVES, IN ONE RUN OF scripts/check-approval-path.js ---
+
+      SUBMIT    a passing check on the same content is required (201);
+                the version LOCKS; a second submission is 409; no passing
+                check is 409; a check against DIFFERENT content is 409 — the
+                receipt compared, not assumed; prod cannot submit (403);
+                another developer's asset is 404.
+      LOCKED    neither the version nor the asset can be deleted (409, 409).
+      APPROVE   a developer 403; an administrator 403; prod 200; an assets row
+                and an asset_versions row appear, carrying the same manifest
+                hash and a copy of the file REFERENCES; the workspace version
+                records the store version and STAYS locked; approving twice 409.
+      REJECT    the reason is stored; the version UNLOCKS; the developer can
+                submit the same work again (201); rejecting twice 409.
+      AUDIT     submit x3, approve x1, reject x1, each with the right actor.
+      AFTER     an approved version can be deleted from the workspace, and the
+                store's copy survives — a developer can never remove game
+                content.
+
+    Thirty-three assertions.
+
+    --- THE HARNESS, WHICH IS THE PART THAT WILL PAY FOR ITSELF ---
+
+      scripts/lib/check-harness.js. The second HTTP check needed the first
+      one's scaffolding — copy the schema, make throwaway directories, set the
+      four path variables, mount the real router, mint tokens, request, report
+      — and two copies would agree until one forgot a step (RULES 5). The
+      preview check was rewritten on top of it, so there is one implementation
+      with two callers.
+
+      THE REWRITE CAUGHT ITS OWN BUG, which is the argument for having done it:
+      the first harness read every response body as TEXT. A WebP is not UTF-8,
+      so decoding replaced invalid bytes — and the preview check's "the body is
+      the preview, not the blob" assertion failed even though the route was
+      correct. The body is now read as bytes and parsed as JSON from them. A
+      check that compares corrupted strings is a check that passes for the
+      wrong reason.
+
+    --- PROVED IT CAN FAIL ---
+
+      Two regressions injected, then restored:
+
+          the receipt comparison skipped   -> "a check against DIFFERENT content
+                                              is refused" FAILED
+          reject no longer unlocks         -> "and UNLOCKS the version" FAILED,
+                                              and "can submit the rejected work
+                                              again" FAILED
+
+      Three failures, all correctly named and all pointing at the injected bug.
+
+    --- WHAT IT DOES NOT COVER ---
+
+      * UPLOADING while a version is pending. The manual says a version under
+        review cannot be changed; the upload route's lock check is covered by
+        nothing yet, and an upload is a multipart fixture rather than a JSON
+        one.
+      * THE TECHNICAL CHECK ITSELF. The passing run is seeded, deliberately:
+        this check is about what happens after a check passes. The check
+        endpoint has no test of its own.
+      * THE DOWNLOAD / ROUND TRIP, and the archive endpoint.
+      * CONCURRENCY — two approvals racing for the same version.
+
+      The upload-while-pending case is the next one worth having: it is the
+      other half of the freeze, and it is the one a developer would hit.
