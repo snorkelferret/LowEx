@@ -10170,34 +10170,107 @@ no upside. If something seems to need one of them, ask.
     SO THE CEILING IS REAL, and it is a reason to keep the count deliberate.
 
     ============================================================
-    3. THE DEPOT AND ITS STREAMS
+    3. THE DEPOT AND ITS STREAMS — REWRITTEN AROUND TASK STREAMS, 2026-10-29
     ============================================================
+
+    THE OWNER, 2026-10-29: *"how about we have the latest approved in-progress
+    game version - that devs can sync to - when they upload it goes to their
+    game version - so they can check it works etc - and then the studio can look
+    at it as well?"*
+
+    THAT IS PERFORCE'S TASK STREAM MODEL, and it is better than what the first
+    version of this section described. What follows replaces it.
 
         //LowExpectations      a STREAM depot, not a classic one
 
-            mainline          //LowExpectations/main     the stable line
-            development       //LowExpectations/dev      where work happens
-            release           //LowExpectations/rel-0.1  cut for a release
-            experimental      //LowExpectations/exp-*    risky work, isolated
+            main                    //LowExpectations/main
+                                    THE GAME. The latest approved in-progress
+                                    version. DEVELOPERS READ IT; THE INTEGRATOR
+                                    WRITES IT.
 
-    WHY STREAMS (item 71): streams ARE Perforce's branching model, and "which
-    line of development am I on" is what item 64 means by the question. A
-    CLASSIC depot can be turned into a stream depot later and the conversion is
-    unpleasant; creating it as one costs nothing today.
+            task-val-1847           //LowExpectations/task-val-1847
+                                    ONE CHANGE, by one developer, off main.
+                                    Holds only the delta. DELETED once merged.
 
-        A DEVELOPMENT STREAM SHARES its parent's files and diverges where
-        somebody changes them. Cheap to create, which is the point.
+            rel-0.1                 //LowExpectations/rel-0.1
+                                    Cut from main when a release must STOP
+                                    MOVING while it is stabilised.
 
-        A RELEASE STREAM IMPORTS a snapshot of its parent and does NOT take
-        later changes from it. That is what a release is: a line that stops
-        moving while it is stabilised.
+    --- AND `dev` IS NOT CREATED ---
 
-    AND THE DISTINCTION THAT KEEPS COMING UP: A STREAM IS NOT A RELEASE.
-    A stream is a line of development. A RELEASE is a named build — "0.4
-    Experimental, 12 Nov" — identified by a name, a CHANGELIST, who built it and
-    when (items 53, 67). Several releases come from one stream, each pinned to
-    the changelist it was built at. THIS is what the portal records; it is not
-    what Perforce stores.
+      The first version had a permanent `development` stream that everybody
+      worked in. WITH TASK STREAMS IT HAS NO JOB: developers work in their own,
+      and the integration into main is the integrator's act.
+
+      IT COMES BACK AS AN INTEGRATION LINE ONLY IF MAIN EVER NEEDS PROTECTING
+      BETWEEN RELEASES — if changes must queue, be tested together and then go
+      to main as a set. Not before. Do not create a stream to hold work that
+      nobody is holding.
+
+    --- WHAT A TASK STREAM IS, AND WHY IT IS THE RIGHT TOOL HERE ---
+
+      A LIGHTWEIGHT BRANCH OFF A PARENT. Its files are shared from `main`; only
+      what changes is stored against the task. It costs almost nothing to
+      create, and once merged it is DELETED — which is the difference between a
+      branch per change and a mess of permanent branches nobody dares remove.
+
+      AND IT IS A DELTA, NOT A COPY. Creating one does not duplicate 300 GB; it
+      records that this task differs from main in these files.
+
+      WHAT IT IS NOT FOR: a sprawling change. Task streams are designed for
+      "here is my one change"; something that rewrites a whole area belongs on a
+      longer-lived development stream.
+
+    --- AND THIS IS WHAT MAKES BYPASS IMPOSSIBLE RATHER THAN DISCOURAGED ---
+
+      THE OWNER ASKED EARLIER: *"what is to stop devs just bypassing the portal
+      and uploading whatever straight to the game"*. THE ANSWER BECOMES
+      STRUCTURAL:
+
+          developers have WRITE on their own task stream
+          developers have READ ONLY on main
+          ONLY THE INTEGRATOR WRITES MAIN
+
+      So there is nothing to bypass: A DEVELOPER NEVER HAD WRITE TO THE GAME.
+      The portal is still not in the path — but Perforce is, and it is a wall
+      rather than a policy.
+
+      THE PORTAL'S APPROVAL THEN GOVERNS WHAT ENTERS THE STORE, and the
+      INTEGRATOR'S ACT is what puts it into main. Two gates, each where it can
+      actually see the thing it is gating.
+
+    --- THE ROUND TRIP, WITH TASK STREAMS ---
+
+      1. A developer SYNCS MAIN — the latest approved in-progress game.
+      2. They CREATE A TASK STREAM for the change, and work in it:
+             p4 stream -t task -P //LowExpectations/main //LowExpectations/task-val-1847
+      3. They SUBMIT to the task stream. Their files are isolated; main is
+         untouched.
+      4. A BUILD FROM THE TASK STREAM is main plus their change — a CANDIDATE
+         the studio can install and play. (The build machine, item 60.)
+      5. PROD APPROVES THE DOCUMENT; THE INTEGRATOR INTEGRATES the task stream
+         into main and records the changelist (asset_integrations — built).
+      6. The task stream is deleted.
+
+      STEP 4 IS THE ONE THAT WAS MISSING FROM EVERY EARLIER SKETCH, and it is
+      what "so they can check it works" means: the change is TESTED IN THE GAME,
+      on a build, without the game having been changed.
+
+    --- WHAT IT COSTS, SAID PLAINLY ---
+
+      * SOMEONE INTEGRATES every approved change into main. That is real time,
+        and it is admin's work (item 52).
+      * A BUILD PER CANDIDATE if the studio is to try it. That is the build
+        machine, not this portal.
+      * DISCIPLINE IN STREAM HYGIENE: a task stream that is never merged and
+        never deleted is a branch nobody remembers. Deleting on merge is part of
+        the workflow, not tidying.
+
+    --- AND THE PORTAL'S PART IN IT IS EXACTLY THE PART IT ALREADY HAS ---
+
+      It LISTS CANDIDATE BUILDS (item 60), it RECORDS THE APPROVAL, and it
+      RECORDS THE CHANGELIST THAT PUT THE CHANGE INTO MAIN. It never moves
+      bytes, and it is never in the path of a submit.
 
     --- THE SECOND DEPOT, NOT NOW ---
 
