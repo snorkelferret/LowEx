@@ -63,6 +63,7 @@ Useful tables:
 | `stored_files` | One row per SHA-256. **One copy of any content, ever.** |
 | `technical_check_runs`, `technical_check_results` | What each check said and why |
 | `creative_approvals` | Who approved or rejected what, and their comment |
+| `file_thumbnails` | The previews that have been made, keyed to a stored file. **These are derived** — deleting them costs a re-render, not content. |
 | `audit_logs` | Deactivations, category changes, resolved reports, settings changes, invitations, account creation, restores and purges, daily job runs |
 | `feedback` | Bug reports and suggestions |
 

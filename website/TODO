@@ -10926,3 +10926,81 @@ no upside. If something seems to need one of them, ask.
       Adding a portal-to-Perforce call "just to check" is a change to WHICH
       SYSTEM DEPENDS ON WHICH. It deserves a decision with a reason, not a
       convenience during an afternoon's work.
+
+89) PREVIEWS — PRODUCTION CAN SEE THE WORK. BUILT 2026-10-29.
+    ============================================================
+
+    ASKED FOR in the owner's words: *"No prod cannot download they are usually
+    not technical so probably don't have them progs to see them. there needs to
+    be a way of displaying images or videos"*.
+
+    THE POINT IS NOT CONVENIENCE. Production decides creative approvals. If the
+    only way to see a submission is to download it and open it in the program
+    that made it, then the reviewer either has that program or is approving
+    blind — and approval is the one place in the system where looking IS the
+    work. `docs/assettypes01` §1 B said it years before the queue existed:
+
+        "Preview — seeing the asset on the website, so an approver can judge it
+         without downloading."
+
+    --- WHAT WAS BUILT ---
+
+      * `backend/lib/thumbnails.js` — ONE implementation, used by both the
+        library and the store. The library had the only copy, inline in its
+        route; copying it for approvals would have been item 84 again, twice,
+        in two files that agree until the first JPEG fails differently.
+
+        - Images: `sharp`, EXIF-rotated, 320px, WebP.
+        - Video: one frame at 1s via `ffmpeg`, falling back to 0s — the first
+          frame of a video is very often black — then the same sharp path.
+        - `previewKindOf()` reads `assetTypeOf()` from `shared/assetRules.mjs`.
+          A private extension list here is how two answers to "what is an
+          image" start.
+
+      * `file_thumbnails` replaced `library_thumbnails` (both empty, so the DROP
+        cost nothing). Keyed `UNIQUE (stored_file_id, kind)`, because the same
+        bytes in the library and in a version are ONE row, not two.
+
+      * Generation runs AFTER the upload transaction, from `blobPath(sha)` —
+        never the multer temp file, which is unlinked. A preview that fails
+        costs a picture, never the upload.
+
+      * `GET /creative-approvals/:approvalId/preview/:sha256`, `requireRole
+        ('prod')`, scoped to the approval's own files: 404 for a real file that
+        is not in this submission, 403 for a developer, 401 unauthenticated,
+        400 for a malformed hash. Verified all five.
+
+      * The prod queue shows a thumbnail strip under the asset name — six, then
+        "+N more", each opening the full size in a new tab. A file with no
+        preview shows nothing rather than a broken image.
+
+    --- DERIVED CONTENT, NOT THE STORE ---
+
+    A preview is made FROM a blob the way a build is made from a project. No
+    `stored_files` row, no quota, never collected as authored work, and the
+    filename is derivable (`<sha>_<kind>.webp`). DELETING EVERY PREVIEW COSTS
+    REGENERATION, NOT DATA — which is what lets `file_thumbnails` be a cache of
+    what has been made rather than the truth about it.
+
+    --- AND THE COPY THAT HAD TO CHANGE WITH IT ---
+
+    The queue carried a notice saying *"You cannot open the submitted files
+    here ... without seeing the content"*. That was honest while it was true and
+    became a lie the moment the first thumbnail rendered. It now says the
+    reviewer sees a picture of the work and not the files, and that a model or
+    scene file has none.
+
+    --- WHAT THIS IS NOT ---
+
+      * NOT A READ PATH INTO THE WORKSPACE. The route can serve the files of the
+        approval it is given and nothing else; privacy is enforced by the query,
+        not by the fact that the queue only lists approvals.
+
+      * NOT `model_preview`. It is in the schema's CHECK and never produced: a
+        picture of a model needs a renderer (headless Blender or Unreal), and
+        neither is connected — and the creative tools are off limits. Until
+        then a `.blend` or `.uasset` has no preview and the page says so.
+
+      * NOT EVERYWHERE YET. The library has had thumbnails since it was built;
+        the prod queue has them now. The game store, the developer's own
+        versions and the admin views still show filenames only.

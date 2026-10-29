@@ -41,9 +41,27 @@ const {
 // already drifted apart.
 const { formatBytes } = require('../../shared/formatBytes.mjs');
 // Where the store's files live, and the only safe way to build a path to one.
-const { BLOB_DIR, TMP_DIR, isStorageKey, blobPath } = require('../lib/storagePaths');
+const { BLOB_DIR, TMP_DIR, isStorageKey, blobPath, thumbPath } = require('../lib/storagePaths');
 // A version's content identity — one SHA-256 over its components.
 const { manifestHash } = require('../lib/manifestHash');
+
+// PREVIEWS — so the approver can SEE the work without downloading it. The
+// generation itself is shared with the library; see backend/lib/thumbnails.js.
+const { makePreview, previewKindOf } = require('../lib/thumbnails');
+
+// Keyed by the FILE, because a preview is a property of a blob rather than of
+// any one asset that happens to reference it (item 84).
+const upsertFileThumbnail = db.prepare(`
+    INSERT INTO file_thumbnails (
+        stored_file_id, kind, storage_key, width, height
+    )
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (stored_file_id, kind)
+    DO UPDATE SET
+        storage_key = excluded.storage_key,
+        width = excluded.width,
+        height = excluded.height
+`);
 // Getting bytes into the store. SHARED WITH THE LIBRARY'S UPLOAD — there is one
 // implementation of this on purpose; see the note at the top of the file.
 const { storeOne } = require('../lib/ingestFiles');
@@ -1610,7 +1628,14 @@ router.get(
                     wvf.relative_path,
                     sf.file_size,
                     sf.mime_type,
-                    sf.sha256
+                    sf.sha256,
+                    -- WHETHER A PREVIEW EXISTS, so the queue can draw the ones
+                    -- it has and an icon for the ones it has not. A file with
+                    -- no preview is normal: a .uasset has no picture.
+                    (SELECT ft.kind
+                       FROM file_thumbnails ft
+                      WHERE ft.stored_file_id = wvf.stored_file_id
+                      LIMIT 1) AS preview_kind
                 FROM workspace_version_files wvf
                 JOIN stored_files sf
                     ON sf.id = wvf.stored_file_id
@@ -1636,6 +1661,126 @@ router.get(
             return res.status(500).json({
                 error: 'Failed to load creative approvals'
             });
+        }
+    }
+);
+
+
+// ============================================================
+// GET /api/developer/workspace/creative-approvals/:approvalId/preview/:sha256
+// ============================================================
+//
+// THE PREVIEW OF ONE FILE IN A SUBMISSION, so the approver can SEE what they
+// are deciding. docs/assettypes01 §1 B, and the answer to the note below about
+// there being no read path into a workspace.
+//
+// ============================================================
+// IT SERVES A PICTURE, NOT THE FILE
+// ============================================================
+//
+// A PREVIEW IS DERIVED CONTENT. It is made from the blob, it is not the blob,
+// and it lives in THUMB_DIR rather than in the store (see storagePaths.js).
+// SERVING IT DOES NOT OPEN THE WORKSPACE — the developer's actual files are
+// still unreachable without impersonating, which is the rule the block below
+// states and which this does not weaken.
+//
+// THE DISTINCTION IS THE WHOLE POINT: an approver needs to look, and looking at
+// a rendered picture is not the same as holding the source. A .blend is useless
+// to production anyway; the picture is the thing they can judge.
+//
+// ============================================================
+// AND THE PERMISSION IS THE APPROVAL ITSELF
+// ============================================================
+//
+// There is no "prod may read any blob" route here. The caller names an
+// approval, and THE FILE MUST BE ONE OF THAT APPROVAL'S FILES — so what can be
+// seen is exactly what has been submitted for a decision, which is the same
+// scope as the queue that lists it.
+// ============================================================
+
+const approvalVersion = db.prepare(`
+    SELECT ca.workspace_version_id
+    FROM creative_approvals ca
+    WHERE ca.id = ?
+`);
+
+const fileInVersion = db.prepare(`
+    SELECT
+        sf.id,
+        sf.sha256,
+        sf.storage_key
+    FROM workspace_version_files wvf
+    JOIN stored_files sf ON sf.id = wvf.stored_file_id
+    WHERE wvf.workspace_version_id = ?
+      AND sf.sha256 = ?
+`);
+
+const previewsForFile = db.prepare(`
+    SELECT kind, storage_key
+    FROM file_thumbnails
+    WHERE stored_file_id = ?
+`);
+
+router.get(
+    '/creative-approvals/:approvalId/preview/:sha256',
+    authenticateToken,
+    requireRole('prod'),
+
+    async (req, res) => {
+        const approvalId = Number(req.params.approvalId);
+        const sha256 = String(req.params.sha256 || '').toLowerCase();
+
+        if (!Number.isInteger(approvalId)) {
+            return res.status(400).json({ error: 'Invalid approval ID' });
+        }
+
+        if (!/^[0-9a-f]{64}$/.test(sha256)) {
+            return res.status(400).json({ error: 'Invalid file hash' });
+        }
+
+        try {
+            const approval = approvalVersion.get(approvalId);
+
+            if (!approval) {
+                return res.status(404).json({ error: 'Creative Approval not found' });
+            }
+
+            // THE FILE MUST BE IN THIS APPROVAL. A hash that is not is not a
+            // mistake worth explaining in detail — it is simply not here.
+            const file = fileInVersion.get(approval.workspace_version_id, sha256);
+
+            if (!file) {
+                return res.status(404).json({ error: 'That file is not in this submission' });
+            }
+
+            // `image` is what an image gets and `video_frame` is a poster;
+            // anything else has none, and answers 404 rather than a broken img.
+            const thumbs = previewsForFile.all(file.id);
+
+            if (thumbs.length === 0) {
+                return res.status(404).json({ error: 'No preview exists for that file' });
+            }
+
+            const preferred = thumbs.find(t => t.kind === 'image')
+                || thumbs.find(t => t.kind === 'video_frame')
+                || thumbs[0];
+
+            const previewPath = thumbPath(preferred.storage_key, preferred.kind);
+
+            if (!previewPath) {
+                return res.status(404).json({ error: 'No preview exists for that file' });
+            }
+
+            // `res.sendFile` handles range requests and caching, and the type
+            // is safe to declare: these are always the WebP this system wrote.
+            res.type('image/webp');
+
+            return res.sendFile(previewPath);
+
+        } catch (err) {
+            console.error('Could not serve a preview:', err);
+
+            return res.status(500).json({ error: 'Could not serve that preview' });
         }
     }
 );
@@ -3096,6 +3241,10 @@ router.post(
                                     mimeType: file.mimetype
                                 });
 
+                            // Kept for the preview pass after the transaction,
+                            // which needs the row rather than the temp file.
+                            item.storedFileId = storedFile.id;
+
 
                             // ONLY A GENUINELY NEW BLOB IS ROLLED BACK. A repair
                             // is not: it restored a file the database said should
@@ -3257,6 +3406,57 @@ router.post(
                     // This does not invalidate the successful upload.
                 }
             }
+
+            // ----------------------------------------------------
+            // PREVIEWS, SO THE APPROVER CAN SEE THE WORK.
+            //
+            // docs/assettypes01 §1 B: "seeing the asset on the website, so an
+            // approver can judge it without downloading." PRODUCTION DOES NOT
+            // HAVE BLENDER OR UNREAL — a download is useless to them even when
+            // they are allowed one. They need to look, and this is the looking.
+            //
+            // OUTSIDE THE TRANSACTION, on purpose. This reads a file and writes
+            // a picture; neither belongs inside a database transaction holding
+            // the write lock. AND FROM THE BLOB, not the temp file, because the
+            // temp files are unlinked above.
+            //
+            // A PREVIEW THAT FAILS IS LOGGED AND SKIPPED. The upload has
+            // already committed; a picture is not worth failing it, and the
+            // item is still worth having without one.
+            // ----------------------------------------------------
+
+            for (const item of processedFiles) {
+                if (!item.storedFileId) continue;
+
+                const kind = previewKindOf(item.filename);
+
+                if (!kind) continue;
+
+                const sourcePath = blobPath(item.sha256);
+
+                if (!sourcePath) continue;
+
+                try {
+                    const made = await makePreview(sourcePath, item.sha256, kind);
+
+                    if (made) {
+                        upsertFileThumbnail.run(
+                            item.storedFileId,
+                            made.kind,
+                            item.sha256,
+                            made.width,
+                            made.height
+                        );
+                    }
+
+                } catch (err) {
+                    console.error(
+                        `Could not make a preview for ${item.filename}:`,
+                        err.message
+                    );
+                }
+            }
+
 
             return res.status(201).json({
                 status: 'created',

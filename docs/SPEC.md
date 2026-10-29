@@ -324,6 +324,24 @@ A developer submits a workspace version; `prod` approves or rejects it. Approval
 writes an immutable `asset_version` into the store, copies the file references
 (never the bytes — one copy), and records which asset and version it came from.
 
+**A reviewer sees a picture, not the files.** Production decides, and production
+does not have Blender, Nuke or Unreal — so a download is useless to them even
+where the rules allow one. The queue therefore shows a **thumbnail of every
+image and video** in a submission, and clicking one opens it full size
+(`docs/assettypes01 §1 B`). **A model or scene file has no preview**: a picture
+of a model needs a renderer and none is connected, so `model_preview` exists in
+the schema and is never produced. A version without one is still judged from
+what was submitted, by whom, and what they said.
+
+**A preview is derived content, not store content.** It is made from the blob
+and written outside the store (`THUMB_DIR`), gets no `stored_files` row, is
+counted against no quota, and is never collected as authored work; deleting
+every preview costs regeneration, not data. `file_thumbnails` is therefore a
+**cache of what has been made**, addressed by `storage_key` + kind, and the
+image is served **scoped to the approval** — a reviewer can see exactly the
+files submitted for the decision in front of them and nothing else in the
+workspace.
+
 **Technical and artistic decisions are separate records**: `technical_check_runs`
 for the first, the approval for the second. "Technically correct but artistically
 rejected" and "artistically excellent but technically not ready" must both be

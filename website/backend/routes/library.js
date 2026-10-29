@@ -75,7 +75,7 @@
 const express = require('express');
 const fs = require('fs');
 const multer = require('multer');
-const sharp = require('sharp');
+const { makePreview, previewKindOf } = require('../lib/thumbnails');
 
 const db = require('../db');
 const audit = require('../lib/audit');
@@ -103,7 +103,6 @@ const libraryUpload = multer({ dest: tempUploadDir });
 
 // The thumbnail's longest edge. Small enough to list a screenful without a
 // megabyte each, large enough to recognise a photograph in a grid.
-const THUMB_SIZE = 320;
 
 // ============================================================
 // Statements
@@ -139,15 +138,15 @@ const restoreItem = db.prepare(`
 `);
 
 const upsertThumbnail = db.prepare(`
-    INSERT INTO library_thumbnails (
-        library_item_id,
+    INSERT INTO file_thumbnails (
+        stored_file_id,
         kind,
         storage_key,
         width,
         height
     )
     VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT (library_item_id, kind)
+    ON CONFLICT (stored_file_id, kind)
     DO UPDATE SET
         storage_key = excluded.storage_key,
         width = excluded.width,
@@ -173,12 +172,12 @@ const itemForServing = db.prepare(`
 
 const thumbForServing = db.prepare(`
     SELECT
-        lt.kind,
-        lt.storage_key
-    FROM library_thumbnails lt
-    JOIN library_items li ON li.id = lt.library_item_id
-    WHERE lt.library_item_id = ?
-      AND lt.kind = ?
+        ft.kind,
+        ft.storage_key
+    FROM file_thumbnails ft
+    JOIN library_items li ON li.stored_file_id = ft.stored_file_id
+    WHERE li.id = ?
+      AND ft.kind = ?
       AND li.is_active = 1
 `);
 
@@ -264,32 +263,11 @@ async function readHead(filePath) {
     }
 }
 
-/**
- * A thumbnail, or null if this is not something a thumbnail can be made from.
- *
- * `rotate()` with no argument applies EXIF orientation, so a photograph taken
- * sideways appears the right way up rather than as a landscape on its side.
- * `failOn: 'none'` means a slightly damaged file still yields a picture instead
- * of throwing — for a thumbnail that is the right trade.
- *
- * Returns { createdPath, width, height } or null.
- */
-async function makeThumbnail(sourcePath, storageKey, kind) {
-    const destination = thumbPath(storageKey, kind);
-
-    if (!destination) return null;
-
-    const info = await sharp(sourcePath, { failOn: 'none' })
-        .rotate()
-        .resize(THUMB_SIZE, THUMB_SIZE, {
-            fit: 'inside',
-            withoutEnlargement: true
-        })
-        .webp({ quality: 80 })
-        .toFile(destination);
-
-    return { createdPath: destination, width: info.width, height: info.height };
-}
+// THUMBNAILS COME FROM backend/lib/thumbnails.js NOW.
+//
+// The generation used to live here, and the store needed the same thing — so it
+// moved rather than being copied. This route keeps only the parts that are the
+// library's: deciding WHICH entries get one, and recording them.
 
 // ============================================================
 // GET /api/library
@@ -321,9 +299,9 @@ router.get(
                     sf.file_size,
                     sf.mime_type,
                     u.username AS added_by_username,
-                    (SELECT lt.kind
-                       FROM library_thumbnails lt
-                      WHERE lt.library_item_id = li.id
+                    (SELECT ft.kind
+                       FROM file_thumbnails ft
+                      WHERE ft.stored_file_id = li.stored_file_id
                       LIMIT 1) AS thumbnail_kind
                 FROM library_items li
                 JOIN stored_files sf ON sf.id = li.stored_file_id
@@ -501,13 +479,18 @@ router.post(
             for (const entry of prepared) {
                 entry.thumbnail = null;
 
-                if (assetTypeOf(entry.name) !== 'Image') continue;
+                // THE SHARED RULES DECIDE, not a private list here: image or
+                // video, or nothing. The library takes both now, because the
+                // implementation does.
+                const kind = previewKindOf(entry.name);
+
+                if (!kind) continue;
 
                 try {
-                    entry.thumbnail = await makeThumbnail(
+                    entry.thumbnail = await makePreview(
                         entry.file.path,
                         entry.sha256,
-                        'image'
+                        kind
                     );
 
                     if (entry.thumbnail) {
@@ -597,8 +580,8 @@ router.post(
 
                     if (entry.thumbnail) {
                         upsertThumbnail.run(
-                            itemId,
-                            'image',
+                            storedFile.id,
+                            entry.thumbnail.kind,
                             entry.sha256,
                             entry.thumbnail.width,
                             entry.thumbnail.height

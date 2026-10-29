@@ -38,9 +38,9 @@
 // AND A THUMBNAIL THAT IS MISSING IS NOT AN ERROR
 // ============================================================
 //
-// Only images have thumbnails. Everything else gets an icon showing its type,
-// which is information rather than a gap — a PDF should not look broken for not
-// being a photograph.
+// Images and videos have thumbnails — a video's is a frame from the video.
+// Everything else gets an icon showing its type, which is information rather
+// than a gap — a PDF should not look broken for not being a photograph.
 
 import { $ } from './utils.js';
 import { apiFetch } from './api.js';

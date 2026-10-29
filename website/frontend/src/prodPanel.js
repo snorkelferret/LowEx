@@ -68,6 +68,12 @@ function cell(text, className) {
     return td;
 }
 
+// THE PREVIEW OF ONE FILE IN A SUBMISSION. Scoped to the approval, so what can
+// be seen is exactly what was submitted for this decision.
+function previewUrl(approvalId, sha256) {
+    return `${API}/creative-approvals/${approvalId}/preview/${sha256}`;
+}
+
 function row(item) {
     const tr = document.createElement('tr');
 
@@ -84,6 +90,54 @@ function row(item) {
         category.textContent = item.category;
         what.appendChild(category);
     }
+
+    // THE PICTURES, SO THE APPROVER CAN SEE WHAT THEY ARE DECIDING.
+    //
+    // PRODUCTION DOES NOT HAVE BLENDER OR UNREAL, so a download is useless to
+    // them even when they are allowed one — they need to look. This is the
+    // looking (docs/assettypes01 §1 B), and until it existed the queue told a
+    // reviewer the file LIST and nothing about the work.
+    //
+    // A FILE WITH NO PREVIEW SHOWS NOTHING RATHER THAN A BROKEN IMAGE: a
+    // .uasset has no picture, and an empty frame would look like a fault.
+    const withPreview = (item.files || []).filter(file => file.preview_kind);
+
+    if (withPreview.length > 0) {
+        const strip = document.createElement('div');
+        strip.className = 'd-flex flex-wrap gap-1 mt-1';
+
+        for (const file of withPreview.slice(0, 6)) {
+            const link = document.createElement('a');
+            link.href = previewUrl(item.id, file.sha256);
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.title = file.relative_path
+                ? `${file.relative_path}/${file.filename}`
+                : file.filename;
+
+            const image = document.createElement('img');
+            image.src = previewUrl(item.id, file.sha256);
+            image.alt = file.filename;
+            image.loading = 'lazy';
+            image.width = 64;
+            image.height = 64;
+            image.style.objectFit = 'cover';
+            image.className = 'rounded border border-secondary';
+
+            link.appendChild(image);
+            strip.appendChild(link);
+        }
+
+        if (withPreview.length > 6) {
+            const more = document.createElement('span');
+            more.className = 'small text-secondary align-self-center ms-1';
+            more.textContent = `+${withPreview.length - 6} more`;
+            strip.appendChild(more);
+        }
+
+        what.appendChild(strip);
+    }
+
     tr.appendChild(what);
 
     // Who, and what they said about it. The version note is the developer's own

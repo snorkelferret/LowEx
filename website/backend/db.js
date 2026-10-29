@@ -582,10 +582,21 @@ const applyAssetRepositorySchema = () => {
    * ----------------------------------------------------------
    */
 
+  // A PREVIEW BELONGS TO THE FILE, NOT TO THE LIBRARY.
+  //
+  // This was library_thumbnails, keyed to a library item — so the store and the
+  // workspace could not have previews without a second table saying the same
+  // thing about the same blobs. A preview is produced FROM a blob, so the blob
+  // is what it is keyed by (item 84: one mechanism, not one per space).
+  //
+  // IT IS A CACHE. The file is named by thumbPath() from the SHA and the kind,
+  // so its location is derivable; this row records what has been made and how
+  // big it is, and losing every row costs regeneration rather than data.
   db.exec(`
-    CREATE TABLE IF NOT EXISTS library_thumbnails (
+    CREATE TABLE IF NOT EXISTS file_thumbnails (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      library_item_id INTEGER NOT NULL,
+
+      stored_file_id INTEGER NOT NULL,
 
       kind TEXT NOT NULL
         CHECK (
@@ -604,13 +615,19 @@ const applyAssetRepositorySchema = () => {
 
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-      FOREIGN KEY (library_item_id)
-        REFERENCES library_items(id)
-        ON DELETE CASCADE,
+      FOREIGN KEY (stored_file_id)
+        REFERENCES stored_files(id),
 
-      UNIQUE (library_item_id, kind)
+      UNIQUE (stored_file_id, kind)
     );
   `);
+
+  // THE OLD TABLE, EMPTIED BY MIGRATION RATHER THAN LEFT BESIDE THE NEW ONE.
+  //
+  // It was checked before this was written: library_items and library_thumbnails
+  // were both empty, so nothing is lost. A table that carried rows would need
+  // copying first, and this drop is the reason that check was made.
+  db.exec('DROP TABLE IF EXISTS library_thumbnails;');
 
   /*
    * ----------------------------------------------------------
@@ -705,8 +722,8 @@ const applyAssetRepositorySchema = () => {
       ON library_items(created_at);
 
     CREATE INDEX IF NOT EXISTS
-      idx_library_thumbnails_item
-      ON library_thumbnails(library_item_id);
+      idx_file_thumbnails_file
+      ON file_thumbnails(stored_file_id);
 
     CREATE INDEX IF NOT EXISTS
       idx_library_item_tags_item

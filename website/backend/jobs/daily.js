@@ -47,7 +47,7 @@ const { retentionDays } = require('../lib/retention');
 // Where the blobs are, and the only safe way to build a path to one. This job
 // is the only thing in the system that deletes content, so it is the last place
 // that should be deriving the path for itself.
-const { BLOB_DIR: STORE_DIR, blobPath } = require('../lib/storagePaths');
+const { BLOB_DIR: STORE_DIR, blobPath, thumbPath } = require('../lib/storagePaths');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const COLLECT = process.argv.includes('--collect');
@@ -164,6 +164,13 @@ function runPurge() {
 // the library is the act of releasing it, so `is_active = 1` is deliberate: the
 // row survives to say it was there, and the blob is freed when nothing else
 // holds it.
+//
+// FILE_THUMBNAILS IS THE FIRST REFERENCER THAT DOES NOT BELONG IN THE LIST
+// ABOVE. A preview is produced FROM a blob — derived content, named from its
+// hash — so it does not keep the blob alive, and a preview row must never stop
+// a blob being collected. What it does mean is that the collector has to clear
+// the rows and the preview files itself, because they are not cascaded: see
+// removePreviews() and the delete below.
 const unreferenced = db.prepare(`
     SELECT id, storage_key, file_size, created_at
     FROM stored_files sf
@@ -182,6 +189,33 @@ const unreferenced = db.prepare(`
     ORDER BY sf.id
     LIMIT ?
 `);
+
+const previewKindsFor = db.prepare(
+    'SELECT kind FROM file_thumbnails WHERE stored_file_id = ?'
+);
+
+// THE PREVIEWS GO WHEN THE BLOB GOES.
+//
+// They are derived content and their names are derived from the hash, so once
+// the blob has been collected nothing can reach them again — leaving them would
+// be a slow leak of files nothing will ever ask for. ENOENT is fine here for the
+// same reason it is fine for a blob: the file may already be gone, and the row
+// is what this call is clearing the way for.
+function removePreviews(storageKey, storedFileId) {
+    for (const { kind } of previewKindsFor.all(storedFileId)) {
+        const preview = thumbPath(storageKey, kind);
+
+        if (!preview) continue;
+
+        try {
+            fs.unlinkSync(preview);
+        } catch (err) {
+            if (err.code !== 'ENOENT') {
+                say(`  collector : could not remove preview ${preview}: ${err.message}`);
+            }
+        }
+    }
+}
 
 function runCollector(sound) {
     const garbage = unreferenced.all(GRACE_HOURS, COLLECT_LIMIT);
@@ -246,6 +280,8 @@ function runCollector(sound) {
             // ENOENT is fine — the blob was already gone, and the row is stale.
         }
 
+        removePreviews(row.storage_key, row.id);
+
         gone.push(row);
         removed++;
         freed += row.file_size || 0;
@@ -257,12 +293,19 @@ function runCollector(sound) {
             const dropReferences = db.prepare(
                 'DELETE FROM asset_version_files WHERE stored_file_id = ?'
             );
+            // The FK to stored_files is not cascaded, on purpose: nothing in the
+            // schema may quietly destroy a row. file_thumbnails is derived, so
+            // its rows go here, before the blob's row can be refused.
+            const dropPreviews = db.prepare(
+                'DELETE FROM file_thumbnails WHERE stored_file_id = ?'
+            );
 
             for (const row of gone) {
                 // Belt and braces. The query above proved nothing referenced
                 // these, but a reference added between then and now would
                 // otherwise be silently orphaned by the delete below.
                 dropReferences.run(row.id);
+                dropPreviews.run(row.id);
                 drop.run(row.id);
             }
         })();
