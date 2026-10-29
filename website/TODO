@@ -10676,3 +10676,51 @@ no upside. If something seems to need one of them, ask.
       AND THE MAP IS STILL `Lvl_ThirdPerson`. The game has not been divided into
       an open world yet, so "sync the cells for North Forest" has nothing to
       name. THAT IS A GAME-SIDE TASK, not a Perforce one.
+
+    ============================================================
+    14. REMOTE DEVELOPERS — WHERE A PROXY SITS, AND WHEN
+    ============================================================
+
+    THE OWNER, 2026-10-29: *"Mostly people in the UK - maybe some in Canada
+    USA"*. SO THE TOPOLOGY IS ONE REGION WITH AN OCCASIONAL OUTLIER:
+
+        the server       UK/EU (item 72) — where almost everybody is
+        UK developers    NOTHING NEEDED. Same region as the server, and latency
+                         is a non-issue at that distance.
+        Canada / USA     ONE PROXY, in North America, WHEN there is somebody
+                         there who syncs often enough to notice.
+
+    ONE PROXY COVERS BOTH CANADA AND THE USA. A proxy is a cache for a REGION,
+    not a country; two boxes for one or two people is maintenance for nothing.
+
+    --- AND NOT YET, AND WHY THAT IS NOT PROCRASTINATION ---
+
+      A PROXY IS DEPLOYED WHEN SOMEBODY IS ACTUALLY SLOW. With no North American
+      developer on the project, it would be a box caching nothing — the same
+      rule as everything else in this file: do not build for a problem nobody
+      has yet.
+
+      THE TRIGGER IS LATENCY, NOT SIZE. Perforce is CHATTY — many small metadata
+      operations per command — and a proxy caches the SYNC only, leaving
+      `describe`, `integrate` and history to round-trip to the UK. If the
+      complaint is that those are slow, the answer is an EDGE SERVER, not a
+      proxy: a full replica at the remote site, which means a second server to
+      run, replicate and BACK UP. Not something to take on for five people, and
+      the reason the order below matters.
+
+    --- AND THE LICENCE POINT, WHICH IS WHAT MAKES THIS CHEAP ---
+
+      A PROXY CONSUMES NO USER AND NO WORKSPACE. The free tier is five users and
+      twenty workspaces (item 62/88 §2), and a cache box costs neither — only
+      the VPS it runs on. THAT IS WHY IT CAN BE ADDED LATER WITHOUT NEGOTIATION.
+
+    --- SO THE ORDER IS ---
+
+        one server in the UK/EU
+          → a PROXY in North America when a remote developer is slow
+            → an EDGE SERVER if a whole remote SITE needs metadata speed
+              → a CLOUD WORKSTATION for the one person too far to sync at all
+
+    EACH STEP IS TAKEN WHEN THE ONE BEFORE IT IS COMPLAINED ABOUT. The known
+    mistake in both directions is picking the cheap one where an edge is needed,
+    or standing up an edge for five people.
