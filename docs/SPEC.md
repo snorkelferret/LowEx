@@ -16,6 +16,10 @@ number.
 broken while changing any of this, and which nothing mechanically catches. Read
 it before a change that touches uploads, storage, permissions or Perforce.
 
+**`docs/DEPLOY.md` is the pre-deployment checklist** — what must be true before
+the portal answers on its real domain, including the decisions that are open
+and have to be accepted in writing rather than quietly skipped.
+
 **Every section carries a state:**
 
 | state | meaning |

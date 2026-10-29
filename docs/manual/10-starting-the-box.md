@@ -70,19 +70,38 @@ content that is not there. Nothing else on disk is worth keeping.
 
 ## Keeping it healthy
 
-Five checks, all read-only, all safe against a running server:
+Nine checks, safe against a running server, and one command to run them all:
 
 ```bash
-npm run check:routes     # no route is shadowed by a catch-all
-npm run check:schema     # the database matches the schema in code
-npm run check:naming     # the shared rules do what they say
-npm run check:dom        # every element the client looks for exists
-npm run check:store      # the content store and the database agree
+npm run check            # all nine, stopping at the first failure
 ```
+
+| Check | What it proves |
+|---|---|
+| `check:routes` | no route is shadowed by a catch-all |
+| `check:schema` | the database matches the schema in code |
+| `check:naming` | the shared rules do what they say |
+| `check:dom` | every element the client looks for exists |
+| `check:store` | the content store and the database agree |
+| `check:collector` | the nightly cleanup removes garbage and nothing else |
+| `check:preview` | the preview route serves production, and nobody else |
+| `check:approval` | submit, lock, approve, reject and unlock behave |
+| `check:upload-pending` | an asset under review refuses changes |
+
+**Three of them start the real routes against a throwaway database and
+directories** — they never touch the live data, but they do need `JWT_SECRET`
+and a free local port. The rest read only.
 
 Run them after a migration and before a backup. `check:store` is the one to
 trust when something looks wrong — it re-hashes every stored file and will tell
 you if any content no longer matches its own name.
+
+## Before it goes public
+
+There is a separate page for this, because it is a sequence of steps rather than
+a document to read: **`docs/DEPLOY.md`**. It covers the backup, the environment,
+rotating every known password, how the app is exposed, the decisions that must
+be taken in writing before it is reachable, and the run record.
 
 ## The daily job
 

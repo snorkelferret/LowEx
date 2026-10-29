@@ -11454,3 +11454,55 @@ no upside. If something seems to need one of them, ask.
       * a pending approval on one asset while ANOTHER developer uploads to
         their own — covered in spirit by "a different asset still accepts an
         upload", but not with a second developer's session.
+
+95) THE PRE-DEPLOYMENT CHECKLIST. 2026-10-29.
+    ============================================================
+
+    THE LAST of the four gaps named in the process audit. What existed was
+    item 87's OUTSTANDING block — a growing list of open decisions — and item
+    42, written 2026-10-05, which still describes a system with a seeded
+    superuser and a seed password in db.js. Neither is a sequence of steps, and
+    neither can be RUN.
+
+    docs/DEPLOY.md is the sequence: seven sections, each with what to do, why,
+    and what proof looks like — output, a file, or a change you can see, never
+    "I think that is set". It ends with a RUN RECORD, one row per deployment,
+    because the difference between this and the OUTSTANDING block is that this
+    one is meant to be executed and dated.
+
+    --- WHAT IT COVERS, AND THE THINGS THAT ARE NOT TICKS ---
+
+      0  the backup FIRST — the steps below change accounts and the secret
+      1  the environment: a NEW JWT_SECRET, NODE_ENV=production (the cookie is
+         only Secure when it is, routes/auth.js:68), CLIENT_URL, SMTP or not
+      2  the known passwords — --list, --reset x3, deactivate test accounts,
+         nothing written down. Still outstanding today.
+      3  exposure — THE APP BINDS *:5000 (TODO 44): the app.listen call has no
+         host, and HOST in .env only builds the OAuth callback. Either
+         implement the loopback bind or firewall the port. Plus the proxy, no
+         Vite in production, and the Perforce-subdomain warning.
+      4  DECISIONS THAT MUST BE TAKEN, NOT SKIPPED — a table, because these are
+         not tasks: CSRF (a blocker if anything HTML-serving shares the
+         registrable domain), sessions, impersonation, multi-role, Perforce
+         notification, releases, alerts. Each is "build it or accept it in
+         writing", with the reason in the record.
+      5  backups and the daily job scheduled, and a restore VERIFIED now
+      6  npm run build, npm run check, and a smoke test over HTTPS as each role
+
+    --- WHY IT IS A DOCUMENT AND NOT ANOTHER TODO BLOCK ---
+
+      The OUTSTANDING block is a record of what was DECIDED and not built. It
+      grows, and it is supposed to. A deployment checklist is a thing you DO:
+      it should shrink to a set of dated rows, and a row that says "accepted"
+      is the honest outcome for the decisions in section 4.
+
+      If the two disagree, the TODO holds the reasoning and DEPLOY.md holds the
+      step. Neither replaces the other, which is the same arrangement RULES.md
+      has.
+
+    --- ALSO CORRECTED WHILE WRITING IT ---
+
+      The manual's "Keeping it healthy" said FIVE checks, all read-only. There
+      are nine now, and three of them start the real routes against a throwaway
+      database — they do not touch live data, but "all read-only" had stopped
+      being true. The page lists the nine and points at DEPLOY.md.
