@@ -11577,3 +11577,77 @@ no upside. If something seems to need one of them, ask.
         waiting, which is the same loss as above.
       * NO BACKPRESSURE on the queue's length. A thousand-image upload queues a
         thousand closures; that is cheap, but it is unbounded.
+
+97) THE DOWNLOAD ROUND TRIP, CHECKED. 2026-10-29.
+    ============================================================
+
+    THE LAST of the three behavioural gaps TODO 90 named, and the only route
+    family that HANDS BYTES OUT. Everything tested before it makes rows; a bug
+    here is silent in the worst way — the zip downloads, unzips, and contains
+    something slightly different from what was approved.
+
+    --- WHAT IT PROVES (28 assertions) ---
+
+      MANIFEST  every file listed with hash and size; the version's
+                manifest_hash RECOMPUTED FROM THE RESPONSE equals the value
+                stored on the version — so the two cannot disagree; and
+                archive_hash equals manifest_hash for a whole version.
+      ARCHIVE   a partial request returns exactly the hashes asked for; the
+                container folder is stripped from entry names; every CRC
+                checks; the bytes hash to the names the manifest gives them.
+      BOTH HASHES the manifest embedded in the zip carries manifest_hash (the
+                version, the same on every delivery) and archive_hash (THIS
+                zip, so a subset differs) — the distinction TODO 87's E2 needed
+                and the reason a single hash would fail on every partial
+                download.
+      REFUSALS  an empty list is 400, no list is 400, no hashes is 400, a hash
+                not in the version is 404.
+      ONE FILE  octet-stream, never the stored mime type; exact bytes.
+      RECORD    POST .../downloaded writes a store.download audit row naming
+                the version and what was written.
+      IMPORT    the version is copied back as FILE REFERENCES — same
+                stored_file_id, no bytes — the workspace asset records which
+                store version it came from, and importing twice says "already".
+
+    --- AND A ZIP READER, BECAUSE TRUSTING CONTENT-LENGTH PROVES NOTHING ---
+
+    The archive is written with STORED entries, so a reader is forty lines: the
+    end-of-central-directory, each central header, each local header, and a CRC
+    check on every entry. It lives in the check rather than in backend/, because
+    production writes zips and never reads them — a reader in the application
+    would be a parser of untrusted input that nothing needs (RULES 1).
+
+    --- PROVED IT CAN FAIL ---
+
+      the archive's hash filter removed   -> "it holds the one file asked for"
+                                             FAILED
+      container stripping disabled        -> "the container folder is stripped"
+                                             FAILED, and "names the DELIVERY
+                                             separately" FAILED, and the
+                                             unknown-hash 404 became a 200
+
+      Four correctly named failures; restored, green again.
+
+    --- TWO THINGS THE CHECK FOUND, NOT FIXED ---
+
+      1. UNKNOWN HASHES ARE NOT REPORTED TO THE CALLER, though the route's own
+         comment says they are: "it is reported back so nothing is silently
+         missing". The route computes `unknown` and logs it, and the manifest
+         inside the zip has no field for it — so a client with a stale manifest
+         gets a subset and nothing in the response says a file was left out.
+         The fix is to pass `unknown` into buildVersionArchive and put it in
+         the manifest; it is additive and small, and it should be done with the
+         client's handling of it, not on its own.
+
+      2. AN IMPORTED VERSION HAS NO manifest_hash. insertWorkspaceVersion
+         writes (workspace_asset_id, version_number, created_by, version_note)
+         and nothing else, in both the fresh and the restored branch. So the
+         version a developer gets back from the store has no content identity
+         until an upload replaces it — and "the version I tested is the version
+         I submitted" has no evidence for it, which is the receipt's job
+         (E1). The hash can be computed from the rows just copied, the way the
+         approve route does it for the store version.
+
+      NEITHER IS A TEST GAP; both are recorded here because building the check
+      is what made them visible, and a check that finds nothing is usually a
+      check that is not looking.

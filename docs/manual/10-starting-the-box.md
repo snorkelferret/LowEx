@@ -70,10 +70,10 @@ content that is not there. Nothing else on disk is worth keeping.
 
 ## Keeping it healthy
 
-Nine checks, safe against a running server, and one command to run them all:
+Ten checks, safe against a running server, and one command to run them all:
 
 ```bash
-npm run check            # all nine, stopping at the first failure
+npm run check            # all ten, stopping at the first failure
 ```
 
 | Check | What it proves |
@@ -87,10 +87,12 @@ npm run check            # all nine, stopping at the first failure
 | `check:preview` | the preview route serves production, and nobody else |
 | `check:approval` | submit, lock, approve, reject and unlock behave |
 | `check:upload-pending` | an asset under review refuses changes |
+| `check:round-trip` | a version downloads as approved and imports back as references |
 
-**Three of them start the real routes against a throwaway database and
+**Four of them start the real routes against a throwaway database and
 directories** — they never touch the live data, but they do need `JWT_SECRET`
-and a free local port. The rest read only.
+and a free local port. `check:collector` runs the cleanup code the same way,
+without a server. The rest read only.
 
 Run them after a migration and before a backup. `check:store` is the one to
 trust when something looks wrong — it re-hashes every stored file and will tell
