@@ -207,6 +207,22 @@ async function main() {
     report.check('and the version was created', versionsOf(2) === 2,
         `${versionsOf(2)} versions of OtherWork, expected 2`);
 
+    // THE PREVIEW IS MADE AFTER THE RESPONSE NOW, so it is not there the
+    // instant the upload returns — and that is the point: the developer is not
+    // waiting for an encoder. It still has to arrive.
+    const uploadedSha = crypto.createHash('sha256').update(FIRST_UPLOAD).digest('hex');
+
+    let previewed = null;
+
+    for (let attempt = 0; attempt < 50 && !previewed; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        previewed = db.prepare('SELECT id FROM file_thumbnails WHERE storage_key = ?')
+            .get(uploadedSha);
+    }
+
+    report.check('its preview is made after the response', !!previewed,
+        'no file_thumbnails row appeared — the background pass is not running, or it lost the upload');
+
     // -----------------------------------------------------------------
     // The freeze lifts on rejection
     // -----------------------------------------------------------------

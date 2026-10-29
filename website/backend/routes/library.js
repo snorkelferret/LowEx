@@ -476,6 +476,13 @@ router.post(
             // for a video_frame or a model_preview when one exists.
             // ------------------------------------------------------
 
+            // THIS ONE WAITS, AND THE APPROVAL UPLOAD DOES NOT. The library
+            // writes the thumbnail row with the item and reports whether there
+            // is one in the response, so the picture has to exist first. The
+            // approval upload has its file rows committed already, so it
+            // replies and makes the pictures afterwards. Both go through the
+            // same queue in lib/thumbnails.js — two at a time — which is what
+            // keeps either from taking the server's thread pool.
             for (const entry of prepared) {
                 entry.thumbnail = null;
 

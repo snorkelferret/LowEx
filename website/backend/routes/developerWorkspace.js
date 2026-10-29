@@ -62,6 +62,46 @@ const upsertFileThumbnail = db.prepare(`
         width = excluded.width,
         height = excluded.height
 `);
+// THE PREVIEWS FOR ONE UPLOAD, made AFTER the response has been sent.
+//
+// One after another rather than Promise.all, so one upload's files do not all
+// queue for the shared threads at once; the queue in lib/thumbnails.js is the
+// backstop, not a reason to be greedy. A failure is logged and skipped — the
+// upload has already committed and a picture is not worth failing it.
+async function generatePreviews(items) {
+    for (const item of items) {
+        if (!item.storedFileId) continue;
+
+        const kind = previewKindOf(item.filename);
+
+        if (!kind) continue;
+
+        const sourcePath = blobPath(item.sha256);
+
+        if (!sourcePath) continue;
+
+        try {
+            const made = await makePreview(sourcePath, item.sha256, kind);
+
+            if (made) {
+                upsertFileThumbnail.run(
+                    item.storedFileId,
+                    made.kind,
+                    item.sha256,
+                    made.width,
+                    made.height
+                );
+            }
+
+        } catch (err) {
+            console.error(
+                `Could not make a preview for ${item.filename}:`,
+                err.message
+            );
+        }
+    }
+}
+
 // Getting bytes into the store. SHARED WITH THE LIBRARY'S UPLOAD — there is one
 // implementation of this on purpose; see the note at the top of the file.
 const { storeOne } = require('../lib/ingestFiles');
@@ -3412,57 +3452,27 @@ router.post(
             }
 
             // ----------------------------------------------------
-            // PREVIEWS, SO THE APPROVER CAN SEE THE WORK.
+            // RESPOND FIRST, THEN MAKE THE PREVIEWS.
             //
             // docs/assettypes01 §1 B: "seeing the asset on the website, so an
             // approver can judge it without downloading." PRODUCTION DOES NOT
             // HAVE BLENDER OR UNREAL — a download is useless to them even when
             // they are allowed one. They need to look, and this is the looking.
             //
-            // OUTSIDE THE TRANSACTION, on purpose. This reads a file and writes
-            // a picture; neither belongs inside a database transaction holding
-            // the write lock. AND FROM THE BLOB, not the temp file, because the
-            // temp files are unlinked above.
+            // BUT A PICTURE IS NOT THE UPLOAD. The upload has already
+            // committed and the developer is waiting on the reply. Encoding an
+            // image takes milliseconds and a video frame can take seconds, so
+            // running that first made a bundle with clips in it feel like a
+            // hung upload — a regression previews introduced, fixed here.
             //
-            // A PREVIEW THAT FAILS IS LOGGED AND SKIPPED. The upload has
-            // already committed; a picture is not worth failing it, and the
-            // item is still worth having without one.
+            // THE PREVIEWS ARE DERIVED CONTENT. Nothing depends on them
+            // existing at the moment of the reply, and a preview that fails is
+            // logged and skipped. The shared queue in lib/thumbnails.js keeps
+            // the background work from becoming a flood: at most two at a
+            // time, across every caller.
             // ----------------------------------------------------
 
-            for (const item of processedFiles) {
-                if (!item.storedFileId) continue;
-
-                const kind = previewKindOf(item.filename);
-
-                if (!kind) continue;
-
-                const sourcePath = blobPath(item.sha256);
-
-                if (!sourcePath) continue;
-
-                try {
-                    const made = await makePreview(sourcePath, item.sha256, kind);
-
-                    if (made) {
-                        upsertFileThumbnail.run(
-                            item.storedFileId,
-                            made.kind,
-                            item.sha256,
-                            made.width,
-                            made.height
-                        );
-                    }
-
-                } catch (err) {
-                    console.error(
-                        `Could not make a preview for ${item.filename}:`,
-                        err.message
-                    );
-                }
-            }
-
-
-            return res.status(201).json({
+            res.status(201).json({
                 status: 'created',
                 // Backups were found and dropped. Said out loud so the
                 // developer is not left wondering why the file count differs
@@ -3470,6 +3480,16 @@ router.post(
                 skipped_backups: skippedBackups,
                 ...result
             });
+
+            // NOT AWAITED. The promise is given a catch here rather than left
+            // to become an unhandled rejection, which in Node 22 takes the
+            // process down — an upload succeeding and the server dying a
+            // second later would be the worst possible trade.
+            generatePreviews(processedFiles).catch(err => {
+                console.error('Previews for an upload failed:', err.message);
+            });
+
+            return;
 
 
         } catch (err) {

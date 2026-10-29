@@ -347,6 +347,13 @@ them, which are ordinary texture and render formats in game art. That fallback
 is the same frame path the video posters use, not a second preview system. What
 neither can read gets no preview and no error.
 
+**Previews never delay an upload, and never take the server with them.** The
+upload responds first and the pictures follow, two at a time through a shared
+queue, with a 64-megapixel input ceiling — sharp and ffmpeg both run on
+resources every other request shares. A preview lost to a restart is not
+regenerated on demand yet; the file simply shows no picture until it is
+uploaded again.
+
 **A preview is derived content, not store content.** It is made from the blob
 and written outside the store (`THUMB_DIR`), gets no `stored_files` row, is
 counted against no quota, and is never collected as authored work; deleting

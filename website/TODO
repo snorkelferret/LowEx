@@ -11506,3 +11506,74 @@ no upside. If something seems to need one of them, ask.
       are nine now, and three of them start the real routes against a throwaway
       database — they do not touch live data, but "all read-only" had stopped
       being true. The page lists the nine and points at DEPLOY.md.
+
+96) PREVIEWS ARE CAPPED, AND THEY NO LONGER DELAY THE UPLOAD. 2026-10-29.
+    ============================================================
+
+    THE LAST of the four gaps in the process audit, and the one TODO 89
+    recorded against itself when previews were built: "no memory ceiling beyond
+    the pixel limit, no concurrency limit". It also fixed a regression previews
+    had introduced.
+
+    --- THE REGRESSION ---
+
+    THE PREVIEW LOOP RAN BEFORE THE RESPONSE. The upload had already committed,
+    then the route read every blob and encoded a picture for it, and only then
+    answered. For a texture that is milliseconds; for a video, ffmpeg can take
+    seconds. A bundle with three clips in it made a finished upload feel hung —
+    and nothing a developer could see explained why.
+
+    The upload now responds FIRST and makes the previews afterwards. They are
+    derived content: nothing depends on them existing at the moment of the
+    reply, and a failure is logged and skipped. The promise is given an
+    explicit catch, because an unhandled rejection in Node 22 takes the process
+    down — an upload succeeding and the server dying a second later would be
+    the worst possible trade.
+
+    --- THE CAP, IN ONE PLACE ---
+
+    backend/lib/thumbnails.js gained a queue: AT MOST TWO PREVIEWS AT A TIME,
+    whichever caller asks. sharp runs inside libvips on libuv's thread pool,
+    which is FOUR THREADS SHARED WITH EVERY OTHER REQUEST, and ffmpeg is a
+    child process; an unbounded burst of either makes the portal wait behind
+    thumbnails. The cap is in the shared module rather than at each call site
+    because that is the only way both spaces are covered (RULES 5).
+
+    AND AN EXPLICIT PIXEL CEILING: 64 megapixels, set on the sharp constructor
+    rather than inherited from its default. The decoded image is what occupies
+    memory, not the file, and 64MP bounds the worst case at roughly 256 MB.
+    An image over the line gets no preview rather than a large allocation.
+
+    ffmpeg already had a 15-second timeout and a 64 MB output buffer, added
+    when previews crossed item 35.
+
+    --- THE LIBRARY STILL WAITS, DELIBERATELY ---
+
+    library.js writes its thumbnail row WITH the item and reports whether there
+    is one in the response, so the picture has to exist before the reply. It is
+    capped by the same queue. The difference is recorded beside both call
+    sites, because two callers behaving differently without a reason written
+    down is how the next person "fixes" one of them.
+
+    --- WHAT WAS VERIFIED ---
+
+      * all nine checks pass, including the upload check
+      * check:upload-pending gained an assertion that an accepted upload's
+        preview ARRIVES after the response — polled, because it is no longer
+        there the instant the reply lands
+      * six concurrent makePreview calls resolve correctly with distinct
+        dimensions (a correctness test of the queue, NOT a measurement of the
+        ceiling — nothing observes `running`, and a test that infers it from
+        wall-clock timing would be flaky)
+
+    --- WHAT IT DOES NOT DO ---
+
+      * NO REGENERATION. A preview lost to a restart mid-pass is not rebuilt;
+        the file shows no picture until it is uploaded again. The obvious fix
+        is to generate on first request in the preview route and cache the
+        result — the table already treats itself as a cache — but that changes
+        when a reviewer sees a picture, so it is a decision.
+      * NO PERSISTENCE. The queue is in-process. A restart loses whatever was
+        waiting, which is the same loss as above.
+      * NO BACKPRESSURE on the queue's length. A thousand-image upload queues a
+        thousand closures; that is cheap, but it is unbounded.

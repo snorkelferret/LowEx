@@ -41,6 +41,21 @@
 // is therefore no ambiguity about where a preview lives, which is what lets the
 // table below be a CACHE of what has been made rather than the source of truth
 // about it.
+//
+// ============================================================
+// AND IT IS CAPPED, BECAUSE A PICTURE IS NOT THE UPLOAD
+// ============================================================
+//
+// TWO AT A TIME, via the queue below, and 64 megapixels of input at most. The
+// work runs on libuv's shared thread pool (sharp) or as a child process
+// (ffmpeg), and neither is free: an unbounded burst of previews makes every
+// other request in the portal wait behind thumbnails.
+//
+// THE CALLERS ALSO DECIDE WHEN TO WAIT. The approval upload responds FIRST and
+// makes its previews afterwards — a video's frame can take seconds and nobody
+// should be staring at a finished upload. The library still waits, because the
+// library writes its thumbnail row with the item and reports it in the
+// response; the queue is what keeps that from being a flood.
 
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -54,6 +69,59 @@ const run = promisify(execFile);
 
 // Big enough to judge a texture by, small enough that a page of them is cheap.
 const THUMB_SIZE = 320;
+
+// ============================================================
+// THE CAP — HOW MUCH OF THE SERVER PREVIEWS MAY USE
+// ============================================================
+//
+// Previews are made for every image and video a developer uploads, and the
+// work is done by two things that are not free: sharp, inside libvips on
+// libuv's THREAD POOL, and ffmpeg, as a child process. THE THREAD POOL IS FOUR
+// THREADS BY DEFAULT AND IT IS SHARED WITH EVERY OTHER REQUEST — a handful of
+// large images is enough to leave the portal waiting behind thumbnails.
+//
+// So previews QUEUE HERE, two at a time, whichever caller asks for one. This is
+// the one place both spaces go through (RULES 5), which is what stops the cap
+// being forgotten by one of them.
+const MAX_CONCURRENT = 2;
+
+// A PIXEL CEILING, EXPLICIT RATHER THAN INHERITED.
+//
+// sharp refuses images over ~268 megapixels by default. Sixty-four is generous
+// for a texture or a render, and it bounds the worst case to roughly 256 MB for
+// a decoded RGBA image — which matters because the decoded image, not the file
+// on disk, is what occupies memory. An image over the line gets NO PREVIEW
+// rather than a large allocation.
+const MAX_INPUT_PIXELS = 64 * 1000 * 1000;
+
+let running = 0;
+const waiting = [];
+
+function schedule(task) {
+    return new Promise((resolve, reject) => {
+        waiting.push({ task, resolve, reject });
+        drain();
+    });
+}
+
+function drain() {
+    while (running < MAX_CONCURRENT && waiting.length > 0) {
+        const job = waiting.shift();
+
+        running++;
+
+        // Promise.resolve().then(...) so a task that throws SYNCHRONOUSLY is
+        // still a rejection this queue can settle, rather than an exception
+        // thrown back into drain() and a counter that never comes down.
+        Promise.resolve()
+            .then(job.task)
+            .then(job.resolve, job.reject)
+            .finally(() => {
+                running--;
+                drain();
+            });
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Which kinds of file get one
@@ -86,12 +154,19 @@ function previewKindOf(filename) {
 /**
  * A preview of `sourcePath`, written to THUMB_DIR, or null.
  *
+ * QUEUED, not started: at most MAX_CONCURRENT previews run at once, so an
+ * upload of a thousand images cannot take the server's thread pool with it.
+ *
  * Returns { createdPath, width, height } or null when the file yields no
  * picture. NULL IS NOT AN ERROR: a damaged image, a video with no decodable
  * frame, or a kind we do not do all arrive here, and none of them is a reason
  * to fail the upload that brought the file.
  */
-async function makePreview(sourcePath, storageKey, kind) {
+function makePreview(sourcePath, storageKey, kind) {
+    return schedule(() => buildPreview(sourcePath, storageKey, kind));
+}
+
+async function buildPreview(sourcePath, storageKey, kind) {
     const destination = thumbPath(storageKey, kind);
 
     if (!destination) return null;
@@ -147,7 +222,7 @@ async function makePreview(sourcePath, storageKey, kind) {
  * a picture rather than throwing; for a thumbnail that is the right trade.
  */
 async function toWebp(input, destination, kind) {
-    const info = await sharp(input, { failOn: 'none' })
+    const info = await sharp(input, { failOn: 'none', limitInputPixels: MAX_INPUT_PIXELS })
         .rotate()
         .resize(THUMB_SIZE, THUMB_SIZE, {
             fit: 'inside',
