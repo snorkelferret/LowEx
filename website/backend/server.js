@@ -77,6 +77,20 @@ if (!JWT_SECRET) {
 console.log("ENV CONFIG PORT ", PORT, "BIND ", BIND, "PUBLIC ", PUBLIC_URL, "CLIENT URL ", CLIENT_URL);
 
 
+// BEHIND A PROXY, ON LOOPBACK ONLY.
+//
+// The reverse proxy (deploy/nginx) forwards to 127.0.0.1 and sets
+// X-Forwarded-For. Without this, req.ip is the PROXY's address for every
+// request — the failure TODO 48 describes, where a rule built on it would act
+// on Cloudflare, which is everybody.
+//
+// THIS IS ONLY SAFE BECAUSE THE APP BINDS LOOPBACK. The forwarded headers can
+// be believed precisely because nothing but the proxy on this machine can reach
+// the socket to forge them; `npm run check:bind` is the proof that this stays
+// true. Loosening the bind and keeping this line would turn a header into a
+// claim.
+app.set('trust proxy', 'loopback');
+
 // Enable CORS dynamically for client URL
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
 //app.use(cors());

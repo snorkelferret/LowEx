@@ -103,14 +103,17 @@ Then:
 
 | Do | Why |
 |---|---|
-| Run a reverse proxy on 443, with 80 redirecting to it, forwarding to the app | The app cannot serve HTTPS itself. TLS, rate limiting and "admin routes only from the studio" all belong at the proxy. |
+| **Protect the origin** — firewall 80/443 to Cloudflare's published ranges, **or** run a Cloudflare Tunnel so there is no inbound port | If the origin answers anybody, every Cloudflare rule is bypassable by connecting straight to the IP with the right `Host` header (TODO 48). This is the prerequisite for `trust proxy`, which the application now sets. |
+| Install the proxy config: **`deploy/nginx/lowexpectations.conf`**, with **`deploy/README.md`** beside it | The app cannot serve HTTPS itself. The config covers the Cloudflare Origin Certificate, the real-IP ranges, streaming uploads and archives, and the 6 GB transport ceiling. If you choose the Tunnel instead, there is no proxy to run — the README says so. |
 | Do **not** run Vite (`npm run start:frontend`) | It is a development server. In production the backend serves `frontend/dist`. |
 | Put Perforce on a subdomain only after reading TODO 88's `IMPORTANT` note | A service sharing the registrable domain changes what the session cookie means: CORS stops a reply being read, not the request being sent. |
 | Check that the database and uploads are not served | Only `frontend/dist` and `frontend/public` are mounted as static. Confirm from outside — `curl -I https://<host>/backend/database.db` must not be 200. |
 
 **Proof:** from another machine, only 443 answers; `curl http://<ip>:5000`
-fails; `/backend/database.db` and `/backend/uploads/files/<sha>` return 404.
-`npm run check:bind` covers the first two from this machine.
+fails; `curl -k https://<ip>/ -H 'Host: lowexpectations.zone'` also fails — that
+is the attack the firewall exists for. `/backend/database.db` and
+`/backend/uploads/files/<sha>` return 404. `npm run check:bind` covers the first
+two from this machine; `deploy/README.md` has the full list.
 
 ---
 
@@ -182,7 +185,7 @@ One row per deployment. A row with "accepted" and no reason is not a record.
 | 1 | 0. Backup taken | not run | — | — | |
 | 2 | 1. Environment | not run | — | — | |
 | 3 | 2. Passwords rotated | **outstanding** | — | — | all three accounts are on development passwords |
-| 4 | 3. Exposure | not run | — | — | loopback bind is built and checked; the proxy is not placed yet |
+| 4 | 3. Exposure | not run | — | — | bind and proxy config are built; the origin, firewall and DNS are not placed yet |
 | 5 | 4. Decisions | **outstanding** | — | — | CSRF, sessions, impersonation, multi-role, Perforce |
 | 6 | 5. Backups and job | not run | — | — | |
 | 7 | 6. Prove it | not run | — | — | |

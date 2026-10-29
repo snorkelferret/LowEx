@@ -11821,3 +11821,60 @@ no upside. If something seems to need one of them, ask.
         ignores them because they match none of the patterns.
       * .env and .env.example are where the values are SET, which is the point.
         The guard is about where they are DEFINED in code.
+
+100) THE PROXY CONFIG. 2026-10-29.
+     ============================================================
+
+     TODO 44's other half. The app binds loopback and is unreachable from the
+     network; something has to face the world, and it had to be written down
+     rather than assembled from memory on the day.
+
+     deploy/nginx/lowexpectations.conf — nginx on 443, forwarding to
+     127.0.0.1:5000. It carries the decisions rather than repeating them:
+
+       * TLS at the origin is a CLOUDFLARE ORIGIN CERTIFICATE, because with the
+         origin reachable only from Cloudflare there is nothing to answer an
+         ACME HTTP-01 challenge. Full (strict) at the zone.
+       * REAL-IP COMES FROM AN INCLUDED RANGES FILE, generated from
+         cloudflare.com/ips rather than pasted and forgotten. Item 48's failure
+         is the one this prevents: an app that sees Cloudflare's address for
+         every request would act on everybody.
+       * client_max_body_size 6g — A TRANSPORT CEILING, ABOVE THE DEFAULT 5 GB
+         WORKSPACE ALLOWANCE. Not a policy: the app's quota check is. nginx's
+         1 MB default would have refused every upload before it reached the
+         application.
+       * proxy_request_buffering off and proxy_buffering off — uploads stream in
+         and archives stream out, instead of the proxy writing either to disk
+         first.
+       * 300s read/send timeouts: the technical check hashes every file and an
+         archive can be hundreds of megabytes. Both are slow and legitimate.
+
+     deploy/README.md — the four things around it: protect the origin (firewall
+     to Cloudflare's ranges, or a Tunnel with no inbound port at all), generate
+     the ranges file and refresh it monthly, install the Origin Certificate, and
+     why trust proxy is safe only after the first of those. Then install, then
+     PROVE IT: from another machine, `https://lowexpectations.zone` answers,
+     `http://<origin-ip>:5000` fails, and so does
+     `curl -k https://<origin-ip>/ -H 'Host: lowexpectations.zone'` — which is
+     the attack the firewall exists for.
+
+     THE THREE THINGS IT IS NOT IN CHARGE OF, said plainly so nobody looks for
+     them here: Perforce (TCP, its own protections), rate limiting and bot
+     protection (Cloudflare, where the reputation data is — TODO 48), and the
+     application's own per-request upload limit, still wanted (item 9).
+
+     --- VERIFIED ---
+
+     `nginx -t` against nginx 1.30.5, with the include and certificate paths
+     pointed at a temporary equivalent and the listen ports moved to high
+     numbers so a non-root user could bind them: "syntax is ok" and "test is
+     successful". The real paths and ports are what is in the file; the
+     substitution existed only to make the validation possible here.
+
+     --- AND ONE APPLICATION CHANGE IT REQUIRED ---
+
+     `app.set('trust proxy', 'loopback')` in server.js. Without it req.ip is the
+     proxy's address for every request. It is safe ONLY because the app binds
+     loopback — nothing else can reach the socket to forge X-Forwarded-For —
+     which is the prerequisite item 48 named, and check:bind is what keeps it
+     true.

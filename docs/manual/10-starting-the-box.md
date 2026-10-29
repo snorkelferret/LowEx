@@ -118,6 +118,11 @@ a document to read: **`docs/DEPLOY.md`**. It covers the backup, the environment,
 rotating every known password, how the app is exposed, the decisions that must
 be taken in writing before it is reachable, and the run record.
 
+The exposure half has its own folder: **`deploy/`**. `deploy/nginx/lowexpectations.conf`
+is the reverse proxy, and `deploy/README.md` explains the Cloudflare Origin
+Certificate, the origin firewall (or Tunnel), and the checks that prove only
+Cloudflare can reach the app. Read the README before the config.
+
 ## The daily job
 
 One script, run from cron. It does two things in order, because the second
