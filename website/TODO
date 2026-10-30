@@ -12143,8 +12143,18 @@ no upside. If something seems to need one of them, ask.
          §15) will deliver the changelist's file list, which is what turns
          membership from something chosen by hand into something the depot
          proposes.
-       * PROD SEEING THE RELEASE LIST. Admin only today; item 83 is the same
-         question asked about the store.
+       * PROD SEEING THE RELEASE LIST. Not yet; item 83 is the same question
+         asked about the store.
+
+       DEVELOPERS SEE IT READ-ONLY (2026-10-30, asked for): the SAME component
+       and the SAME script on both dashboards, included by build.js rather than
+       copied (RULES 5). Reads are developer+admin; create/add/remove/delete
+       stay admin, and the page draws no control the server would refuse. Two
+       aids answer their actual question — "which of my assets were accepted,
+       and into what": the releases list counts the viewer's own versions, both
+       lists carry the uploader, an ONLY MY WORK filter narrows them, and every
+       column header sorts. The check asserts a developer can read and count,
+       and cannot add or create.
        * THE STREAM SIDE. "Devs add an asset to their stream" is Perforce's
          task streams (TODO 88 §3); the portal's candidates start at APPROVED
          store versions, because nothing tells it about a stream yet.

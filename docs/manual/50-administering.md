@@ -180,6 +180,8 @@ misconfigured mail server is never the reason nobody can get in.
 
 **Releases** is where an approved asset is put into a named build — "0.4
 Experimental, 12 Nov" — and where you can see what a build already contains.
+**Developers see the same panel read-only**; the controls that write are shown
+to administrators only, because the server refuses everybody else.
 
 Two lists, and the difference matters:
 

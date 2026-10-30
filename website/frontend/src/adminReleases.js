@@ -5,32 +5,32 @@
 // between two builds.
 //
 // ============================================================
-// WHY THIS EXISTS
+// ONE PANEL, TWO PAGES, TWO ROLES
 // ============================================================
 //
-// An approved version could record a changelist and nothing else. "Which
-// version of the game does this go into, what is already in it, and what is
-// actually inside it?" had no answer anywhere. A release is a NAME and a DATE;
-// its content is a set of approved versions; each version is a set of files
-// with content hashes.
+// The same file is the admin's section and the developer's tab. The server
+// decides what is allowed — reads are developer+admin, writes are admin — and
+// this script does not offer what the server would refuse: the create form, the
+// delete button, the add and remove buttons and the changelist fields are
+// hidden unless the viewer is an administrator.
+//
+// A DEVELOPER SEES THE SAME THING, READ-ONLY, plus two aids for the question
+// they actually have — "which of my assets were accepted, and into what":
+//
+//   ONLY MY WORK   filters both lists to versions the viewer uploaded
+//   SORTING        every column header sorts, so finding your rows in a long
+//                  build does not mean reading it
+//
+// AND THE RELEASES LIST COUNTS YOUR OWN WORK in each build, before it is even
+// opened.
 //
 // ============================================================
-// THE THREE THINGS ON THIS PAGE
+// THE UPLOADER IS NOT THE APPROVER
 // ============================================================
 //
-//   IN THIS RELEASE   what this build ships. One version per asset — the
-//                     server refuses a second and names the one in the way.
-//
-//   CANDIDATES        approved, not in this release. A version already in
-//                     ANOTHER release still appears, marked.
-//
-//   FILES / DIFF      the manifest of one version as a tree, with each file's
-//                     hash and size behind a toggle; and what changed between
-//                     two builds, by asset and by file CONTENT HASH.
-//
-// THE UPLOADER IS NOT ON THE STORE VERSION. The store records who approved;
-// who authored it is one link back through the approval, and the server joins
-// it. Both are shown, because they are different people and different acts.
+// The store version records both. created_by is who approved it; uploaded_by is
+// who authored it. "Mine" means uploaded_by, because that is the question "my
+// work" asks.
 
 import { $, escapeHtml } from './utils.js';
 import { apiFetch } from './api.js';
@@ -39,14 +39,32 @@ import { formatBytes } from '../../shared/formatBytes.mjs';
 const API = '/api/releases';
 const GAME_API = '/api/game';
 
+// WHO IS LOOKING. From the profile the login stored — cosmetic only, because
+// the server checks the role on every request; this decides what to DRAW.
+const ME = (() => {
+    try {
+        return JSON.parse(localStorage.getItem('user_info') || '{}') || {};
+    } catch {
+        return {};
+    }
+})();
+
+const IS_ADMIN = ME.role === 'admin';
+
 let selectedId = null;
 let allReleases = [];
+let currentDetail = null;
 
-// WHICH PANEL, IF ANY, IS OPEN. Both the file tree and the diff are revealed
-// by a button, and the same button hides them again — a control that only
-// opens is a one-way door, and the only way back was to change release.
+// WHICH PANEL, IF ANY, IS OPEN. Both the file tree and the diff are revealed by
+// a button, and the same button hides them again — a control that only opens is
+// a one-way door.
 let openManifest = null;   // { assetId, versionId }
-let openDiff = null;       // "fromId:toId" 
+let openDiff = null;       // "fromId:toId"
+
+// Sorting, per table. Toggling a header flips the direction; choosing another
+// header starts ascending on that one.
+let memberSort = { key: 'asset', dir: 1 };
+let candidateSort = { key: 'asset', dir: 1 };
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -90,15 +108,50 @@ function formatDate(value) {
 
 const shortHash = hash => (hash ? `${hash.slice(0, 12)}…` : '—');
 
-// "uploaded by val · approved by prod · 12 Nov" — the line an admin reads.
-function peopleLine(row) {
-    const parts = [];
+const isMine = row => Boolean(ME.username && row.uploaded_by === ME.username);
 
-    if (row.uploaded_by) parts.push(`uploaded by ${escapeHtml(row.uploaded_by)}`);
-    if (row.approved_by) parts.push(`approved by ${escapeHtml(row.approved_by)}`);
-    if (row.decided_at) parts.push(formatDate(row.decided_at));
+const mineOnly = () => Boolean($('releaseMineOnly')?.checked);
 
-    return parts.join(' · ');
+// The sort keys, so the header buttons and the comparators cannot disagree.
+const SORT_KEYS = {
+    asset: row => String(row.asset_name || '').toLowerCase(),
+    version: row => row.version_number || 0,
+    uploaded: row => String(row.uploaded_by || '').toLowerCase(),
+    approved: row => String(row.approved_by || '').toLowerCase(),
+    decided: row => String(row.decided_at || ''),
+    changelist: row => row.changelist || 0
+};
+
+function sortRows(rows, sort) {
+    const key = SORT_KEYS[sort.key] || SORT_KEYS.asset;
+
+    return [...rows].sort((a, b) => {
+        const left = key(a);
+        const right = key(b);
+
+        if (left < right) return -1 * sort.dir;
+        if (left > right) return 1 * sort.dir;
+        return String(a.asset_name).localeCompare(String(b.asset_name));
+    });
+}
+
+// A column header that sorts. The arrow says which column is in charge and
+// which way round.
+function sortHeader(label, table, key, current) {
+    const th = document.createElement('th');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-link p-0 text-decoration-none text-uppercase small '
+        + (current.key === key ? 'text-info' : 'text-secondary');
+    button.dataset.sortTable = table;
+    button.dataset.sortKey = key;
+    button.innerHTML = escapeHtml(label)
+        + (current.key === key
+            ? ` <i class="bi bi-caret-${current.dir === 1 ? 'up' : 'down'}-fill"></i>`
+            : ' <i class="bi bi-arrow-down-up"></i>');
+
+    th.appendChild(button);
+    return th;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +165,7 @@ function renderReleases(releases) {
     list.innerHTML = '';
 
     if (releases.length === 0) {
-        list.innerHTML = '<span class="text-secondary">No releases yet. Name one above — “0.4 Experimental, 12 Nov”.</span>';
+        list.innerHTML = '<span class="text-secondary">No releases yet.</span>';
         return;
     }
 
@@ -126,17 +179,21 @@ function renderReleases(releases) {
         const date = release.released_on ? formatDate(release.released_on) : 'no date';
         const changelist = release.changelist ? ` · CL ${release.changelist}` : '';
 
+        // HOW MUCH OF THIS BUILD IS THE VIEWER'S OWN WORK. That is the question
+        // a developer opens this page to answer.
+        const mine = release.mine_count > 0
+            ? ` · <span class="text-info">${release.mine_count} of yours</span>`
+            : '';
+
         button.innerHTML =
             `<span class="fw-semibold">${escapeHtml(release.name)}</span>` +
             `<span class="d-block small text-secondary">${date}${changelist} · ` +
-            `${release.asset_count} version${release.asset_count === 1 ? '' : 's'}</span>`;
+            `${release.asset_count} version${release.asset_count === 1 ? '' : 's'}${mine}</span>`;
 
         list.appendChild(button);
     }
 }
 
-// The two selects for the diff, kept in step with the list. A selection is
-// preserved when it still exists, so comparing does not reset itself.
 function refreshDiffSelects() {
     for (const id of ['releaseDiffFrom', 'releaseDiffTo']) {
         const select = $(id);
@@ -153,7 +210,6 @@ function refreshDiffSelects() {
         }
     }
 
-    // Default: to = the selected release, from = the newest other one.
     const to = $('releaseDiffTo');
     const from = $('releaseDiffFrom');
 
@@ -177,39 +233,89 @@ async function loadReleases() {
 }
 
 // ---------------------------------------------------------------------------
-// One release
+// What is in a release
 // ---------------------------------------------------------------------------
+
+function peopleCell(row) {
+    const cell = document.createElement('td');
+    cell.className = 'small text-secondary';
+
+    const parts = [];
+    if (row.uploaded_by) parts.push(`uploaded ${escapeHtml(row.uploaded_by)}`);
+    if (row.approved_by) parts.push(`approved ${escapeHtml(row.approved_by)}`);
+    if (row.decided_at) parts.push(formatDate(row.decided_at));
+
+    cell.innerHTML = parts.join(' · ') || '—';
+    return cell;
+}
+
+function assetCell(row, extraBadge) {
+    const cell = document.createElement('td');
+
+    cell.innerHTML =
+        `${escapeHtml(row.asset_name)} <span class="text-secondary">v${row.version_number}</span>` +
+        (isMine(row) ? ' <span class="badge text-bg-info ms-1">yours</span>' : '') +
+        (extraBadge || '');
+
+    return cell;
+}
+
+function emptyRow(table, message) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.className = 'text-secondary';
+    td.textContent = message;
+    tr.appendChild(td);
+    table.appendChild(tr);
+}
 
 function renderMembers(members) {
     const box = $('releaseMembers');
     const count = $('releaseMemberCount');
-
-    if (count) count.textContent = `(${members.length})`;
     if (!box) return;
+
+    const shown = sortRows(mineOnly() ? members.filter(isMine) : members, memberSort);
+
+    if (count) {
+        const mine = members.filter(isMine).length;
+        count.textContent = `(${shown.length}${shown.length !== members.length ? ` of ${members.length}` : ''}`
+            + `${mine ? ` · ${mine} yours` : ''})`;
+    }
 
     box.innerHTML = '';
 
-    if (members.length === 0) {
-        box.innerHTML = '<span class="text-secondary">Nothing in this release yet.</span>';
-        return;
-    }
-
     const table = document.createElement('table');
     table.className = 'table table-sm align-middle mb-0';
-    table.innerHTML =
-        '<thead class="text-uppercase small"><tr>' +
-        '<th>Asset</th><th>Who</th><th>CL</th><th></th>' +
-        '</tr></thead>';
+
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headRow.appendChild(sortHeader('Asset', 'members', 'asset', memberSort));
+    headRow.appendChild(sortHeader('Uploaded', 'members', 'uploaded', memberSort));
+    headRow.appendChild(sortHeader('Approved', 'members', 'approved', memberSort));
+    headRow.appendChild(sortHeader('CL', 'members', 'changelist', memberSort));
+    headRow.appendChild(document.createElement('th'));
+    thead.appendChild(headRow);
+    table.appendChild(thead);
 
     const body = document.createElement('tbody');
 
-    for (const row of members) {
+    if (shown.length === 0) {
+        emptyRow(table, members.length === 0
+            ? 'Nothing in this release yet.'
+            : 'None of this release is yours.');
+    }
+
+    for (const row of shown) {
         const tr = document.createElement('tr');
 
-        tr.innerHTML =
-            `<td>${escapeHtml(row.asset_name)} <span class="text-secondary">v${row.version_number}</span></td>` +
-            `<td class="small text-secondary">${peopleLine(row)}</td>` +
-            `<td class="small text-secondary">${row.changelist ? `CL ${row.changelist}` : '—'}</td>`;
+        tr.appendChild(assetCell(row));
+        tr.appendChild(peopleCell(row));
+
+        const changelist = document.createElement('td');
+        changelist.className = 'small text-secondary';
+        changelist.textContent = row.changelist ? `CL ${row.changelist}` : '—';
+        tr.appendChild(changelist);
 
         const actions = document.createElement('td');
         actions.className = 'text-end text-nowrap';
@@ -223,12 +329,14 @@ function renderMembers(members) {
         files.dataset.manifestName = `${row.asset_name} v${row.version_number}`;
         actions.appendChild(files);
 
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'btn btn-sm btn-outline-danger py-0 px-2';
-        remove.textContent = 'Remove';
-        remove.dataset.removeVersion = String(row.asset_version_id);
-        actions.appendChild(remove);
+        if (IS_ADMIN) {
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn btn-sm btn-outline-danger py-0 px-2';
+            remove.textContent = 'Remove';
+            remove.dataset.removeVersion = String(row.asset_version_id);
+            actions.appendChild(remove);
+        }
 
         tr.appendChild(actions);
         body.appendChild(tr);
@@ -241,53 +349,85 @@ function renderMembers(members) {
 function renderCandidates(candidates) {
     const box = $('releaseCandidates');
     const count = $('releaseCandidateCount');
-    const select = $('releaseCandidate');
-    const form = $('releaseAddForm');
+    if (!box) return;
 
-    if (count) count.textContent = `(${candidates.length})`;
-    if (!box || !select || !form) return;
+    const shown = sortRows(mineOnly() ? candidates.filter(isMine) : candidates, candidateSort);
+
+    if (count) {
+        const mine = candidates.filter(isMine).length;
+        count.textContent = `(${shown.length}${shown.length !== candidates.length ? ` of ${candidates.length}` : ''}`
+            + `${mine ? ` · ${mine} yours` : ''})`;
+    }
 
     box.innerHTML = '';
-    select.innerHTML = '';
 
-    if (candidates.length === 0) {
-        box.innerHTML = '<span class="text-secondary">Everything approved is already in this release.</span>';
-        form.classList.add('d-none');
-        return;
+    const table = document.createElement('table');
+    table.className = 'table table-sm align-middle mb-0';
+
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headRow.appendChild(sortHeader('Asset', 'candidates', 'asset', candidateSort));
+    headRow.appendChild(sortHeader('Uploaded', 'candidates', 'uploaded', candidateSort));
+    headRow.appendChild(sortHeader('Approved', 'candidates', 'approved', candidateSort));
+    headRow.appendChild(document.createElement('th'));
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const body = document.createElement('tbody');
+
+    if (shown.length === 0) {
+        emptyRow(table, candidates.length === 0
+            ? 'Everything approved is already in this release.'
+            : 'None of the candidates are yours.');
     }
 
-    const list = document.createElement('ul');
-    list.className = 'list-unstyled mb-0';
+    for (const row of shown) {
+        const tr = document.createElement('tr');
 
-    for (const row of candidates) {
-        const item = document.createElement('li');
-        item.className = 'mb-1';
+        tr.appendChild(assetCell(row, row.in_other_release
+            ? ' <span class="badge text-bg-secondary ms-1">in another release</span>'
+            : ''));
+        tr.appendChild(peopleCell(row));
+        tr.appendChild(cellDate(row.decided_at));
 
-        item.innerHTML =
-            `<span class="fw-semibold">${escapeHtml(row.asset_name)}</span> ` +
-            `<span class="text-secondary">v${row.version_number}</span> ` +
-            `<span class="text-secondary small">— ${peopleLine(row)}</span>` +
-            (row.in_other_release
-                ? ' <span class="badge text-bg-secondary ms-1">in another release</span>'
-                : '');
+        const actions = document.createElement('td');
+        actions.className = 'text-end text-nowrap';
 
-        list.appendChild(item);
+        if (IS_ADMIN) {
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'btn btn-sm btn-success py-0 px-2';
+            add.textContent = 'Add';
+            add.dataset.addVersion = String(row.asset_version_id);
+            add.dataset.addName = `${row.asset_name} v${row.version_number}`;
+            actions.appendChild(add);
+        }
 
-        const option = document.createElement('option');
-        option.value = String(row.asset_version_id);
-        option.textContent = `${row.asset_name} v${row.version_number}`;
-        select.appendChild(option);
+        tr.appendChild(actions);
+        body.appendChild(tr);
     }
 
-    box.appendChild(list);
-    form.classList.remove('d-none');
+    table.appendChild(body);
+    box.appendChild(table);
 }
 
-function renderDetail(detail) {
-    const { release, members, candidates } = detail;
+// A date cell, in the same shape as peopleCell's tail.
+function cellDate(value) {
+    const cell = document.createElement('td');
+    cell.className = 'small text-secondary';
+    cell.textContent = value ? formatDate(value) : '—';
+    return cell;
+}
 
-    const panel = $('releaseDetail');
-    if (panel) panel.classList.remove('d-none');
+// ---------------------------------------------------------------------------
+// One release
+// ---------------------------------------------------------------------------
+
+function renderDetail(detail) {
+    currentDetail = detail;
+    const { release } = detail;
+
+    $('releaseDetail')?.classList.remove('d-none');
 
     const title = $('releaseDetailTitle');
     if (title) title.textContent = release.name;
@@ -295,22 +435,31 @@ function renderDetail(detail) {
     const meta = $('releaseDetailMeta');
     if (meta) {
         const parts = [];
-
         parts.push(release.released_on ? `Released ${formatDate(release.released_on)}` : 'No date');
         if (release.changelist) parts.push(`CL ${release.changelist}`);
         if (release.created_by) parts.push(`created by ${release.created_by}`);
         if (release.notes) parts.push(release.notes);
-
         meta.textContent = parts.join(' · ');
     }
 
-    // A manifest belongs to one version and one release; changing release
-    // closes it rather than leaving a tree labelled with the wrong build.
+    // The tree belongs to one version and one release; changing release closes
+    // it rather than leaving a tree labelled with the wrong build.
     $('releaseManifest')?.classList.add('d-none');
     openManifest = null;
 
-    renderMembers(members);
-    renderCandidates(candidates);
+    renderMembers(detail.members || []);
+    renderCandidates(detail.candidates || []);
+
+    // HOW MUCH OF IT IS THE VIEWER'S. Said once, in the header, rather than
+    // repeated on every row.
+    const note = $('releaseMineNote');
+    if (note) {
+        const mine = (detail.members || []).filter(isMine).length;
+        note.textContent = mine
+            ? `${mine} of the versions in this release are yours.`
+            : 'None of this release is your work.';
+    }
+
     refreshDiffSelects();
 }
 
@@ -332,18 +481,12 @@ async function selectRelease(id) {
 // ---------------------------------------------------------------------------
 // The manifest, as a tree
 // ---------------------------------------------------------------------------
-//
-// THE MANIFEST IS THE VERSION'S FILE LIST, read from the same endpoint a
-// downloader uses — so what an admin sees here is exactly what a download would
-// contain, not a second interpretation of the database.
 
 function buildTree(files) {
     const root = { dirs: new Map(), files: [] };
 
     for (const file of files) {
-        const parts = String(file.relative_path || '')
-            .split('/')
-            .filter(Boolean);
+        const parts = String(file.relative_path || '').split('/').filter(Boolean);
 
         let node = root;
 
@@ -435,7 +578,6 @@ async function loadManifest(assetId, versionId, label) {
 
     try {
         const manifest = await fetchJson(`${GAME_API}/${assetId}/versions/${versionId}/manifest`);
-
         const files = manifest.files || [];
 
         title.innerHTML =
@@ -554,7 +696,6 @@ async function runDiff() {
 
     const key = `${from}:${to}`;
 
-    // The same button closes what it opened.
     if (openDiff === key) {
         hideDiff();
         return;
@@ -606,17 +747,8 @@ function onSubmitCreate(event) {
         .catch(err => showAlert(err.message));
 }
 
-function onSubmitAdd(event) {
-    event.preventDefault();
-
+function addVersion(versionId, name) {
     if (selectedId === null) return;
-
-    const versionId = Number($('releaseCandidate')?.value);
-
-    if (!Number.isInteger(versionId)) {
-        showAlert('Choose a version first.', 'warning');
-        return;
-    }
 
     const payload = {
         asset_version_id: versionId,
@@ -630,8 +762,7 @@ function onSubmitAdd(event) {
         body: JSON.stringify(payload)
     })
         .then(detail => {
-            showAlert('', 'success');
-            $('releaseAddForm')?.reset();
+            showAlert(`${name} added.`, 'success');
             renderDetail(detail);
             loadReleases();
         })
@@ -645,7 +776,29 @@ function onClickList(event) {
     selectRelease(Number(button.dataset.releaseId));
 }
 
+// Sorting: any column header in either table.
+function onClickSort(event) {
+    const button = event.target.closest('button[data-sort-table]');
+    if (!button || !currentDetail) return;
+
+    const table = button.dataset.sortTable;
+    const key = button.dataset.sortKey;
+
+    if (table === 'members') {
+        memberSort = { key, dir: memberSort.key === key ? -memberSort.dir : 1 };
+        renderMembers(currentDetail.members || []);
+    } else {
+        candidateSort = { key, dir: candidateSort.key === key ? -candidateSort.dir : 1 };
+        renderCandidates(currentDetail.candidates || []);
+    }
+}
+
 function onClickMembers(event) {
+    if (event.target.closest('button[data-sort-table]')) {
+        onClickSort(event);
+        return;
+    }
+
     const manifestButton = event.target.closest('button[data-manifest-version]');
 
     if (manifestButton) {
@@ -667,8 +820,25 @@ function onClickMembers(event) {
         .catch(err => showAlert(err.message));
 }
 
-// DELETING THE RELEASE, NOT ITS CONTENT. The membership cascades; the approved
-// versions stay in the store.
+function onClickCandidates(event) {
+    if (event.target.closest('button[data-sort-table]')) {
+        onClickSort(event);
+        return;
+    }
+
+    const addButton = event.target.closest('button[data-add-version]');
+    if (!addButton) return;
+
+    addVersion(Number(addButton.dataset.addVersion), addButton.dataset.addName || 'That version');
+}
+
+function onMineChange() {
+    if (currentDetail) {
+        renderMembers(currentDetail.members || []);
+        renderCandidates(currentDetail.candidates || []);
+    }
+}
+
 function onClickDelete() {
     if (selectedId === null) return;
 
@@ -689,15 +859,25 @@ function onClickDelete() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // WHAT THIS VIEWER MAY NOT DO IS NOT OFFERED. The server refuses it in any
+    // case; a button that would be refused is a button that teaches the wrong
+    // thing about the role.
+    if (!IS_ADMIN) {
+        $('releaseCreateForm')?.classList.add('d-none');
+        $('releaseDeleteBtn')?.classList.add('d-none');
+        $('releaseAddControls')?.classList.add('d-none');
+    }
+
     $('releaseCreateForm')?.addEventListener('submit', onSubmitCreate);
-    $('releaseAddForm')?.addEventListener('submit', onSubmitAdd);
     $('releaseList')?.addEventListener('click', onClickList);
     $('releaseMembers')?.addEventListener('click', onClickMembers);
+    $('releaseCandidates')?.addEventListener('click', onClickCandidates);
     $('releaseDeleteBtn')?.addEventListener('click', onClickDelete);
     $('releaseDiffBtn')?.addEventListener('click', runDiff);
     $('releaseDiffFrom')?.addEventListener('change', hideDiff);
     $('releaseDiffTo')?.addEventListener('change', hideDiff);
     $('releaseManifestClose')?.addEventListener('click', hideManifest);
+    $('releaseMineOnly')?.addEventListener('change', onMineChange);
 
     loadReleases();
 });

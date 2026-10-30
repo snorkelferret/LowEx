@@ -1,38 +1,49 @@
 <!-- ============================================================
      Game releases — named builds, and which approved versions are in them.
 
-     THE ADMIN'S QUEUE. An approved version is a candidate for a build until
-     it is in one; this page names the build and records the membership. Until
-     it existed, an admin could record a changelist against a version and
-     nothing could say which build it belonged to, or show what a build was
-     made of.
+     ONE PANEL, TWO PAGES. It is a top-level section on the admin dashboard and
+     a tab on the developer dashboard, from this single file. The script hides
+     the writing controls unless the viewer is an administrator, and the server
+     refuses them anyway — the panel is read-only for everybody else.
 
-     A CANDIDATE IS APPROVED AND NOT IN THIS RELEASE. A version already in
-     another release is still a candidate here — the same version can ship in
-     several builds — and the list says so rather than hiding it.
+     WHAT IT ANSWERS:
+
+       which of my assets were accepted, and into which release
+       what has gone into the game at all
+       what each version is made of (the manifest, as a tree)
+       what changed between two builds (the diff, by content hash)
+
+     AND THE COLUMNS SORT, because "find your work" is the first thing anybody
+     does here — on a release's contents and on the candidates, and each
+     release in the list carries a count of your own work.
 
      THE WRAPPING MATCHES adminPanel.html and adminReports.html: card
-     panel-module, an h2 in the header, a card-body. Listed in build.js for the
-     admin dashboard (frontend/src/components/adminReleases.html).
+     panel-module, an h2 in the header, a card-body.
      ============================================================ -->
 
 <section class="card panel-module mb-4" id="admin-releases-module">
 
-  <div class="card-header">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
     <h2 class="h5 mb-0">🎮 Game releases</h2>
+
+    <label class="small text-secondary mb-0 d-flex align-items-center gap-2" for="releaseMineOnly">
+      <input id="releaseMineOnly" class="form-check-input m-0" type="checkbox">
+      Only my work
+    </label>
   </div>
 
   <div class="card-body">
 
     <p class="text-secondary">
       A <strong>named build</strong> — "0.4 Experimental, 12 Nov" — and the
-      approved versions it ships. Pick a release to see what is in it, and to
-      add approved work it does not hold yet.
+      approved versions it ships. Pick a release to see what is in it and what
+      it is made of.
+      <span id="releaseMineNote" class="d-block small mt-1"></span>
     </p>
 
     <div id="releaseAlert" class="alert py-2 px-3 small d-none"></div>
 
-    <!-- ── Create a release ─────────────────────────────────────── -->
+    <!-- ── Create a release — administrators only, hidden by the script ── -->
     <form id="releaseCreateForm" class="row g-2 align-items-end mb-4">
 
       <div class="col-md-3">
@@ -101,9 +112,6 @@
           <div id="releaseManifest" class="d-none mt-3">
             <div class="d-flex justify-content-between align-items-center">
               <h4 class="h6 mb-0" id="releaseManifestTitle"></h4>
-              <!-- THE SAME BUTTON THAT OPENED IT CLOSES IT (the row's Files
-                   button becomes Hide). This is the second way, for somebody
-                   whose eye is already here. -->
               <button id="releaseManifestClose" type="button"
                       class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2">
                 Hide
@@ -123,15 +131,9 @@
             another release is still a candidate here.
           </p>
 
-          <div id="releaseCandidates" class="small mb-3"></div>
+          <div id="releaseCandidates" class="small"></div>
 
-          <form id="releaseAddForm" class="row g-2 align-items-end d-none">
-
-            <div class="col-12">
-              <label class="form-label small mb-1" for="releaseCandidate">Version</label>
-              <select id="releaseCandidate" class="form-select form-select-sm"></select>
-            </div>
-
+          <div id="releaseAddControls" class="row g-2 align-items-end mt-2">
             <div class="col-6">
               <label class="form-label small mb-1" for="releaseAddChangelist">Changelist</label>
               <input id="releaseAddChangelist" class="form-control form-control-sm"
@@ -143,14 +145,7 @@
               <input id="releaseAddNote" class="form-control form-control-sm"
                      placeholder="why, or what else went with it" autocomplete="off">
             </div>
-
-            <div class="col-12">
-              <button id="releaseAddBtn" class="btn btn-sm btn-success" type="submit">
-                Add to this release
-              </button>
-            </div>
-
-          </form>
+          </div>
         </div>
 
       </div>

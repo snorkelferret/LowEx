@@ -53,13 +53,21 @@ const router = express.Router();
 // Statements
 // ---------------------------------------------------------------------------
 
+// `?` is the CALLER'S USER ID: how much of this release is their own work.
+// It is the difference between "which builds exist" and "which of my assets
+// have been accepted, and into what" — the question a developer asks.
 const listReleases = db.prepare(`
     SELECT
         r.id, r.name, r.released_on, r.changelist, r.notes,
         r.created_at,
         u.username AS created_by_username,
         (SELECT COUNT(*) FROM release_assets ra WHERE ra.release_id = r.id)
-            AS asset_count
+            AS asset_count,
+        (SELECT COUNT(*)
+           FROM release_assets ra
+           JOIN asset_versions av ON av.id = ra.asset_version_id
+          WHERE ra.release_id = r.id
+            AND av.uploaded_by = ?) AS mine_count
     FROM releases r
     LEFT JOIN users u ON u.id = r.created_by
     ORDER BY r.id DESC
@@ -223,8 +231,11 @@ const isPositiveInteger = value => Number.isInteger(value) && value >= 1;
 // GET /api/releases — every named release, newest first
 // ---------------------------------------------------------------------------
 
-router.get('/', authenticateToken, requireRole('admin'), (req, res) => {
-    return res.json({ releases: listReleases.all() });
+// READ BY DEVELOPERS TOO. "Which of my assets were accepted, and into which
+// release" is a developer's question, and so is "what has gone into the game".
+// WRITES BELOW STAY ADMIN: putting content in is engineering.
+router.get('/', authenticateToken, requireRole('developer', 'admin'), (req, res) => {
+    return res.json({ releases: listReleases.all(req.user.id) });
 });
 
 // ---------------------------------------------------------------------------
@@ -298,7 +309,7 @@ router.post('/', authenticateToken, requireRole('admin'), (req, res) => {
 // GET /api/releases/:id — what it holds, and what it could hold
 // ---------------------------------------------------------------------------
 
-router.get('/:id', authenticateToken, requireRole('admin'), (req, res) => {
+router.get('/:id', authenticateToken, requireRole('developer', 'admin'), (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid release ID' });
@@ -479,7 +490,7 @@ function filesByKey(versionId) {
     return new Map(filesOfVersion.all(versionId).map(file => [fileKey(file), file]));
 }
 
-router.get('/:id/diff', authenticateToken, requireRole('admin'), (req, res) => {
+router.get('/:id/diff', authenticateToken, requireRole('developer', 'admin'), (req, res) => {
     const toId = Number(req.params.id);
     const fromId = Number(req.query.against);
 

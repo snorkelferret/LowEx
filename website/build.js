@@ -43,6 +43,7 @@ const pageConfigurations = [
 	'./src/developerWorkspace.js',
 	'./src/developerLibrary.js', // The Library tab: shared source material
 	'./src/developerStore.js',   // The Game store tab: approved work, read
+	'./src/adminReleases.js',    // The Releases tab: the SAME panel the admin has, read-only
 	'./src/feedback.js',        // Report-a-problem button
 	'./src/utilityBar.js',     // The utility bar: manual, and whatever else a page adds
 	'./src/notBuilt.js'         // Menu stubs for features that are not built yet
@@ -148,12 +149,31 @@ function compilePage(config) {
   let headerContent = '';
   let bodyContent = '';
 
+  // A COMPONENT MAY INCLUDE ANOTHER, once. The release panel lives in ONE file
+  // and appears on two pages: top-level on the admin dashboard, and inside a
+  // tab on the developer dashboard (RULES 5 — one panel, two placements). An
+  // `<!-- Include: path -->` marker inside a component is replaced here.
+  const inlineIncludes = (html, depth = 0) => {
+    if (depth > 5) return html;
+
+    return html.replace(/<!--\s*Include:\s*([^\s]+?)\s*-->/g, (marker, includePath) => {
+      const included = path.resolve(__dirname, includePath);
+
+      if (!fs.existsSync(included)) {
+        console.warn(`  ⚠️ Warning: Included component missing at ${includePath}.`);
+        return `<!-- Missing Include: ${includePath} -->`;
+      }
+
+      return inlineIncludes(fs.readFileSync(included, 'utf-8'), depth + 1);
+    });
+  };
+
   for (const modulePath of config.modules) {
     const fullPath = path.resolve(__dirname, modulePath);
     const isChrome = modulePath.endsWith('header.html');
 
     if (fs.existsSync(fullPath)) {
-      const content = fs.readFileSync(fullPath, 'utf-8');
+      const content = inlineIncludes(fs.readFileSync(fullPath, 'utf-8'));
       const block = `\n<!-- Module: ${modulePath} -->\n${content}\n`;
 
       if (isChrome) headerContent += block;

@@ -84,6 +84,23 @@
       </button>
     </li>
 
+    <!-- THE SAME PANEL THE ADMIN HAS, read-only for a developer. One file —
+         frontend/src/components/adminReleases.html — included here rather than
+         copied, so the two cannot drift (RULES 5). The script hides the
+         writing controls unless the viewer is an administrator. -->
+    <li class="nav-item" role="presentation">
+      <button
+        class="nav-link"
+        id="tab-releases-btn"
+        data-bs-toggle="tab"
+        data-bs-target="#tab-releases"
+        type="button"
+        role="tab"
+      >
+        <i class="bi bi-tag me-1"></i>Releases
+      </button>
+    </li>
+
   </ul>
 
 
@@ -735,6 +752,10 @@
 
   </div><!-- /tab-store -->
 
+
+  <div class="tab-pane fade" id="tab-releases" role="tabpanel">
+    <!-- Include: frontend/src/components/adminReleases.html -->
+  </div>
 
   </div><!-- /tab-content -->
 

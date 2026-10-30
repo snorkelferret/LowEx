@@ -198,10 +198,27 @@ async function main() {
     report.check('a different asset is accepted', differentAsset.status === 201,
         `expected 201, got ${differentAsset.status} — ${differentAsset.text.slice(0, 140)}`);
 
+    // READS ARE FOR DEVELOPERS TOO — "which of my assets were accepted, and
+    // into what" is their question — and the mine_count comes back for them.
     const asDeveloper = await server.get('/', dev);
 
-    report.check('a developer is refused', asDeveloper.status === 403,
-        `expected 403, got ${asDeveloper.status}`);
+    report.check('a developer can read the releases', asDeveloper.status === 200,
+        `expected 200, got ${asDeveloper.status}`);
+
+    report.check('and the list counts their own work',
+        (asDeveloper.json?.releases || []).every(r => typeof r.mine_count === 'number'),
+        `first release: ${JSON.stringify(asDeveloper.json?.releases?.[0])}`);
+
+    const developerWrite = await server.post(`/${releaseA}/assets`, { asset_version_id: 2 }, dev);
+
+    report.check('but a developer cannot put work into a release',
+        developerWrite.status === 403,
+        `expected 403, got ${developerWrite.status}`);
+
+    const developerCreate = await server.post('/', { name: 'by a developer' }, dev);
+
+    report.check('and cannot create one', developerCreate.status === 403,
+        `expected 403, got ${developerCreate.status}`);
 
     // v2 out, v1 in — so release A holds BigTree v1 and the diff has something
     // to compare against.

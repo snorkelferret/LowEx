@@ -199,6 +199,23 @@ store keeps its own copy, so only yours goes.
 that might be wrong — it is what the storage does. Content in the game store is
 kept alive by the store's own reference, and deleting your copy cannot remove it.
 
+## Releases
+
+**The Releases tab** shows the named builds the studio has made — and it is the
+same page the administrator sees, read-only.
+
+- **Each release in the list says how much of it is yours** — "3 of yours".
+- **Only my work** narrows both lists to versions you uploaded.
+- **Every column sorts**, by asset, who uploaded it, who approved it, or the
+  changelist — so finding your work in a long build does not mean reading it.
+- **Files** opens a version's manifest as a tree, with each file's hash, size
+  and path behind it.
+- **Compare releases** shows what changed between two builds, by asset and by
+  file content hash.
+
+**You cannot add work to a release.** Putting content into the game is the
+administrator's job; the page does not offer what the server would refuse.
+
 ## Getting your work back
 
 **The game store is a tab on your dashboard.** It lists everything approved into
