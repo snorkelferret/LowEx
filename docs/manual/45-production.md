@@ -66,6 +66,23 @@ again immediately.
 Either way an audit record is written — who decided, what, and when — so the
 decision can be looked up later rather than remembered.
 
+## Releases
+
+**Game releases** is below the queue. It shows the named builds the studio has
+made, and what is in each one — the same page developers and administrators
+use, read-only for you.
+
+- **Click a release** to open it; click it again, or press **Hide**, to close it.
+- **Files** opens a version's manifest as a tree, with each file's hash and size.
+- **Compare releases** shows what changed between two builds.
+
+It answers the question the queue cannot: **where did the work you approved end
+up?** Approving puts a version in the store; an administrator puts it into a
+build, and this is where that shows.
+
+**You cannot add work to a release.** That is the administrator's job — putting
+content into the game is engineering, not craft.
+
 ## What you cannot do
 
 - **You cannot open the files themselves**, only the pictures of them. There is

@@ -462,17 +462,18 @@ asset, files are added, removed or modified **by content hash** — so a file
 whose bytes are the same under a new path shows as a removal and an addition,
 which is the upload model's own rule: a path is part of a version's identity.
 
-**Developers see the same panel, read-only.** It is one component and one
-script on both dashboards (RULES 5). Reads are developer+admin; creating a
-release, adding or removing a version, and deleting are admin-only, and the page
-does not draw controls the server would refuse. A developer gets two aids for
+**Developers and production see the same panel, read-only.** It is one
+component and one script on all three dashboards (RULES 5). Reads are
+developer+prod+admin; creating a release, adding or removing a version, and
+deleting are admin-only, and the page does not draw controls the server would
+refuse. **For prod it is the answer to "where did the work I approved end up"** —
+the queue decides what is good; this shows what is shipping. A developer gets two aids for
 their own question — "which of my assets were accepted, and into what": each
 release in the list counts the viewer's own versions, and a **Only my work**
 filter narrows both lists. **Every column header sorts.**
 
-**Not built:** a build (there is nothing to build yet), membership derived from
-a delivered changelist rather than chosen by hand, and prod seeing the release
-list.
+**Not built:** a build (there is nothing to build yet), and membership derived
+from a delivered changelist rather than chosen by hand.
 
 ---
 

@@ -231,10 +231,12 @@ const isPositiveInteger = value => Number.isInteger(value) && value >= 1;
 // GET /api/releases — every named release, newest first
 // ---------------------------------------------------------------------------
 
-// READ BY DEVELOPERS TOO. "Which of my assets were accepted, and into which
-// release" is a developer's question, and so is "what has gone into the game".
-// WRITES BELOW STAY ADMIN: putting content in is engineering.
-router.get('/', authenticateToken, requireRole('developer', 'admin'), (req, res) => {
+// READ BY DEVELOPERS AND BY PRODUCTION. "Which of my assets were accepted, and
+// into which release" is a developer's question; "what is actually shipping"
+// is production's — a reviewer deciding what is good should be able to see
+// where the good work ended up. WRITES BELOW STAY ADMIN: putting content into
+// the game is engineering.
+router.get('/', authenticateToken, requireRole('developer', 'prod', 'admin'), (req, res) => {
     return res.json({ releases: listReleases.all(req.user.id) });
 });
 
@@ -309,7 +311,7 @@ router.post('/', authenticateToken, requireRole('admin'), (req, res) => {
 // GET /api/releases/:id — what it holds, and what it could hold
 // ---------------------------------------------------------------------------
 
-router.get('/:id', authenticateToken, requireRole('developer', 'admin'), (req, res) => {
+router.get('/:id', authenticateToken, requireRole('developer', 'prod', 'admin'), (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid release ID' });
@@ -490,7 +492,7 @@ function filesByKey(versionId) {
     return new Map(filesOfVersion.all(versionId).map(file => [fileKey(file), file]));
 }
 
-router.get('/:id/diff', authenticateToken, requireRole('developer', 'admin'), (req, res) => {
+router.get('/:id/diff', authenticateToken, requireRole('developer', 'prod', 'admin'), (req, res) => {
     const toId = Number(req.params.id);
     const fromId = Number(req.query.against);
 

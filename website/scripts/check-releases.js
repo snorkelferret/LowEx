@@ -220,6 +220,19 @@ async function main() {
     report.check('and cannot create one', developerCreate.status === 403,
         `expected 403, got ${developerCreate.status}`);
 
+    // PRODUCTION READS TOO: deciding what is good includes seeing where the
+    // good work ended up. It does not write — putting content in is engineering.
+    const prod = server.tokenFor(3);
+    const asProd = await server.get('/', prod);
+
+    report.check('production can read the releases', asProd.status === 200,
+        `expected 200, got ${asProd.status}`);
+
+    const prodWrite = await server.post(`/${releaseA}/assets`, { asset_version_id: 2 }, prod);
+
+    report.check('but production cannot put work into a release', prodWrite.status === 403,
+        `expected 403, got ${prodWrite.status}`);
+
     // v2 out, v1 in — so release A holds BigTree v1 and the diff has something
     // to compare against.
     const removed = await server.del(`/${releaseA}/assets/2`, admin);

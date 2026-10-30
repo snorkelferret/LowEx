@@ -12143,8 +12143,11 @@ no upside. If something seems to need one of them, ask.
          §15) will deliver the changelist's file list, which is what turns
          membership from something chosen by hand into something the depot
          proposes.
-       * PROD SEEING THE RELEASE LIST. Not yet; item 83 is the same question
-         asked about the store.
+       * PROD SEES THE RELEASES (2026-10-30, asked for). Read-only, on the
+         production dashboard: the builds, their contents, the file tree and the
+         diff. It answers "where did the work I approved end up". The writes
+         stay admin. Item 83 — prod reading the STORE and LIBRARY — is a
+         separate question and still open.
 
        DEVELOPERS SEE IT READ-ONLY (2026-10-30, asked for): the SAME component
        and the SAME script on both dashboards, included by build.js rather than

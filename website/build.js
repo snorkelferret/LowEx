@@ -64,11 +64,17 @@ const pageConfigurations = [
     // offering more would be offering what the server refuses.
     //
     // No loginModal: that dialog belonged to the removed superuser page.
+    //
+    // TWO PANELS: the queue of what is waiting, and the releases — where the
+    // approved work ended up. The second is READ-ONLY for prod: deciding what
+    // is good is craft; putting it into a build is engineering (item 52), and
+    // the server refuses the writes.
     output: 'frontend/prodDashboard.html',
     title: 'Production',
     scripts: [
       './src/header.js',          // Fills in who is signed in, and signs them out
       './src/prodPanel.js',       // The queue of what is waiting, and the decisions
+      './src/releases.js',        // The releases: what ships, read-only
       './src/feedback.js',        // Report-a-problem button
       './src/utilityBar.js',      // The utility bar
     ],
@@ -76,6 +82,7 @@ const pageConfigurations = [
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/prodPanel.html',
+      'frontend/src/components/releases.html',
     ],
 },
 
