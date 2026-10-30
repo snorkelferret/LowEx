@@ -99,7 +99,16 @@
                opens to its hash, size and path. Read from the same endpoint a
                downloader uses, so this is exactly what a download contains. -->
           <div id="releaseManifest" class="d-none mt-3">
-            <h4 class="h6" id="releaseManifestTitle"></h4>
+            <div class="d-flex justify-content-between align-items-center">
+              <h4 class="h6 mb-0" id="releaseManifestTitle"></h4>
+              <!-- THE SAME BUTTON THAT OPENED IT CLOSES IT (the row's Files
+                   button becomes Hide). This is the second way, for somebody
+                   whose eye is already here. -->
+              <button id="releaseManifestClose" type="button"
+                      class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2">
+                Hide
+              </button>
+            </div>
             <div id="releaseManifestTree" class="small"></div>
           </div>
         </div>

@@ -200,9 +200,11 @@ store; a release is a statement about a build, not a second copy.
 
 **Files** opens the version's manifest as a tree: folders, then files, and each
 file opens to its content hash, its size and its path. This is the same list a
-download would produce, not a second reading of the database.
+download would produce, not a second reading of the database. **Press Files
+again — or Hide — to close it**; the button that opens a panel also closes it.
 
-**Compare releases** shows what changed between two builds. Assets are added,
+**Compare releases** shows what changed between two builds; **Compare again
+closes it**, and changing either selection closes it too. Assets are added,
 removed, changed or unchanged; under a changed asset, the files are listed as
 added, removed or modified — **compared by content hash**, so the same bytes
 under a new path appear as a removal and an addition. That is correct: a path is

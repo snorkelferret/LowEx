@@ -12150,3 +12150,10 @@ no upside. If something seems to need one of them, ask.
          store versions, because nothing tells it about a stream yet.
        * DIFF BETWEEN ARBITRARY VERSIONS of one asset, rather than between two
          releases. The data supports it; the control does not offer it yet.
+
+       AND THE PANELS TOGGLE (2026-10-30, asked for): "clicking on the container
+       reveals information but there is no symmetrical device to hide it
+       again." Files becomes Hide and closes the tree; the tree's own Hide does
+       the same; Compare becomes Hide diff and closes the result; changing a
+       selection closes a stale diff. A control that only opens is a one-way
+       door, and before this the only way back was to change release.

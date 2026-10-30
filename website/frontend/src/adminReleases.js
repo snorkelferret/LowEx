@@ -42,6 +42,12 @@ const GAME_API = '/api/game';
 let selectedId = null;
 let allReleases = [];
 
+// WHICH PANEL, IF ANY, IS OPEN. Both the file tree and the diff are revealed
+// by a button, and the same button hides them again — a control that only
+// opens is a one-way door, and the only way back was to change release.
+let openManifest = null;   // { assetId, versionId }
+let openDiff = null;       // "fromId:toId" 
+
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
@@ -301,6 +307,7 @@ function renderDetail(detail) {
     // A manifest belongs to one version and one release; changing release
     // closes it rather than leaving a tree labelled with the wrong build.
     $('releaseManifest')?.classList.add('d-none');
+    openManifest = null;
 
     renderMembers(members);
     renderCandidates(candidates);
@@ -382,6 +389,37 @@ function renderNode(node, parent) {
         details.appendChild(body);
         parent.appendChild(details);
     }
+}
+
+function resetManifestButtons() {
+    for (const button of document.querySelectorAll('#releaseMembers button[data-manifest-version]')) {
+        button.textContent = 'Files';
+        button.classList.remove('active');
+    }
+}
+
+function hideManifest() {
+    $('releaseManifest')?.classList.add('d-none');
+    resetManifestButtons();
+    openManifest = null;
+}
+
+async function toggleManifest(button) {
+    const assetId = Number(button.dataset.manifestAsset);
+    const versionId = Number(button.dataset.manifestVersion);
+
+    if (openManifest && openManifest.versionId === versionId) {
+        hideManifest();
+        return;
+    }
+
+    resetManifestButtons();
+    button.textContent = 'Hide';
+    button.classList.add('active');
+
+    openManifest = { assetId, versionId };
+
+    await loadManifest(assetId, versionId, button.dataset.manifestName);
 }
 
 async function loadManifest(assetId, versionId, label) {
@@ -495,6 +533,16 @@ function renderDiff(diff) {
     }
 }
 
+function hideDiff() {
+    const box = $('releaseDiffResult');
+    if (box) box.innerHTML = '';
+
+    const button = $('releaseDiffBtn');
+    if (button) button.textContent = 'Compare';
+
+    openDiff = null;
+}
+
 async function runDiff() {
     const from = Number($('releaseDiffFrom')?.value);
     const to = Number($('releaseDiffTo')?.value);
@@ -504,9 +552,21 @@ async function runDiff() {
         return;
     }
 
+    const key = `${from}:${to}`;
+
+    // The same button closes what it opened.
+    if (openDiff === key) {
+        hideDiff();
+        return;
+    }
+
     try {
         const diff = await fetchJson(`${API}/${to}/diff?against=${from}`);
         renderDiff(diff);
+
+        openDiff = key;
+        const button = $('releaseDiffBtn');
+        if (button) button.textContent = 'Hide diff';
     } catch (err) {
         showAlert(`Could not compare those releases: ${err.message}`);
     }
@@ -589,11 +649,7 @@ function onClickMembers(event) {
     const manifestButton = event.target.closest('button[data-manifest-version]');
 
     if (manifestButton) {
-        loadManifest(
-            Number(manifestButton.dataset.manifestAsset),
-            Number(manifestButton.dataset.manifestVersion),
-            manifestButton.dataset.manifestName
-        );
+        toggleManifest(manifestButton);
         return;
     }
 
@@ -626,7 +682,7 @@ function onClickDelete() {
         .then(() => {
             selectedId = null;
             $('releaseDetail')?.classList.add('d-none');
-            $('releaseDiffResult') && ($('releaseDiffResult').innerHTML = '');
+            hideDiff();
             loadReleases();
         })
         .catch(err => showAlert(err.message));
@@ -639,6 +695,9 @@ document.addEventListener('DOMContentLoaded', () => {
     $('releaseMembers')?.addEventListener('click', onClickMembers);
     $('releaseDeleteBtn')?.addEventListener('click', onClickDelete);
     $('releaseDiffBtn')?.addEventListener('click', runDiff);
+    $('releaseDiffFrom')?.addEventListener('change', hideDiff);
+    $('releaseDiffTo')?.addEventListener('change', hideDiff);
+    $('releaseManifestClose')?.addEventListener('click', hideManifest);
 
     loadReleases();
 });
