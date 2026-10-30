@@ -82,7 +82,23 @@ router.get('/manual', authenticateToken, (req, res) => {
     );
   }
 
-  res.sendFile(manual);
+  // BACK GOES TO THE READER'S OWN DASHBOARD.
+  //
+  // The manual is one generated file, and the reader's role is known HERE and
+  // nowhere in the page. So the template carries a token and this fills it in.
+  // It used to be a fixed "/" — the splash — from every role, which is why a
+  // reader finishing a page was thrown out of the portal's furniture.
+  //
+  // Read rather than sendFile: the replacement is the whole reason the file
+  // cannot go out as it sits on disk. The manual is one page read
+  // occasionally, and a fresh read also means a rebuild is picked up without a
+  // restart.
+  const html = require('fs').readFileSync(manual, 'utf8').replace(
+    '{{BACK_HREF}}',
+    require('../../shared/dashboards.mjs').dashboardFor(req.user?.role) || '/index.html'
+  );
+
+  return res.type('html').send(html);
 });
 
 module.exports = router;

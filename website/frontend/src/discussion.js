@@ -11,6 +11,10 @@
 // somewhere sensible depending on whether you are signed in.
 
 import { $ } from './utils.js';
+// ONE MAP, shared with the login redirect and the manual's Back link. This
+// file's private copy was missing 'prod', so a reviewer clicking Back from the
+// board landed on the tester page (shared/dashboards.mjs).
+import { dashboardFor } from '../../shared/dashboards.mjs';
 
 const BOARD_URL = import.meta.env.VITE_DISCUSSION_URL || '';
 
@@ -50,11 +54,7 @@ function pointNav() {
     const user = readUser();
     if (!user || !user.role) return;
 
-    const destination = {
-        admin: '/adminDashboard.html',
-        developer: '/devDashboard.html',
-        user: '/user.html',
-    }[user.role] || '/user.html';
+    const destination = dashboardFor(user.role) || '/index.html';
 
     action.href = destination;
     action.innerHTML = '<i class="bi bi-arrow-left me-1"></i> Back';

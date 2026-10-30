@@ -197,7 +197,11 @@ function renderPage(documents) {
 
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1 class="h3 mb-0">Studio in a Box — Manual</h1>
-      <a href="/" class="btn btn-sm btn-outline-secondary">
+      <!-- The Back target IS FILLED BY THE ROUTE, not here: only the server
+           knows which role is asking, and Back must go to THAT role's
+           dashboard. It went to "/" (the splash) from every role until
+           2026-10-30. See shared/dashboards.mjs. -->
+      <a href="{{BACK_HREF}}" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i>Back
       </a>
     </div>

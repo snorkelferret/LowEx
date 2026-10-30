@@ -1,5 +1,9 @@
 // frontend/auth.js
 
+// WHICH PAGE A ROLE LANDS ON — one map, shared with the discussion page's Back
+// link and the manual's. See shared/dashboards.mjs.
+import { dashboardFor } from '../../shared/dashboards.mjs';
+
 const API_URL = '/api/auth';
 
 let activeUsername = '';
@@ -121,31 +125,28 @@ function saveSessionAndFinish(user) {
   
   // 3. Immediate Dashboard Load OR Page Refresh
   //
+  // THE ROLE → PAGE MAP IS SHARED, not a switch here: shared/dashboards.mjs.
+  // This copy, the discussion page's Back link and the manual's Back link were
+  // three separate answers to the same question, and one of them was wrong.
+  //
   // THE LADDER IS user < developer < prod < admin. There is no superuser — the
   // role was removed on 2026-10-06 along with its dashboard, and admin is the
   // top.
-  switch (user?.role) {
-    case 'admin':
-      window.location.href = '/adminDashboard.html';
-      break;
-    case 'developer':
-      window.location.href = '/devDashboard.html';
-      break;
-    case 'prod':
-      // Production reviews work; it has no workspace and no admin powers, so
-      // the reviewer's queue is its whole page. Until 2026-10-06 this case did
-      // not exist and a prod signing in was told "No match for login".
-      window.location.href = '/prodDashboard.html';
-      break;
-    case 'user':
-      alert(`Welcome back, ${user?.username || 'user'}!`);
-      window.location.href = '/user.html';
-      break;
-    default:
-      alert("No match for login");
-      window.location.href = DEFAULT_START_PAGE;
-      break;
+  const destination = dashboardFor(user?.role);
+
+  if (!destination) {
+    alert('No match for login');
+    window.location.href = DEFAULT_START_PAGE;
+    return;
   }
+
+  // A tester is greeted; the others are not. That was the only thing this
+  // switch did beyond choosing a page.
+  if (user.role === 'user') {
+    alert(`Welcome back, ${user?.username || 'user'}!`);
+  }
+
+  window.location.href = destination;
 }
 // REMOVED: handleDeveloperReissueRequest(), which reissued an invitation from
 // the developer dashboard.
