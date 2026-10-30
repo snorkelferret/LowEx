@@ -1,0 +1,37 @@
+# deploy/systemd/lowex-daily.timer
+#
+# WHEN THE CLEANUP RUNS. Enable this, not the service.
+#
+# WHY A TIMER AND NOT A STARTUP SCRIPT:
+#
+#   * a startup hook runs once per boot, and a server that stays up for months
+#     would then never collect again — which is the shape of the failure the
+#     steward found on 2026-10-30 (runs on three days, a 24-day gap)
+#   * a restart loop would run it repeatedly
+#   * the time would be whenever the box happened to restart
+#
+# Persistent=true is the part that behaves like a startup script should: if the
+# machine was down when the run was due, systemd runs it once shortly after it
+# comes back, and then not again. That is the catch-up without the schedule
+# being tied to boot.
+#
+# INSTALL: see deploy/README.md, "The nightly job".
+
+[Unit]
+Description=Nightly cleanup for the Low Expectations portal
+Documentation=file:/srv/lowex/docs/DEPLOY.md
+
+[Timer]
+# 04:17, not 04:00 — an off-minute, so it does not land with every other
+# daily job on the machine (backups included).
+OnCalendar=*-*-* 04:17:00
+
+# Run at boot if a scheduled run was missed.
+Persistent=true
+
+# NO OnBootSec. An unconditional run at every boot would duplicate the daily
+# run on any day the machine restarted, and Persistent=true already covers the
+# case that matters — a run that was missed because the machine was down.
+
+[Install]
+WantedBy=timers.target

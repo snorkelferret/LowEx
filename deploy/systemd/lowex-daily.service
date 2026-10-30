@@ -1,0 +1,42 @@
+# deploy/systemd/lowex-daily.service
+#
+# THE NIGHTLY CLEANUP, as a systemd service the timer starts.
+#
+# It does two things, in order: empties bins whose retention has expired, then
+# collects blobs nothing references any more. THE SECOND IS THE ONLY THING IN
+# THE SYSTEM THAT FREES DISK, so a job that quietly stops is discovered when
+# the disk is full.
+#
+# --collect IS REQUIRED. Without it the job reports what it would remove and
+# removes nothing, which looks identical in the logs and frees nothing.
+#
+# INSTALL: see deploy/README.md, "The nightly job". WorkingDirectory, User and
+# Group below are placeholders for the deployment — change them to where the
+# repository is checked out and who owns it.
+
+[Unit]
+Description=Low Expectations — purge expired bins and collect unreferenced content
+Documentation=file:/srv/lowex/docs/DEPLOY.md
+After=local-fs.target
+# The database lives on local disk; do not start before it is mounted.
+RequiresMountsFor=/srv/lowex
+
+[Service]
+Type=oneshot
+User=lowex
+Group=lowex
+WorkingDirectory=/srv/lowex/website
+
+# A LOCK, BECAUSE THE JOB HAS NONE OF ITS OWN.
+# A person running it by hand while the timer fires would give two collectors
+# the same store at the same time. -n means "fail if held" rather than queue:
+# the OLD run is what should finish, and the next timer run will catch up.
+# RuntimeDirectory gives the service a /run/lowex of its own to hold the lock.
+RuntimeDirectory=lowex
+ExecStart=/usr/bin/flock -n /run/lowex/daily.lock /usr/bin/node backend/jobs/daily.js --collect
+
+# The job writes its own audit row; the journal is the second record, and the
+# one that shows a crash before any row was written.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lowex-daily

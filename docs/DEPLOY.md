@@ -144,9 +144,27 @@ in the record below. Item numbers are in `website/TODO`.
 | Verify a restore **now**, not on the day | Copy a backup elsewhere and run `check:store` against the copy. |
 | Press the alerts **test button** on the admin page | Email is a configuration, and the day to find out it is not configured is not the day of an incident. |
 
-```cron
-17 4 * * *  cd /path/to/website && node backend/jobs/daily.js >> /var/log/lowex-daily.log 2>&1
+**A systemd timer, installed from this repository** — not a cron line typed on
+the machine, because a line typed on the machine is not in git and cannot be
+reviewed:
+
+```bash
+sudo cp deploy/systemd/lowex-daily.* /etc/systemd/system/
+# edit WorkingDirectory, User/Group and RequiresMountsFor for this host
+sudo systemctl daemon-reload
+sudo systemctl enable --now lowex-daily.timer     # the timer, not the service
 ```
+
+`deploy/README.md`, *The nightly job*, has the details and the proof:
+`systemctl list-timers` shows LAST and NEXT, `journalctl -u lowex-daily.service`
+shows the run, and a `store.daily_job` row in `audit_logs` shows what it did.
+`Persistent=true` means a run missed while the machine was down happens once
+when it comes back.
+
+> **The portal's own service unit is still outstanding.** Where the app runs
+> from, as which user, with which environment and restart policy is a deployment
+> decision, recorded in TODO 102; the timer does not depend on it and can be
+> installed first.
 
 ---
 

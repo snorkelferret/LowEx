@@ -112,6 +112,75 @@ cookie is `Secure` and `HttpOnly`. If it is not `Secure`, `NODE_ENV` is not
 
 ---
 
+## The nightly job
+
+The portal's garbage collection runs from a **systemd timer**, not from cron and
+not from a startup script. Files: `systemd/lowex-daily.service` and
+`systemd/lowex-daily.timer`.
+
+**Why a timer.** A startup hook runs once per boot; a server that stays up for
+months would then never collect again — which is the shape of the failure the
+steward found on 2026-10-30 (runs on three days, a 24-day gap). `Persistent=true`
+is the part that does what a startup hook should: a run missed because the
+machine was down happens once when it comes back.
+
+**Why the service file is here but the portal's own unit is not.** The timer is
+self-contained — it needs a working directory, a user and a node binary.
+Supervising the *application* (which user, which environment file, restart
+policy, log handling) is a deployment decision that belongs with the VPS, and
+is recorded as outstanding in TODO 102. The timer can be installed before any of
+that is settled.
+
+### Installing it
+
+```bash
+sudo cp deploy/systemd/lowex-daily.* /etc/systemd/system/
+```
+
+Edit both files first:
+
+- `WorkingDirectory` — where the repository is checked out
+- `User` / `Group` — who owns `backend/database.db` and `backend/uploads/`
+- `RequiresMountsFor=` — the path under which that checkout lives
+- `/usr/bin/flock` — correct if the host keeps it elsewhere; it ships with
+  util-linux on Debian and Ubuntu
+
+Then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now lowex-daily.timer     # the TIMER, not the service
+```
+
+Enabling the service as well would run the job at boot in addition to the
+schedule. The timer starts the service; nothing else should.
+
+### Proving it runs
+
+```bash
+systemctl list-timers lowex-daily.timer          # NEXT and LAST
+sudo systemctl start lowex-daily.service         # one run now, by hand
+journalctl -u lowex-daily.service -n 30          # the run's own output
+```
+
+Then the record, which is the point:
+
+```bash
+sqlite3 website/backend/database.db \
+  "SELECT created_at, details FROM audit_logs
+   WHERE action = 'store.daily_job' ORDER BY id DESC LIMIT 3;"
+```
+
+A row per run, with what was purged and collected. **The row does not say which
+mode ran** — a hand-run report and a nightly `--collect` look the same — so
+check the counts (a report run collects nothing) until that is fixed (TODO 101).
+
+After a day, `systemctl list-timers` should show LAST as last night and NEXT as
+tonight. If LAST stays empty, the timer is not enabled or the service is failing
+— `journalctl -u lowex-daily.service` says which.
+
+---
+
 ## What this does not cover
 
 | | |

@@ -11954,3 +11954,73 @@ no upside. If something seems to need one of them, ask.
        * log archiving: no retention, no export, no policy
        * a triage step for reports — a field linking a report to the commit or
          TODO item that answered it (item 87's process question, still open)
+
+102) THE NIGHTLY JOB IS A SYSTEMD TIMER. THE PORTAL'S SERVICE UNIT IS NOT. 2026-10-30.
+     ==========================================================================
+
+     DECIDED by the owner: "systemd, just the timer for now". The units are
+     deploy/systemd/lowex-daily.service and .timer.
+
+     --- WHY A TIMER, AND WHY NOT A STARTUP SCRIPT ---
+
+       A startup hook runs once per boot. A server that stays up for months
+       would then never collect again — which is the shape of what the steward
+       found on 2026-10-30: runs on three days and a 24-day gap. A restart loop
+       would run it repeatedly, and the time would be whenever the box happened
+       to restart.
+
+       Persistent=true gives the one thing a startup hook has going for it —
+       a missed run does not stay missed — without tying the schedule to boot.
+       NO OnBootSec: an unconditional boot run would duplicate the daily run on
+       any day the machine restarted.
+
+       04:17 rather than 04:00, so it does not land with the backup job and
+       everything else scheduled on the hour.
+
+     --- WHY THE PORTAL'S OWN SERVICE UNIT IS NOT HERE ---
+
+       Supervising the application is a different decision from scheduling a
+       job: which user, which checkout, which environment file, restart policy,
+       where logs go. Those belong with the VPS being set up, and none of them
+       blocks the timer. The timer needs a working directory and a node binary;
+       it can be installed first and will keep working when the app's
+       supervision is decided.
+
+       IT IS STILL REQUIRED BEFORE GO-LIVE — the portal cannot run from a shell
+       on a server. Recorded here so "the timer is installed" is not mistaken
+       for "the box is set up".
+
+     --- THE LOCK ---
+
+       The job has no lock of its own, and systemd will not run two instances of
+       one unit concurrently — but a person running it by hand during the
+       nightly run would give two collectors the same store. ExecStart wraps it
+       in `flock -n`, so the manual run fails fast instead of overlapping. If
+       the host keeps flock elsewhere, the path needs correcting; it ships with
+       util-linux on Debian and Ubuntu.
+
+     --- COME BACK AND CHECK THIS (the point of recording it) ---
+
+       None of the following can be verified until the box exists. Each is a
+       thing that is easy to believe and cheap to prove:
+
+       [ ] the units are installed and `systemctl list-timers lowex-daily.timer`
+           shows a LAST and a NEXT
+       [ ] one night's run wrote a store.daily_job row with collected counts
+       [ ] `journalctl -u lowex-daily.service` shows the run and no error
+       [ ] the timer is enabled and the SERVICE is not — enabling the service
+           would also run the job at every boot
+       [ ] simulating downtime (stop the timer, set a past timestamp, start it)
+           produces exactly one catch-up run, not one per missed day
+       [ ] a manual run during a scheduled one is refused by the lock
+       [ ] the row still does not say which mode ran (item 101) — a report run
+           and a --collect look identical, so read the counts
+       [ ] THE PORTAL'S SERVICE UNIT is still outstanding before go-live
+
+     --- WHAT IT DOES NOT DO ---
+
+       * no alerting. A job that stops writes nothing, so silence is the
+         failure signal; the check above is the stand-in until something watches
+         it.
+       * no off-box copy of the database — that is the backup item in DEPLOY §5,
+         and it is still a manual instruction with no timer.
