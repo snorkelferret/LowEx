@@ -43,6 +43,22 @@ export default defineConfig(({ mode }) => {
           target: config.serverUrl,
           changeOrigin: true,
         },
+
+        // /APP IS A BACKEND ROUTE, NOT A PAGE VITE SERVES.
+        //
+        // The one link is the manual (/app/manual, in utilityBar.js): it is
+        // generated into backend/generated/ and served through the backend
+        // because its content includes how the server is run and what
+        // administrators can do — it is not a public shell like the others.
+        //
+        // WITHOUT THIS, Vite's history fallback answers /app/manual with
+        // index.html, which sends the browser to the splash page. That is the
+        // bug in report 25: "pressed the manual tab and got sent to the splash".
+        // It only ever affected development; production serves /app itself.
+        '/app': {
+          target: config.serverUrl,
+          changeOrigin: true,
+        },
       },
     },
     build: {
