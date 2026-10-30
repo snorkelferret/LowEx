@@ -10108,6 +10108,13 @@ no upside. If something seems to need one of them, ask.
 
       [ ] stored_files FIRST UPLOADER — who brought each blob in, and when. (§2)
 
+          PARTLY DONE 2026-10-30, AT THE VERSION LEVEL: `asset_versions.uploaded_by`
+          now records the author of a store version, set from the workspace
+          version at approval, backfilled for earlier rows from the approval
+          link, and shown in the release views beside the approver. What remains
+          of this item is PER BLOB — who first brought a given file into the
+          store — which is a different question and is not built.
+
       [ ] PROD'S CATEGORY POWER. The route is requireRole('admin'); item 51 says
           categories belong to prod. (§6, A6)
 

@@ -91,11 +91,10 @@ const membersOf = db.prepare(`
     LEFT JOIN creative_approvals ca
         ON ca.repository_version_id = av.id AND ca.status = 'approved'
     LEFT JOIN users u ON u.id = ca.decided_by
-    -- THE UPLOADER IS ON THE WORKSPACE VERSION, NOT THE STORE'S. The store
-    -- records who approved; who AUTHORED it is one link back through the
-    -- approval. See SPEC §7 and TODO 87's first-uploader item.
-    LEFT JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
-    LEFT JOIN users wu ON wu.id = wv.created_by
+    -- WHO AUTHORED IT, from the store version itself since 2026-10-30. It
+    -- used to be a link back through the approval to the workspace version;
+    -- the column is recorded at approval, so the join is direct.
+    LEFT JOIN users wu ON wu.id = av.uploaded_by
     WHERE ra.release_id = ?
     ORDER BY a.name COLLATE NOCASE, av.version_number
 `);
@@ -121,8 +120,7 @@ const candidatesFor = db.prepare(`
     JOIN creative_approvals ca
         ON ca.repository_version_id = av.id AND ca.status = 'approved'
     LEFT JOIN users u ON u.id = ca.decided_by
-    LEFT JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
-    LEFT JOIN users wu ON wu.id = wv.created_by
+    LEFT JOIN users wu ON wu.id = av.uploaded_by
     WHERE NOT EXISTS (
         SELECT 1 FROM release_assets r2
         WHERE r2.release_id = ? AND r2.asset_version_id = av.id

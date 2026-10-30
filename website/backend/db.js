@@ -311,7 +311,18 @@ const applyAssetRepositorySchema = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       asset_id INTEGER NOT NULL,
       version_number INTEGER NOT NULL,
+      -- WHO APPROVED IT.
       created_by INTEGER NOT NULL,
+
+      -- WHO AUTHORED IT. Two different people, and until 2026-10-30 only the
+      -- first was recorded — so "who uploaded this store version" was
+      -- answerable only by following the approval back to the workspace
+      -- version, which is not what a store row should require.
+      --
+      -- Nullable: rows created before the column existed are backfilled below,
+      -- and a null here means "unknown", not "nobody".
+      uploaded_by INTEGER,
+
       version_note TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       -- The content identity of this version — see shared/manifest.mjs.
@@ -319,6 +330,10 @@ const applyAssetRepositorySchema = () => {
       manifest_hash TEXT,
       FOREIGN KEY (asset_id)
         REFERENCES assets(id),
+
+      FOREIGN KEY (uploaded_by)
+        REFERENCES users(id),
+
       UNIQUE (asset_id, version_number),
       UNIQUE (id, asset_id)
     );
@@ -858,6 +873,14 @@ const applyAssetWorkflowSchemaPatches = () => {
     `);
   }
 
+  // WHO AUTHORED IT, as distinct from who approved it (created_by).
+  if (!assetVersionColumns.includes('uploaded_by')) {
+    db.exec(`
+      ALTER TABLE asset_versions
+      ADD COLUMN uploaded_by INTEGER REFERENCES users(id);
+    `);
+  }
+
   const workspaceAssetColumns = db
     .prepare("PRAGMA table_info(workspace_assets)")
     .all()
@@ -1317,6 +1340,37 @@ const applyAssetWorkflowSchemaPatches = () => {
     CREATE INDEX IF NOT EXISTS
       idx_asset_comments_repository_version
       ON asset_comments(repository_version_id);
+  `);
+
+  /*
+   * ----------------------------------------------------------
+   * Backfill: who uploaded the versions approved before the column existed
+   *
+   * THE APPROVAL IS THE LINK. creative_approvals knows the workspace version
+   * a store version came from, and workspace_versions.created_by is the
+   * developer. Nothing is guessed: a row with no approval stays null.
+   *
+   * Idempotent and cheap — it only touches rows where uploaded_by IS NULL, so
+   * it runs once per row on a new database and never again.
+   *
+   * HERE RATHER THAN BESIDE THE ALTER because creative_approvals is created
+   * further down this same function, and the subquery needs it.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    UPDATE asset_versions
+       SET uploaded_by = (
+           SELECT wv.created_by
+             FROM creative_approvals ca
+             JOIN workspace_versions wv
+               ON wv.id = ca.workspace_version_id
+            WHERE ca.repository_version_id = asset_versions.id
+              AND ca.status = 'approved'
+            ORDER BY ca.id DESC
+            LIMIT 1
+       )
+     WHERE uploaded_by IS NULL
   `);
 
   console.log('🔄 Asset workflow tables and migrations ready.');

@@ -134,6 +134,9 @@ holds the content; your workspace version keeps a pointer to it and is marked as
 being in the game store. **Ownership passes to the game at this point** — but you
 can always download a copy.
 
+**The store version records both of you**: who uploaded it and who approved it.
+They are different acts by different people, and both are kept.
+
 ## The technical check
 
 Run it from the button on any version. It reports **every check it ran**, not

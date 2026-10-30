@@ -344,6 +344,13 @@ A developer submits a workspace version; `prod` approves or rejects it. Approval
 writes an immutable `asset_version` into the store, copies the file references
 (never the bytes — one copy), and records which asset and version it came from.
 
+**The store version records two people, not one.** `created_by` is the
+**approver** — who let it in — and `uploaded_by` is the **author**, taken from
+the workspace version at approval. Until 2026-10-30 only the approver was
+stored, so "who uploaded this store version" was answerable only by following
+the approval back; rows approved before then were backfilled from the same link,
+and a row with no approval stays null rather than guessed.
+
 **A reviewer sees a picture, not the files.** Production decides, and production
 does not have Blender, Nuke or Unreal — so a download is useless to them even
 where the rules allow one. The queue therefore shows a **thumbnail of every

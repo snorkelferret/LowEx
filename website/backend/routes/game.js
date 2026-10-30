@@ -129,7 +129,11 @@ const versionsOf = db.prepare(`
         av.version_number,
         av.version_note,
         av.created_at,
+        -- WHO DECIDED (created_by) AND WHO AUTHORED (uploaded_by) — two
+        -- different people, both on the store version since 2026-10-30.
         u.username AS created_by_username,
+        av.uploaded_by,
+        uu.username AS uploaded_by_username,
         (SELECT COUNT(*) FROM asset_version_files f WHERE f.asset_version_id = av.id) AS file_count,
         (SELECT COALESCE(SUM(sf.file_size), 0)
            FROM asset_version_files f
@@ -137,6 +141,7 @@ const versionsOf = db.prepare(`
           WHERE f.asset_version_id = av.id) AS total_bytes
     FROM asset_versions av
     LEFT JOIN users u ON u.id = av.created_by
+    LEFT JOIN users uu ON uu.id = av.uploaded_by
     WHERE av.asset_id = ?
     ORDER BY av.version_number DESC
 `);

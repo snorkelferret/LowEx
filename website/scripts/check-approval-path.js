@@ -269,6 +269,13 @@ async function main() {
     report.check('and the file references are copied', storeFiles.length === 1,
         `expected 1 file reference, found ${storeFiles.length}`);
 
+    // TWO DIFFERENT PEOPLE, TWO COLUMNS. created_by is the decider; the
+    // author comes from the workspace version. Before 2026-10-30 the store
+    // recorded only the approver.
+    report.check('the store version records who UPLOADED it as well as who approved',
+        storeVersion?.uploaded_by === 2 && storeVersion?.created_by === 1,
+        `uploaded_by=${storeVersion?.uploaded_by}, created_by=${storeVersion?.created_by}`);
+
     report.check('and the store version carries the same content identity',
         storeVersion?.manifest_hash === H1,
         `expected ${H1}, got ${storeVersion?.manifest_hash}`);

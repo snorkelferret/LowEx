@@ -4745,7 +4745,12 @@ router.post(
                         wv.version_number,
                         wv.version_note,
                         wv.creative_locked,
-                        wv.repository_version_id
+                        wv.repository_version_id,
+                        -- WHO AUTHORED IT. The store version records the
+                        -- APPROVER (created_by, set to the decider below);
+                        -- the author comes from the workspace version, and is
+                        -- recorded here so the store row stands alone.
+                        wv.created_by AS uploaded_by
 
                     FROM creative_approvals ca
 
@@ -4948,13 +4953,18 @@ router.post(
                                 asset_id,
                                 version_number,
                                 created_by,
+                                uploaded_by,
                                 version_note
                             )
-                            VALUES (?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?)
                         `).run(
                             repositoryAsset.id,
                             repositoryVersionNumber,
+                            // WHO DECIDED.
                             decidedBy,
+                            // WHO AUTHORED — a different person, and the one
+                            // the store row previously could not name.
+                            approval.uploaded_by,
                             approval.version_note
                         );
 
