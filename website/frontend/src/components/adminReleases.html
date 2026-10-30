@@ -1,0 +1,149 @@
+<!-- ============================================================
+     Game releases — named builds, and which approved versions are in them.
+
+     THE ADMIN'S QUEUE. An approved version is a candidate for a build until
+     it is in one; this page names the build and records the membership. Until
+     it existed, an admin could record a changelist against a version and
+     nothing could say which build it belonged to, or show what a build was
+     made of.
+
+     A CANDIDATE IS APPROVED AND NOT IN THIS RELEASE. A version already in
+     another release is still a candidate here — the same version can ship in
+     several builds — and the list says so rather than hiding it.
+
+     THE WRAPPING MATCHES adminPanel.html and adminReports.html: card
+     panel-module, an h2 in the header, a card-body. Listed in build.js for the
+     admin dashboard (frontend/src/components/adminReleases.html).
+     ============================================================ -->
+
+<section class="card panel-module mb-4" id="admin-releases-module">
+
+  <div class="card-header">
+    <h2 class="h5 mb-0">🎮 Game releases</h2>
+  </div>
+
+  <div class="card-body">
+
+    <p class="text-secondary">
+      A <strong>named build</strong> — "0.4 Experimental, 12 Nov" — and the
+      approved versions it ships. Pick a release to see what is in it, and to
+      add approved work it does not hold yet.
+    </p>
+
+    <div id="releaseAlert" class="alert py-2 px-3 small d-none"></div>
+
+    <!-- ── Create a release ─────────────────────────────────────── -->
+    <form id="releaseCreateForm" class="row g-2 align-items-end mb-4">
+
+      <div class="col-md-3">
+        <label class="form-label small mb-1" for="releaseName">Name</label>
+        <input id="releaseName" class="form-control form-control-sm"
+               placeholder="0.4 Experimental, 12 Nov" autocomplete="off" required>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label small mb-1" for="releaseDate">Released</label>
+        <input id="releaseDate" type="date" class="form-control form-control-sm">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label small mb-1" for="releaseChangelist">Changelist</label>
+        <input id="releaseChangelist" class="form-control form-control-sm"
+               inputmode="numeric" placeholder="15407" autocomplete="off">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label small mb-1" for="releaseNotes">Notes</label>
+        <input id="releaseNotes" class="form-control form-control-sm" autocomplete="off">
+      </div>
+
+      <div class="col-md-2">
+        <button id="releaseCreateBtn" class="btn btn-sm btn-primary w-100 text-nowrap" type="submit">
+          Create
+        </button>
+      </div>
+
+    </form>
+
+    <!-- ── Every release ────────────────────────────────────────── -->
+    <h3 class="h6">Releases</h3>
+    <div id="releaseList" class="list-group list-group-flush small mb-4">
+      <span class="text-secondary">Loading…</span>
+    </div>
+
+    <!-- ── One release, selected ────────────────────────────────── -->
+    <div id="releaseDetail" class="d-none">
+
+      <div class="d-flex justify-content-between align-items-baseline flex-wrap mb-2">
+        <h3 class="h6 mb-0" id="releaseDetailTitle"></h3>
+        <div class="d-flex align-items-center gap-3">
+          <span class="small text-secondary" id="releaseDetailMeta"></span>
+          <button id="releaseDeleteBtn" type="button"
+                  class="btn btn-sm btn-outline-danger py-0 px-2 text-nowrap">
+            Delete release
+          </button>
+        </div>
+      </div>
+
+      <div class="row g-4">
+
+        <div class="col-lg-6">
+          <h4 class="h6">
+            In this release
+            <span id="releaseMemberCount" class="text-secondary fw-normal small ms-1"></span>
+          </h4>
+          <div id="releaseMembers" class="small"></div>
+        </div>
+
+        <div class="col-lg-6">
+          <h4 class="h6">
+            Candidates
+            <span id="releaseCandidateCount" class="text-secondary fw-normal small ms-1"></span>
+          </h4>
+          <p class="small text-secondary mb-2">
+            Approved work this release does not hold yet. A version already in
+            another release is still a candidate here.
+          </p>
+
+          <div id="releaseCandidates" class="small mb-3"></div>
+
+          <form id="releaseAddForm" class="row g-2 align-items-end d-none">
+
+            <div class="col-12">
+              <label class="form-label small mb-1" for="releaseCandidate">Version</label>
+              <select id="releaseCandidate" class="form-select form-select-sm"></select>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="releaseAddChangelist">Changelist</label>
+              <input id="releaseAddChangelist" class="form-control form-control-sm"
+                     inputmode="numeric" placeholder="15407" autocomplete="off">
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="releaseAddNote">Note</label>
+              <input id="releaseAddNote" class="form-control form-control-sm"
+                     placeholder="why, or what else went with it" autocomplete="off">
+            </div>
+
+            <div class="col-12">
+              <button id="releaseAddBtn" class="btn btn-sm btn-success" type="submit">
+                Add to this release
+              </button>
+            </div>
+
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    <p class="form-text mt-3 mb-0">
+      The changelist is recorded as an assertion, like the one on a store
+      version: the portal does not talk to Perforce. A release cannot ship two
+      versions of the same asset — the one in the way is named when that
+      happens.
+    </p>
+
+  </div>
+</section>

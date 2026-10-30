@@ -12,6 +12,7 @@ const pageConfigurations = [
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
       './src/adminUsers.js',      // Accounts table
       './src/adminReports.js',    // Reports - shared the same way
+      './src/adminReleases.js',   // Game releases: named builds and their contents
       './src/adminAudit.js',      // Audit log - shared the same way
       './src/adminSettings.js',   // Settings - shared the same way
       './src/adminStorage.js',    // Storage - shared the same way
@@ -26,6 +27,7 @@ const pageConfigurations = [
       'frontend/src/components/adminPanel.html',
       'frontend/src/components/devInvites.html',
       'frontend/src/components/adminReports.html',
+      'frontend/src/components/adminReleases.html',
       'frontend/src/components/adminAudit.html',
       'frontend/src/components/adminSettings.html',
       'frontend/src/components/adminStorage.html',

@@ -176,6 +176,32 @@ If the portal has been configured to send mail, the link is emailed. If not, you
 are given the link to pass on yourself — so invitations work either way, and a
 misconfigured mail server is never the reason nobody can get in.
 
+## Releases
+
+**Releases** is where an approved asset is put into a named build — "0.4
+Experimental, 12 Nov" — and where you can see what a build already contains.
+
+Two lists, and the difference matters:
+
+- **In this release** — what this build ships. One version per asset: a build
+  cannot hold two versions of the same thing, and the panel names the version in
+  the way if you try.
+- **Candidates** — everything approved that this release does not hold yet. A
+  version already in *another* release still appears, marked, because the same
+  version can ship in several builds.
+
+**Adding a version** records it as part of this build. The **changelist** is
+optional, and is an assertion — the portal cannot see Perforce. When you give
+one, it is recorded against the version as well, which is what answers "what put
+this into Unreal" later.
+
+**Removing** takes the version out of this build. It stays approved in the
+store; a release is a statement about a build, not a second copy.
+
+> **This is the only place an integration is recorded.** The old button on the
+> Game store tab was removed when this arrived — two buttons writing the same
+> record is how they come to disagree.
+
 ## Settings
 
 **Settings** holds the values that used to be fixed in the code. A change takes

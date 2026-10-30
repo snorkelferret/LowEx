@@ -231,9 +231,9 @@ necessarily the newest version.
 
 A dash means nobody has recorded an integration, which covers two different
 things the portal cannot tell apart: never put in the game, and put in but not
-noticed here. **An administrator records it**, after importing the asset into
-Unreal and committing it — it is a note about what happened, not something the
-portal can see for itself.
+noticed here. **An administrator records it** when adding the version to a
+release, after importing the asset into Unreal and committing it — it is a note
+about what happened, not something the portal can see for itself.
 
 ## Discussion
 

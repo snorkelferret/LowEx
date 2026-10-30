@@ -12024,3 +12024,85 @@ no upside. If something seems to need one of them, ask.
          it.
        * no off-box copy of the database — that is the backup item in DEPLOY §5,
          and it is still a manual instruction with no timer.
+
+104) NAMED GAME RELEASES, AND THE ADMIN'S CANDIDATE QUEUE. BUILT 2026-10-30.
+     =========================================================================
+
+     ASKED FOR: "the devs add an asset to their stream - admin can add it to the
+     game - admin needs a list of things that are candidates to be added and
+     what version of the game it should be added to. Lets start with this."
+
+     --- WHAT WAS BUILT ---
+
+       * `releases` — a NAME ("0.4 Experimental, 12 Nov"), an optional date, an
+         optional Perforce changelist, notes, who created it and when. Item 53's
+         decision, finally in the schema.
+       * `release_assets` — which approved store versions are in it. A TABLE,
+         not a field: one version can be in several builds, and membership is
+         the queryable answer to "what ships in 0.4" (item 53).
+       * backend/routes/releases.js — list, create, detail, add, remove,
+         delete. ADMIN ONLY: putting content into the game is engineering
+         rather than craft (item 52's test).
+       * The admin **Releases** tab, which was a missing view: a release is
+         selected, and the panel shows IN THIS RELEASE and THE CANDIDATES.
+
+     --- THE CANDIDATES, WHICH IS THE POINT ---
+
+       APPROVED STORE VERSIONS THE RELEASE DOES NOT HOLD. A version already in
+       another release is still a candidate and is MARKED as such, because the
+       same version can ship in several builds — that is the many-to-many rule
+       item 53 insisted on.
+
+     --- THE ONE-VERSION-PER-ASSET RULE ---
+
+       A build cannot ship two versions of BigTree. That rule is about the
+       ASSET, and `release_assets` only knows asset_version_id, so it is
+       enforced in the route — with the version in the way NAMED in the refusal
+       rather than a bare conflict.
+
+     --- THE CHANGELIST IS OPTIONAL, AND DOES TWO THINGS ---
+
+       Given one, adding a version writes the membership AND the
+       `asset_integrations` row, in one transaction — the import and the
+       membership are one act, so they cannot disagree about whether it reached
+       the game. Omitted, the release still records the membership, and "in the
+       game" stays unknown.
+
+     --- ONE PATH REMOVED, BECAUSE THERE WERE TWO ---
+
+       The Game store tab carried an admin "hash" button that prompted for a
+       changelist and recorded an integration. That is the same row this page
+       writes, so it is DELETED (button, handler, the isAdmin helper it existed
+       for), and the manual points at Releases. Rule 5: one mechanism.
+
+     --- THE CHECK ---
+
+       scripts/check-releases.js, 24 assertions: create and its validation, the
+       candidate list, add with a changelist (membership AND integration),
+       the one-version rule and its message, removal returning the version to
+       the candidates, the developer refusal, deletion leaving store content
+       alone, and the audit rows for create/add/remove/delete.
+
+       PROVED IT CAN FAIL: skipping the same-asset check and skipping the
+       integration write produced six correctly named failures; restored.
+
+     --- LIVE, IN THE DEV DATABASE ---
+
+       One release exists as a demonstration: "0.1 Sandbox, 30 Oct", CL 15407,
+       holding TestUpload v2. It can be deleted from the page — that is what the
+       Delete button is for.
+
+     --- WHAT IS NOT BUILT ---
+
+       * A BUILD. A release records what a person says the build came from; the
+         portal has never seen a build and cannot verify the changelist.
+       * MEMBERSHIP DERIVED FROM A DELIVERED CHANGELIST. The trigger (TODO 88
+         §15) will deliver the changelist's file list, which is what turns
+         membership from something chosen by hand into something the depot
+         proposes.
+       * THE RELEASE DIFF, and the manifest tree under each version.
+       * PROD SEEING THE RELEASE LIST. Admin only today; item 83 is the same
+         question asked about the store.
+       * THE STREAM SIDE. "Devs add an asset to their stream" is Perforce's
+         task streams (TODO 88 §3); the portal's candidates start at APPROVED
+         store versions, because nothing tells it about a stream yet.

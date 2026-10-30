@@ -428,6 +428,73 @@ const applyAssetRepositorySchema = () => {
 
   /*
    * ----------------------------------------------------------
+   * releases — WHICH APPROVED VERSIONS ARE IN WHICH NAMED BUILD
+   *
+   * A RELEASE IS A NAME AND A DATE, not a channel. "0.4 Experimental, 12 Nov"
+   * cannot be expressed by production/development/experimental, because a
+   * channel holds one value and a release has a history (item 53).
+   *
+   * MEMBERSHIP IS A TABLE, NOT A FIELD ON THE ASSET. The same asset version is
+   * in several releases over time, and a release holds many versions — so
+   * "which version of BigTree ships in 0.4" is a query, and a stored flag
+   * answering the same question is a flag that can be wrong.
+   *
+   * ONE VERSION PER ASSET PER RELEASE is enforced by the routes rather than a
+   * constraint: the rule is about the ASSET, and this table only knows
+   * asset_version_id. Both cannot ship, so adding a second version of the same
+   * asset to one release is refused and named.
+   *
+   * THE CHANGELIST IS AN ASSERTION, like asset_integrations: the portal does
+   * not talk to Perforce and records what a person says the build came from.
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS releases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      name TEXT NOT NULL UNIQUE,
+
+      -- When it was released, as YYYY-MM-DD. Optional: a release may be
+      -- planned before it has a date.
+      released_on TEXT,
+
+      -- The Perforce changelist the build came from, when known.
+      changelist INTEGER,
+
+      notes TEXT,
+
+      created_by INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS release_assets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      release_id INTEGER NOT NULL,
+      asset_version_id INTEGER NOT NULL,
+
+      added_by INTEGER,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
+      FOREIGN KEY (asset_version_id) REFERENCES asset_versions(id),
+      FOREIGN KEY (added_by) REFERENCES users(id),
+
+      UNIQUE (release_id, asset_version_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_release_assets_release
+      ON release_assets(release_id);
+
+    CREATE INDEX IF NOT EXISTS idx_release_assets_version
+      ON release_assets(asset_version_id);
+  `);
+
+  /*
+   * ----------------------------------------------------------
    * stored_files — THE PHYSICAL CONTENT, AND THE ONLY COPY OF IT
    *
    * THERE IS ONE AND ONLY ONE COPY OF ANY SHA-256 IN THE

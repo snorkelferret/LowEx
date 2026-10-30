@@ -407,7 +407,8 @@ who said so, and when (`asset_integrations`).
 
 ## 8. Releases, and the game's versions
 
-*State: DECIDED — not built (TODO 53, 60, 67)*
+*State: PARTLY BUILT — releases and membership exist. Builds, automatic
+membership and the release diff do not (TODO 53, 104).*
 
 **Named releases, not channels.** "0.4 Experimental, 12 Nov" — a specific build
 with a date. Channels (production / development / experimental) are a small
@@ -428,6 +429,25 @@ under review. The game records which version it uses.
 > **NOT BUILT:** `asset_recommended_versions` (one version per asset) exists and
 > is never written. It cannot express an asset being in production *and*
 > candidate-dev at once — that needs the release dimension.
+
+**BUILT 2026-10-30 — the record and the admin's queue.** `releases` (a name, an
+optional date, an optional changelist, notes) and `release_assets` (which
+approved versions are in it). The admin page lists every release and, for one
+selected release, **the candidates**: approved store versions it does not hold.
+Adding a candidate writes the membership, and — when a changelist is given —
+also the `asset_integrations` row, so the import and the membership are one act.
+
+**One version per asset per release**, enforced by name in the routes: a build
+cannot ship two versions of BigTree, and the refusal says which one is in the
+way.
+
+**The changelist is an assertion**, like every other link to Perforce: the
+portal records what a person says, with who said it and when.
+
+**Not built:** a build (there is nothing to build yet), membership derived from
+a delivered changelist rather than chosen by hand, a diff between two releases,
+prod seeing the release list, and the `releases` idea reaching the developer
+page.
 
 ---
 

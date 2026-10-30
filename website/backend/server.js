@@ -138,6 +138,12 @@ app.use('/api/library', require('./routes/library'));
 // resource rather than a personal one. See routes/game.js.
 app.use('/api/game', require('./routes/game'));
 
+// NAMED RELEASES, AND WHAT IS IN THEM. The admin's queue: which approved
+// versions are candidates for a build, and which version of the game each one
+// goes into. Admin-only, because putting content into the game is engineering
+// rather than craft — see routes/releases.js.
+app.use('/api/releases', require('./routes/releases'));
+
 // Bug reports and suggestions. Reachable from every page, signed in or not —
 // the route applies its own optionalAuth rather than requiring a session,
 // because someone who cannot sign in is the most likely person to want to
