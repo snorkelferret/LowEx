@@ -111,6 +111,33 @@ Run them after a migration and before a backup. `check:store` is the one to
 trust when something looks wrong — it re-hashes every stored file and will tell
 you if any content no longer matches its own name.
 
+## The steward
+
+The box has an assistant for the duties nobody does during development, defined
+in the repository at `.claude/agents/steward.md`. Ask for the **steward** when
+you are in Claude Code in this project.
+
+It looks after four things:
+
+- **the nightly cleanup** — whether the job is running, what it would collect,
+  and whether the store is sound
+- **the audit log** — how fast it is growing, what it is costing, and what
+  archiving would mean (nothing archives it today)
+- **bug reports** — working through what is open with you: what each one says,
+  whether it still happens, and whether a commit has already fixed it
+- **deployment** — walking the checklist above (see *Before it goes public*)
+  with you, running the checks it can and naming the steps that are yours
+
+**It is advisory.** It does not write anything, commit, resolve a report,
+change a setting, or run a collection. Its findings come back in four parts:
+what it checked, what is true, what the documents claim that the box does not
+do, and what needs your decision.
+
+**It is not an account.** There is no login, no role and no permission for it —
+it runs the same read-only commands you could run. If it is ever given the power
+to act, it needs its own identity first, so its actions are not recorded as
+yours.
+
 ## Before it goes public
 
 There is a separate page for this, because it is a sequence of steps rather than

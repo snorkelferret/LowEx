@@ -11878,3 +11878,79 @@ no upside. If something seems to need one of them, ask.
      loopback — nothing else can reach the socket to forge X-Forwarded-For —
      which is the prerequisite item 48 named, and check:bind is what keeps it
      true.
+
+101) THE STEWARD — AN ADVISORY AGENT FOR THE RUNNING BOX. 2026-10-30.
+     ============================================================
+
+     ASKED FOR: "a new Agent role - which has oversite of garbage collection -
+     archiving old logs - and going thru bug reports with the admin - also going
+     through deployment with the admin".
+
+     DECIDED: CLAUDE CODE AGENT FIRST, in the owner's words. A portal role — a
+     fifth login type with built capabilities — is the later option, and is not
+     built.
+
+     --- WHAT IT IS ---
+
+       `.claude/agents/steward.md`. Four duties, each ending in the same
+       four-part report: what it checked, what is true, what the documents claim
+       that the box does not do, and what needs the owner's decision.
+
+         garbage collection   the daily job: is it running, is the store sound,
+                              what would it collect, is disk fine
+         audit-log growth     how fast audit_logs grows and what archiving
+                              would mean (nothing archives it today)
+         bug reports          what is open, whether it still happens, whether a
+                              commit fixed it, what the note should name
+         deployment           docs/DEPLOY.md section by section, running the
+                              proofs it can and naming the owner-only steps
+
+       TOOLS: Read, Grep, Glob, Bash — and the Bash is for read-only commands.
+       It is ADVISORY: no writes, no commits, no report resolutions, no
+       settings, and NEVER `daily.js --collect`.
+
+     --- AND WHY IT IS NOT A ROLE ---
+
+       Acting as `admin` would record every agent action as the ADMINISTRATOR'S,
+       and the "who did what" record — audit_logs, which is the whole answer to
+       that question — would stop being true. If it is ever given the power to
+       act, it needs its own identity first. That is in SPEC §16 and in the
+       agent's own instructions.
+
+     --- DOCUMENTED ---
+
+       SPEC.md §16 states what it is and what it is not. The manual's *Starting
+       the box* describes it for the operator, including that it has no account
+       and runs the same commands a person could. *Administering* points at it
+       from the Reports section, because that is where its findings land.
+
+     --- FIRST RUN, 2026-10-30 (run by hand: an agent definition is only picked
+         up when a Claude Code session starts) ---
+
+       * store sound, 3 rows / 3 blobs; check:collector passes; nothing to
+         collect; disk 19% of 11 TB.
+       * audit_logs: 37 rows since 2026-10-05 — store.daily_job 10,
+         workspace.upload 4, technical_check.run 4, creative_approval.submit 4,
+         workspace.import_from_store 3, workspace.upload_refused 2,
+         store.download 2, settings.update 2, creative_approval.reject 2, plus
+         one each of user.delete, user.create, creative_approval.approve,
+         asset.integrate.
+       * **THE DAILY JOB HAS NO EVIDENCE OF A SCHEDULE.** The rows cluster on
+         three days — 2026-10-05, 2026-10-29, 2026-10-30 — which are days
+         somebody ran it by hand. There is a 24-day gap. The manual says "put it
+         in cron, do not run it by hand"; nothing in the record shows cron.
+         CHECK THE SCHEDULE, do not assume it exists.
+       * **REPORT MODE STILL WRITES A store.daily_job ROW**, and the details do
+         not say which mode ran. So the record cannot tell a nightly --collect
+         from a hand-run report, and "last run" means "last time anyone ran it".
+         A one-field fix (`mode`) when the job is next touched; until then, read
+         the counts to tell them apart.
+       * one open report, id 25 (the Manual link to the splash) — already fixed
+         in 0b37b93 and f1fb02e; waiting to be resolved with a note naming them.
+
+     --- NOT BUILT ---
+
+       * the portal role, and its capability list
+       * log archiving: no retention, no export, no policy
+       * a triage step for reports — a field linking a report to the commit or
+         TODO item that answered it (item 87's process question, still open)

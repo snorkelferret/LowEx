@@ -260,6 +260,10 @@ person to want to report something.
 Resolving one takes an optional note, and the panel tells you when a report was
 skipped rather than resolved.
 
+**The steward can work through these with you** — see *Starting the box*. It
+reads them, checks whether each still happens, and proposes the resolution note.
+It cannot resolve one; that is your click, and the note is the record.
+
 ## What is not built
 
 - **Health figures** — memory and CPU, and a warning banner that appears without

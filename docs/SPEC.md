@@ -563,3 +563,36 @@ portal role does not carry over.
 | the Director decides | **BUILT as `prod`** (§6) |
 | notifications to the owner | **NOT BUILT** (§11) |
 | discussion attached to assets, versions, submissions, approvals | **DEFERRED** — a link-out (§12) |
+
+---
+
+## 16. The steward
+
+*State: BUILT — an agent definition. Not a portal role, and no account.*
+
+A Claude Code agent defined at **`.claude/agents/steward.md`** that looks after
+the **running box** rather than the codebase. Four duties:
+
+- **garbage collection** — is the nightly job running, is the store sound, what
+  is accumulating, what would the collector remove
+- **audit-log growth** — how fast `audit_logs` is growing, what it is costing,
+  and what archiving would mean (there is no archiving mechanism today)
+- **bug reports** — working through open reports with the owner: what each says,
+  whether it still happens, whether a commit already fixed it, and what the
+  resolution note should name
+- **deployment** — walking `docs/DEPLOY.md` section by section, running the
+  proofs it can and naming the steps that are only the owner's
+
+**It is advisory.** It measures, verifies and reports in four parts — what it
+checked, what is true, what the documents claim that the box does not do, and
+what needs the owner's decision. It does not write files, commit, resolve a
+report, change a setting, or run a collection.
+
+**It is not a role.** There is no account, no `requireRole` entry, and nothing
+in `roles.js`. It runs the same read-only commands and checks a person would,
+and its findings are proposals to the owner or to whoever is building.
+
+> **If it is ever given the power to act** — writing a row, resolving a report,
+> collecting garbage — it needs its own identity first. Acting as `admin` would
+> record every agent action as the administrator's, and the "who did what"
+> record (§6, and the note on sessions in §7) would stop being true.
