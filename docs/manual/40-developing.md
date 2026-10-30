@@ -232,6 +232,10 @@ took and when.
 game, and which Perforce changelist put it there — `v2 · CL 15407`. That is not
 necessarily the newest version.
 
+**Each row says who uploaded the version it is showing.** That is the
+developer who authored it; the person who approved it is a different one, and
+the store records both.
+
 A dash means nobody has recorded an integration, which covers two different
 things the portal cannot tell apart: never put in the game, and put in but not
 noticed here. **An administrator records it** when adding the version to a

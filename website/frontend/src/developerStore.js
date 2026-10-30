@@ -102,6 +102,16 @@ function row(asset) {
         what.appendChild(description);
     }
 
+    // WHO AUTHORED THE VERSION THIS ROW IS ABOUT, filled in once its versions
+    // are known (loadVersionIds). The list is assets, so the uploader comes
+    // from the latest version's record — uploaded_by, not created_by, which is
+    // the APPROVER. Two different people and two different columns since
+    // 2026-10-30.
+    const uploadedBy = document.createElement('div');
+    uploadedBy.className = 'small text-secondary';
+    uploadedBy.dataset.uploadedBy = String(asset.id);
+    what.appendChild(uploadedBy);
+
     tr.appendChild(what);
 
     // WHAT PART OF THE GAME
@@ -318,6 +328,15 @@ async function loadVersionIds() {
             link.href = `${API}/${assetId}/versions/${latest.id}/download`;
             link.dataset.resolved = '1';
             link.dataset.version = String(latest.id);
+
+            // The author of the version this row downloads. The store version
+            // records the approver in created_by_username; this is the other
+            // person.
+            const by = document.querySelector(`[data-uploaded-by="${assetId}"]`);
+
+            if (by && latest.uploaded_by_username) {
+                by.textContent = `uploaded by ${latest.uploaded_by_username}`;
+            }
 
         } catch {
             // A link that cannot be resolved stays where it is and 404s. That
