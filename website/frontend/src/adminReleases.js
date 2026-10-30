@@ -1,43 +1,46 @@
 // frontend/src/adminReleases.js
 //
-// The Game releases panel: named builds, what is in them, and the queue of
-// approved work that could go into one.
+// The Game releases panel: named builds, what is in them, the queue of approved
+// work that could go into one, each version's FILES as a tree, and the DIFF
+// between two builds.
 //
 // ============================================================
 // WHY THIS EXISTS
 // ============================================================
 //
 // An approved version could record a changelist and nothing else. "Which
-// version of the game does this go into, and what is already in it?" had no
-// answer anywhere — not in the portal, and not in a document. This is that
-// answer: a release is a NAME and a DATE, its content is a set of approved
-// versions, and the candidates are everything approved that it does not hold.
+// version of the game does this go into, what is already in it, and what is
+// actually inside it?" had no answer anywhere. A release is a NAME and a DATE;
+// its content is a set of approved versions; each version is a set of files
+// with content hashes.
 //
 // ============================================================
-// THE TWO LISTS, AND WHY THEY ARE DIFFERENT
+// THE THREE THINGS ON THIS PAGE
 // ============================================================
 //
 //   IN THIS RELEASE   what this build ships. One version per asset — the
 //                     server refuses a second and names the one in the way.
 //
 //   CANDIDATES        approved, not in this release. A version already in
-//                     ANOTHER release still appears, marked, because the same
-//                     version can ship in several builds.
+//                     ANOTHER release still appears, marked.
 //
-// ============================================================
-// THE CHANGELIST IS OPTIONAL AND IS AN ASSERTION
-// ============================================================
+//   FILES / DIFF      the manifest of one version as a tree, with each file's
+//                     hash and size behind a toggle; and what changed between
+//                     two builds, by asset and by file CONTENT HASH.
 //
-// The portal does not talk to Perforce. Adding a version to a release writes
-// the membership; giving a changelist also records the import, which is what
-// makes "what put this in Unreal" answerable later.
+// THE UPLOADER IS NOT ON THE STORE VERSION. The store records who approved;
+// who authored it is one link back through the approval, and the server joins
+// it. Both are shown, because they are different people and different acts.
 
 import { $, escapeHtml } from './utils.js';
 import { apiFetch } from './api.js';
+import { formatBytes } from '../../shared/formatBytes.mjs';
 
 const API = '/api/releases';
+const GAME_API = '/api/game';
 
 let selectedId = null;
+let allReleases = [];
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -79,15 +82,17 @@ function formatDate(value) {
     });
 }
 
-// "BigTree v3 — approved by prod on 12 Nov" — the line an admin reads.
-function versionLabel(row) {
-    const approved = row.approved_by
-        ? `approved by ${escapeHtml(row.approved_by)}`
-        : 'approval record missing';
+const shortHash = hash => (hash ? `${hash.slice(0, 12)}…` : '—');
 
-    const when = row.decided_at ? ` on ${formatDate(row.decided_at)}` : '';
+// "uploaded by val · approved by prod · 12 Nov" — the line an admin reads.
+function peopleLine(row) {
+    const parts = [];
 
-    return `${escapeHtml(row.asset_name)} <span class="text-secondary">v${row.version_number} — ${approved}${when}</span>`;
+    if (row.uploaded_by) parts.push(`uploaded by ${escapeHtml(row.uploaded_by)}`);
+    if (row.approved_by) parts.push(`approved by ${escapeHtml(row.approved_by)}`);
+    if (row.decided_at) parts.push(formatDate(row.decided_at));
+
+    return parts.join(' · ');
 }
 
 // ---------------------------------------------------------------------------
@@ -124,10 +129,42 @@ function renderReleases(releases) {
     }
 }
 
+// The two selects for the diff, kept in step with the list. A selection is
+// preserved when it still exists, so comparing does not reset itself.
+function refreshDiffSelects() {
+    for (const id of ['releaseDiffFrom', 'releaseDiffTo']) {
+        const select = $(id);
+        if (!select) continue;
+
+        const previous = select.value;
+
+        select.innerHTML = allReleases
+            .map(release => `<option value="${release.id}">${escapeHtml(release.name)}</option>`)
+            .join('');
+
+        if (previous && allReleases.some(r => String(r.id) === previous)) {
+            select.value = previous;
+        }
+    }
+
+    // Default: to = the selected release, from = the newest other one.
+    const to = $('releaseDiffTo');
+    const from = $('releaseDiffFrom');
+
+    if (to && selectedId !== null) to.value = String(selectedId);
+
+    if (from && (!from.value || from.value === to?.value)) {
+        const other = allReleases.find(r => String(r.id) !== from.value);
+        if (other) from.value = String(other.id);
+    }
+}
+
 async function loadReleases() {
     try {
         const data = await fetchJson(API);
-        renderReleases(data.releases || []);
+        allReleases = data.releases || [];
+        renderReleases(allReleases);
+        refreshDiffSelects();
     } catch (err) {
         showAlert(`Could not load releases: ${err.message}`);
     }
@@ -153,7 +190,10 @@ function renderMembers(members) {
 
     const table = document.createElement('table');
     table.className = 'table table-sm align-middle mb-0';
-    table.innerHTML = '<thead class="text-uppercase small"><tr><th>Asset</th><th>Approved</th><th>CL</th><th></th></tr></thead>';
+    table.innerHTML =
+        '<thead class="text-uppercase small"><tr>' +
+        '<th>Asset</th><th>Who</th><th>CL</th><th></th>' +
+        '</tr></thead>';
 
     const body = document.createElement('tbody');
 
@@ -162,11 +202,20 @@ function renderMembers(members) {
 
         tr.innerHTML =
             `<td>${escapeHtml(row.asset_name)} <span class="text-secondary">v${row.version_number}</span></td>` +
-            `<td class="small text-secondary">${row.approved_by ? escapeHtml(row.approved_by) : '—'}${row.decided_at ? ` · ${formatDate(row.decided_at)}` : ''}</td>` +
+            `<td class="small text-secondary">${peopleLine(row)}</td>` +
             `<td class="small text-secondary">${row.changelist ? `CL ${row.changelist}` : '—'}</td>`;
 
         const actions = document.createElement('td');
-        actions.className = 'text-end';
+        actions.className = 'text-end text-nowrap';
+
+        const files = document.createElement('button');
+        files.type = 'button';
+        files.className = 'btn btn-sm btn-outline-secondary py-0 px-2 me-1';
+        files.textContent = 'Files';
+        files.dataset.manifestAsset = String(row.asset_id);
+        files.dataset.manifestVersion = String(row.asset_version_id);
+        files.dataset.manifestName = `${row.asset_name} v${row.version_number}`;
+        actions.appendChild(files);
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -208,8 +257,11 @@ function renderCandidates(candidates) {
         const item = document.createElement('li');
         item.className = 'mb-1';
 
-        item.innerHTML = versionLabel(row)
-            + (row.in_other_release
+        item.innerHTML =
+            `<span class="fw-semibold">${escapeHtml(row.asset_name)}</span> ` +
+            `<span class="text-secondary">v${row.version_number}</span> ` +
+            `<span class="text-secondary small">— ${peopleLine(row)}</span>` +
+            (row.in_other_release
                 ? ' <span class="badge text-bg-secondary ms-1">in another release</span>'
                 : '');
 
@@ -246,8 +298,13 @@ function renderDetail(detail) {
         meta.textContent = parts.join(' · ');
     }
 
+    // A manifest belongs to one version and one release; changing release
+    // closes it rather than leaving a tree labelled with the wrong build.
+    $('releaseManifest')?.classList.add('d-none');
+
     renderMembers(members);
     renderCandidates(candidates);
+    refreshDiffSelects();
 }
 
 async function selectRelease(id) {
@@ -257,12 +314,201 @@ async function selectRelease(id) {
         const detail = await fetchJson(`${API}/${id}`);
         renderDetail(detail);
 
-        // Keep the list's highlight in step without a second request.
         for (const button of document.querySelectorAll('#releaseList [data-release-id]')) {
             button.classList.toggle('active', Number(button.dataset.releaseId) === id);
         }
     } catch (err) {
         showAlert(`Could not load that release: ${err.message}`);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The manifest, as a tree
+// ---------------------------------------------------------------------------
+//
+// THE MANIFEST IS THE VERSION'S FILE LIST, read from the same endpoint a
+// downloader uses — so what an admin sees here is exactly what a download would
+// contain, not a second interpretation of the database.
+
+function buildTree(files) {
+    const root = { dirs: new Map(), files: [] };
+
+    for (const file of files) {
+        const parts = String(file.relative_path || '')
+            .split('/')
+            .filter(Boolean);
+
+        let node = root;
+
+        for (const part of parts) {
+            if (!node.dirs.has(part)) node.dirs.set(part, { dirs: new Map(), files: [] });
+            node = node.dirs.get(part);
+        }
+
+        node.files.push(file);
+    }
+
+    return root;
+}
+
+function renderNode(node, parent) {
+    for (const [name, child] of [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = `📁 ${name}`;
+        details.appendChild(summary);
+
+        const inner = document.createElement('div');
+        inner.className = 'ps-3';
+        renderNode(child, inner);
+        details.appendChild(inner);
+
+        parent.appendChild(details);
+    }
+
+    for (const file of [...node.files].sort((a, b) => a.filename.localeCompare(b.filename))) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = `📄 ${file.filename}`;
+        details.appendChild(summary);
+
+        const body = document.createElement('div');
+        body.className = 'ps-3 text-secondary';
+        body.innerHTML =
+            `<div>sha256: <code class="text-info">${escapeHtml(file.sha256)}</code></div>` +
+            `<div>size: ${formatBytes(file.size)}</div>` +
+            `<div>path: ${escapeHtml(`${file.relative_path || ''}/${file.filename}`.replace(/^\/+/, ''))}</div>`;
+
+        details.appendChild(body);
+        parent.appendChild(details);
+    }
+}
+
+async function loadManifest(assetId, versionId, label) {
+    const panel = $('releaseManifest');
+    const title = $('releaseManifestTitle');
+    const tree = $('releaseManifestTree');
+
+    if (!panel || !title || !tree) return;
+
+    panel.classList.remove('d-none');
+    title.textContent = `${label} — loading…`;
+    tree.innerHTML = '';
+
+    try {
+        const manifest = await fetchJson(`${GAME_API}/${assetId}/versions/${versionId}/manifest`);
+
+        const files = manifest.files || [];
+
+        title.innerHTML =
+            `${escapeHtml(label)} — ${files.length} file${files.length === 1 ? '' : 's'}, ` +
+            `${formatBytes(manifest.total_bytes || 0)}, ` +
+            `<span class="text-secondary fw-normal">manifest <code>${shortHash(manifest.manifest_hash)}</code></span>`;
+
+        const root = document.createElement('div');
+        renderNode(buildTree(files), root);
+        tree.innerHTML = '';
+        tree.appendChild(root);
+
+    } catch (err) {
+        title.textContent = label;
+        tree.innerHTML = `<span class="text-danger">${escapeHtml(err.message)}</span>`;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The diff
+// ---------------------------------------------------------------------------
+
+const STATUS_STYLE = {
+    added: { label: 'Added', badge: 'success' },
+    removed: { label: 'Removed', badge: 'danger' },
+    changed: { label: 'Changed', badge: 'warning' },
+    unchanged: { label: 'Unchanged', badge: 'secondary' }
+};
+
+function renderFileLine(text) {
+    const row = document.createElement('div');
+    row.className = 'ps-3';
+    row.innerHTML = text;
+    return row;
+}
+
+function renderDiff(diff) {
+    const box = $('releaseDiffResult');
+    if (!box) return;
+
+    box.innerHTML = '';
+
+    const heading = document.createElement('div');
+    heading.className = 'mb-2';
+    heading.innerHTML =
+        `<strong>${escapeHtml(diff.from.name)}</strong> → <strong>${escapeHtml(diff.to.name)}</strong> ` +
+        `<span class="text-secondary">` +
+        `${diff.summary.added} added · ${diff.summary.removed} removed · ` +
+        `${diff.summary.changed} changed · ${diff.summary.unchanged} unchanged</span>`;
+    box.appendChild(heading);
+
+    for (const asset of diff.assets || []) {
+        const style = STATUS_STYLE[asset.status] || STATUS_STYLE.unchanged;
+
+        if (asset.status === 'unchanged') {
+            const line = document.createElement('div');
+            line.className = 'text-secondary small mb-1';
+            line.textContent = `${asset.asset_name} — unchanged (v${asset.to_version})`;
+            box.appendChild(line);
+            continue;
+        }
+
+        const details = document.createElement('details');
+        details.className = 'mb-1';
+
+        const summary = document.createElement('summary');
+        summary.innerHTML =
+            `<span class="badge text-bg-${style.badge} me-2">${style.label}</span>` +
+            escapeHtml(asset.asset_name) +
+            `<span class="text-secondary"> ` +
+            (asset.status === 'added'
+                ? `v${asset.to_version}`
+                : asset.status === 'removed'
+                    ? `v${asset.from_version}`
+                    : `v${asset.from_version} → v${asset.to_version}`) +
+            `</span>`;
+        details.appendChild(summary);
+
+        for (const file of asset.files?.added || []) {
+            details.appendChild(renderFileLine(`<span class="text-success">+ ${escapeHtml(file.path)}</span>`));
+        }
+
+        for (const file of asset.files?.removed || []) {
+            details.appendChild(renderFileLine(`<span class="text-danger">− ${escapeHtml(file.path)}</span>`));
+        }
+
+        for (const file of asset.files?.changed || []) {
+            details.appendChild(renderFileLine(
+                `<span class="text-warning">~ ${escapeHtml(file.path)}</span> ` +
+                `<span class="text-secondary">${shortHash(file.from_sha256)} → ${shortHash(file.to_sha256)}</span>`
+            ));
+        }
+
+        box.appendChild(details);
+    }
+}
+
+async function runDiff() {
+    const from = Number($('releaseDiffFrom')?.value);
+    const to = Number($('releaseDiffTo')?.value);
+
+    if (!Number.isInteger(from) || !Number.isInteger(to)) {
+        showAlert('Choose two releases to compare.', 'warning');
+        return;
+    }
+
+    try {
+        const diff = await fetchJson(`${API}/${to}/diff?against=${from}`);
+        renderDiff(diff);
+    } catch (err) {
+        showAlert(`Could not compare those releases: ${err.message}`);
     }
 }
 
@@ -339,8 +585,34 @@ function onClickList(event) {
     selectRelease(Number(button.dataset.releaseId));
 }
 
+function onClickMembers(event) {
+    const manifestButton = event.target.closest('button[data-manifest-version]');
+
+    if (manifestButton) {
+        loadManifest(
+            Number(manifestButton.dataset.manifestAsset),
+            Number(manifestButton.dataset.manifestVersion),
+            manifestButton.dataset.manifestName
+        );
+        return;
+    }
+
+    const removeButton = event.target.closest('button[data-remove-version]');
+    if (!removeButton || selectedId === null) return;
+
+    fetchJson(`${API}/${selectedId}/assets/${Number(removeButton.dataset.removeVersion)}`, {
+        method: 'DELETE'
+    })
+        .then(detail => {
+            showAlert('', 'success');
+            renderDetail(detail);
+            loadReleases();
+        })
+        .catch(err => showAlert(err.message));
+}
+
 // DELETING THE RELEASE, NOT ITS CONTENT. The membership cascades; the approved
-// versions stay in the store. A misspelt release can be removed and named again.
+// versions stay in the store.
 function onClickDelete() {
     if (selectedId === null) return;
 
@@ -354,22 +626,7 @@ function onClickDelete() {
         .then(() => {
             selectedId = null;
             $('releaseDetail')?.classList.add('d-none');
-            $('releaseAlert')?.classList.add('d-none');
-            loadReleases();
-        })
-        .catch(err => showAlert(err.message));
-}
-
-function onClickRemove(event) {
-    const button = event.target.closest('button[data-remove-version]');
-    if (!button || selectedId === null) return;
-
-    const versionId = Number(button.dataset.removeVersion);
-
-    fetchJson(`${API}/${selectedId}/assets/${versionId}`, { method: 'DELETE' })
-        .then(detail => {
-            showAlert('', 'success');
-            renderDetail(detail);
+            $('releaseDiffResult') && ($('releaseDiffResult').innerHTML = '');
             loadReleases();
         })
         .catch(err => showAlert(err.message));
@@ -379,8 +636,9 @@ document.addEventListener('DOMContentLoaded', () => {
     $('releaseCreateForm')?.addEventListener('submit', onSubmitCreate);
     $('releaseAddForm')?.addEventListener('submit', onSubmitAdd);
     $('releaseList')?.addEventListener('click', onClickList);
-    $('releaseMembers')?.addEventListener('click', onClickRemove);
+    $('releaseMembers')?.addEventListener('click', onClickMembers);
     $('releaseDeleteBtn')?.addEventListener('click', onClickDelete);
+    $('releaseDiffBtn')?.addEventListener('click', runDiff);
 
     loadReleases();
 });

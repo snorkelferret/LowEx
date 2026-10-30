@@ -82,6 +82,7 @@ const membersOf = db.prepare(`
         a.name          AS asset_name,
         ca.decided_at,
         u.username      AS approved_by,
+        wu.username     AS uploaded_by,
         (SELECT MAX(ai.changelist) FROM asset_integrations ai
           WHERE ai.asset_version_id = av.id) AS changelist
     FROM release_assets ra
@@ -90,6 +91,11 @@ const membersOf = db.prepare(`
     LEFT JOIN creative_approvals ca
         ON ca.repository_version_id = av.id AND ca.status = 'approved'
     LEFT JOIN users u ON u.id = ca.decided_by
+    -- THE UPLOADER IS ON THE WORKSPACE VERSION, NOT THE STORE'S. The store
+    -- records who approved; who AUTHORED it is one link back through the
+    -- approval. See SPEC §7 and TODO 87's first-uploader item.
+    LEFT JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
+    LEFT JOIN users wu ON wu.id = wv.created_by
     WHERE ra.release_id = ?
     ORDER BY a.name COLLATE NOCASE, av.version_number
 `);
@@ -105,6 +111,7 @@ const candidatesFor = db.prepare(`
         a.name          AS asset_name,
         ca.decided_at,
         u.username      AS approved_by,
+        wu.username     AS uploaded_by,
         EXISTS (
             SELECT 1 FROM release_assets x
             WHERE x.asset_version_id = av.id
@@ -114,6 +121,8 @@ const candidatesFor = db.prepare(`
     JOIN creative_approvals ca
         ON ca.repository_version_id = av.id AND ca.status = 'approved'
     LEFT JOIN users u ON u.id = ca.decided_by
+    LEFT JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
+    LEFT JOIN users wu ON wu.id = wv.created_by
     WHERE NOT EXISTS (
         SELECT 1 FROM release_assets r2
         WHERE r2.release_id = ? AND r2.asset_version_id = av.id
@@ -134,6 +143,14 @@ const otherVersionOfAssetInRelease = db.prepare(`
     FROM release_assets ra
     JOIN asset_versions av ON av.id = ra.asset_version_id
     WHERE ra.release_id = ? AND av.asset_id = ?
+`);
+
+const filesOfVersion = db.prepare(`
+    SELECT avf.relative_path, avf.filename, sf.sha256, sf.file_size
+    FROM asset_version_files avf
+    JOIN stored_files sf ON sf.id = avf.stored_file_id
+    WHERE avf.asset_version_id = ?
+    ORDER BY avf.relative_path, avf.filename
 `);
 
 const insertRelease = db.prepare(`
@@ -185,6 +202,7 @@ function detailOf(releaseId) {
             asset_id: row.asset_id,
             asset_name: row.asset_name,
             approved_by: row.approved_by,
+            uploaded_by: row.uploaded_by,
             decided_at: row.decided_at,
             changelist: row.changelist
         })),
@@ -194,6 +212,7 @@ function detailOf(releaseId) {
             asset_id: row.asset_id,
             asset_name: row.asset_name,
             approved_by: row.approved_by,
+            uploaded_by: row.uploaded_by,
             decided_at: row.decided_at,
             in_other_release: Boolean(row.in_other_release)
         }))
@@ -430,6 +449,155 @@ router.delete('/:id', authenticateToken, requireRole('admin'), (req, res) => {
     });
 
     return res.json({ status: 'deleted', release_id: id });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/releases/:id/diff?against=:otherId — what changed between builds
+// ---------------------------------------------------------------------------
+//
+// COMPARED BY ASSET AND BY FILE, which are the two questions people ask:
+// "which assets changed in 0.4" and "what changed inside BigTree".
+//
+//   added      an asset in this release and not in the other
+//   removed    the reverse
+//   changed    the same asset at a different version — and for those, the
+//              files added, removed and modified by PATH AND CONTENT HASH
+//   unchanged  the same version in both
+//
+// FILES ARE COMPARED BY HASH, not by date or size: the store is
+// content-addressed, so two files with the same SHA are the same file however
+// they got there, and a file that changed identity is exactly a changed hash.
+
+const fileKey = file =>
+    `${file.relative_path || ''}/${file.filename}`.replace(/^\/+/, '');
+
+const describeFile = file => ({
+    path: fileKey(file),
+    sha256: file.sha256,
+    size: file.file_size
+});
+
+function filesByKey(versionId) {
+    return new Map(filesOfVersion.all(versionId).map(file => [fileKey(file), file]));
+}
+
+router.get('/:id/diff', authenticateToken, requireRole('admin'), (req, res) => {
+    const toId = Number(req.params.id);
+    const fromId = Number(req.query.against);
+
+    if (!Number.isInteger(toId) || !Number.isInteger(fromId)) {
+        return res.status(400).json({
+            error: 'Two release IDs are needed: /api/releases/:id/diff?against=:other'
+        });
+    }
+
+    const to = releaseById.get(toId);
+    const from = releaseById.get(fromId);
+
+    if (!to || !from) {
+        return res.status(404).json({ error: 'Release not found' });
+    }
+
+    const toMap = new Map(membersOf.all(toId).map(m => [m.asset_id, m]));
+    const fromMap = new Map(membersOf.all(fromId).map(m => [m.asset_id, m]));
+
+    const assets = [];
+
+    for (const assetId of new Set([...toMap.keys(), ...fromMap.keys()])) {
+        const before = fromMap.get(assetId);
+        const after = toMap.get(assetId);
+
+        if (!before) {
+            assets.push({
+                asset_id: assetId,
+                asset_name: after.asset_name,
+                status: 'added',
+                from_version: null,
+                to_version: after.version_number,
+                files: {
+                    added: filesOfVersion.all(after.asset_version_id).map(describeFile),
+                    removed: [],
+                    changed: []
+                }
+            });
+            continue;
+        }
+
+        if (!after) {
+            assets.push({
+                asset_id: assetId,
+                asset_name: before.asset_name,
+                status: 'removed',
+                from_version: before.version_number,
+                to_version: null,
+                files: {
+                    added: [],
+                    removed: filesOfVersion.all(before.asset_version_id).map(describeFile),
+                    changed: []
+                }
+            });
+            continue;
+        }
+
+        if (before.asset_version_id === after.asset_version_id) {
+            assets.push({
+                asset_id: assetId,
+                asset_name: after.asset_name,
+                status: 'unchanged',
+                from_version: before.version_number,
+                to_version: after.version_number,
+                files: { added: [], removed: [], changed: [] }
+            });
+            continue;
+        }
+
+        const oldFiles = filesByKey(before.asset_version_id);
+        const newFiles = filesByKey(after.asset_version_id);
+
+        assets.push({
+            asset_id: assetId,
+            asset_name: after.asset_name,
+            status: 'changed',
+            from_version: before.version_number,
+            to_version: after.version_number,
+            files: {
+                added: [...newFiles.keys()]
+                    .filter(key => !oldFiles.has(key))
+                    .map(key => describeFile(newFiles.get(key))),
+
+                removed: [...oldFiles.keys()]
+                    .filter(key => !newFiles.has(key))
+                    .map(key => describeFile(oldFiles.get(key))),
+
+                changed: [...newFiles.keys()]
+                    .filter(key => oldFiles.has(key)
+                        && oldFiles.get(key).sha256 !== newFiles.get(key).sha256)
+                    .map(key => ({
+                        path: key,
+                        from_sha256: oldFiles.get(key).sha256,
+                        to_sha256: newFiles.get(key).sha256,
+                        size: newFiles.get(key).file_size
+                    }))
+            }
+        });
+    }
+
+    assets.sort((a, b) =>
+        a.asset_name.localeCompare(b.asset_name, undefined, { sensitivity: 'base' }));
+
+    const count = status => assets.filter(asset => asset.status === status).length;
+
+    return res.json({
+        from: { id: from.id, name: from.name, released_on: from.released_on },
+        to: { id: to.id, name: to.name, released_on: to.released_on },
+        summary: {
+            added: count('added'),
+            removed: count('removed'),
+            changed: count('changed'),
+            unchanged: count('unchanged')
+        },
+        assets
+    });
 });
 
 module.exports = router;

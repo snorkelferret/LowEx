@@ -444,10 +444,20 @@ way.
 **The changelist is an assertion**, like every other link to Perforce: the
 portal records what a person says, with who said it and when.
 
+**Each version's files, as a tree.** Selecting a version in a release shows its
+manifest — read from the same endpoint a downloader uses, so it is exactly what
+a download contains. Folders and files are native `<details>`; a file opens to
+its content hash, size and path.
+
+**The diff between two releases** compares by asset and by file. Assets are
+added, removed, changed (a different version) or unchanged. Within a changed
+asset, files are added, removed or modified **by content hash** — so a file
+whose bytes are the same under a new path shows as a removal and an addition,
+which is the upload model's own rule: a path is part of a version's identity.
+
 **Not built:** a build (there is nothing to build yet), membership derived from
-a delivered changelist rather than chosen by hand, a diff between two releases,
-prod seeing the release list, and the `releases` idea reaching the developer
-page.
+a delivered changelist rather than chosen by hand, prod seeing the release list,
+and the `releases` idea reaching the developer page.
 
 ---
 

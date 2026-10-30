@@ -198,6 +198,16 @@ this into Unreal" later.
 **Removing** takes the version out of this build. It stays approved in the
 store; a release is a statement about a build, not a second copy.
 
+**Files** opens the version's manifest as a tree: folders, then files, and each
+file opens to its content hash, its size and its path. This is the same list a
+download would produce, not a second reading of the database.
+
+**Compare releases** shows what changed between two builds. Assets are added,
+removed, changed or unchanged; under a changed asset, the files are listed as
+added, removed or modified — **compared by content hash**, so the same bytes
+under a new path appear as a removal and an addition. That is correct: a path is
+part of what a version is.
+
 > **This is the only place an integration is recorded.** The old button on the
 > Game store tab was removed when this arrived — two buttons writing the same
 > record is how they come to disagree.

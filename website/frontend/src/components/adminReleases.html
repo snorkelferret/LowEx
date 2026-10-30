@@ -93,6 +93,15 @@
             <span id="releaseMemberCount" class="text-secondary fw-normal small ms-1"></span>
           </h4>
           <div id="releaseMembers" class="small"></div>
+
+          <!-- THE MANIFEST OF ONE VERSION, as a tree. Folders and files are
+               native <details>, so every node is a button that opens; a file
+               opens to its hash, size and path. Read from the same endpoint a
+               downloader uses, so this is exactly what a download contains. -->
+          <div id="releaseManifest" class="d-none mt-3">
+            <h4 class="h6" id="releaseManifestTitle"></h4>
+            <div id="releaseManifestTree" class="small"></div>
+          </div>
         </div>
 
         <div class="col-lg-6">
@@ -136,6 +145,37 @@
         </div>
 
       </div>
+
+      <!-- ── Compare two builds ─────────────────────────────────── -->
+      <hr class="my-4">
+
+      <h4 class="h6">Compare releases</h4>
+      <p class="small text-secondary mb-2">
+        What changed going from one build to another — by asset, and inside a
+        changed asset, by file content hash.
+      </p>
+
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label small mb-1" for="releaseDiffFrom">From</label>
+          <select id="releaseDiffFrom" class="form-select form-select-sm"></select>
+        </div>
+
+        <div class="col-md-5">
+          <label class="form-label small mb-1" for="releaseDiffTo">To</label>
+          <select id="releaseDiffTo" class="form-select form-select-sm"></select>
+        </div>
+
+        <div class="col-md-2">
+          <button id="releaseDiffBtn" type="button"
+                  class="btn btn-sm btn-outline-info w-100 text-nowrap">
+            Compare
+          </button>
+        </div>
+      </div>
+
+      <div id="releaseDiffResult" class="small mt-3"></div>
+
     </div>
 
     <p class="form-text mt-3 mb-0">

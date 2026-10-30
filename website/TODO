@@ -12092,6 +12092,42 @@ no upside. If something seems to need one of them, ask.
        holding TestUpload v2. It can be deleted from the page — that is what the
        Delete button is for.
 
+     --- SECOND PASS, SAME DAY: THE TREE AND THE DIFF ---
+
+       THE MANIFEST TREE. "Files" on a member shows that version's manifest as
+       a tree — folders and files as native <details>, a file opening to its
+       hash, size and path. Read from the SAME endpoint a downloader uses, so
+       the admin is looking at what a download would produce and not a second
+       interpretation of the database.
+
+       THE DIFF. GET /api/releases/:id/diff?against=:other, and a Compare
+       control on the page. By asset: added, removed, changed (a different
+       version) or unchanged. Inside a changed asset: files added, removed or
+       MODIFIED BY CONTENT HASH. Compared by hash rather than by date or size
+       because the store is content-addressed — the same bytes are the same
+       file, and a changed file is exactly a changed hash.
+
+       AND A REAL CASE FROM THE DEV DATABASE, which is why the rule matters:
+       TestUpload v1 → v2 MOVED a file (artPics/IMG…jpg → artPics/v2/IMG…jpg)
+       with the same content. The diff reports it as one removal and one
+       addition, not as "unchanged" — because a path change is what makes a new
+       version in this system (TODO 87 A5/A10). A path-based diff that ignored
+       names would have said nothing happened.
+
+       THE UPLOADER, WHICH THE STORE VERSION DOES NOT RECORD. The store has
+       created_by = the APPROVER. Who authored it is one link back through
+       creative_approvals to workspace_versions.created_by, and both queries
+       now join it: members and candidates show "uploaded by X · approved by Y".
+       That is as close to item 87's first-uploader item as this page can get
+       without a column on asset_versions.
+
+       THE CHECK grew to 35 assertions: the diff's counts, both versions named,
+       the modified file with its before and after hashes, the added file,
+       nothing falsely removed, the reverse direction, a release against
+       itself, the missing-argument and missing-release cases. PROVED BY
+       MUTATION: ignoring the hash comparison made exactly the modified-file
+       assertion fail.
+
      --- WHAT IS NOT BUILT ---
 
        * A BUILD. A release records what a person says the build came from; the
@@ -12100,9 +12136,10 @@ no upside. If something seems to need one of them, ask.
          §15) will deliver the changelist's file list, which is what turns
          membership from something chosen by hand into something the depot
          proposes.
-       * THE RELEASE DIFF, and the manifest tree under each version.
        * PROD SEEING THE RELEASE LIST. Admin only today; item 83 is the same
          question asked about the store.
        * THE STREAM SIDE. "Devs add an asset to their stream" is Perforce's
          task streams (TODO 88 §3); the portal's candidates start at APPROVED
          store versions, because nothing tells it about a stream yet.
+       * DIFF BETWEEN ARBITRARY VERSIONS of one asset, rather than between two
+         releases. The data supports it; the control does not offer it yet.
