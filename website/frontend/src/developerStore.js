@@ -49,6 +49,16 @@ async function fetchJson(url, { raw = false, ...options } = {}) {
     return response.json();
 }
 
+// WHO MAY TAKE A COPY INTO A WORKSPACE. Import writes a workspace asset; prod
+// has no workspace (item 83 gives prod the READ side only). Download stays —
+// it changes nothing.
+const ME = (() => {
+    try { return JSON.parse(localStorage.getItem('user_info') || '{}') || {}; }
+    catch { return {}; }
+})();
+
+const CAN_IMPORT = ME.role === 'developer' || ME.role === 'admin';
+
 const API = '/api/game';
 
 let allAssets = [];
@@ -204,16 +214,18 @@ function row(asset) {
         actions.insertBefore(download, zip);
     }
 
-    const importButton = document.createElement('button');
-    importButton.type = 'button';
-    importButton.className = 'btn btn-sm btn-outline-success py-0 px-2';
-    importButton.dataset.import = String(asset.id);
-    importButton.dataset.name = asset.name;
-    importButton.title =
-        'Take this version into your workspace, recording where it came from, ' +
-        'so approving it again becomes a new version of this asset';
-    importButton.innerHTML = '<i class="bi bi-box-arrow-in-down"></i> Import';
-    actions.appendChild(importButton);
+    if (CAN_IMPORT) {
+        const importButton = document.createElement('button');
+        importButton.type = 'button';
+        importButton.className = 'btn btn-sm btn-outline-success py-0 px-2';
+        importButton.dataset.import = String(asset.id);
+        importButton.dataset.name = asset.name;
+        importButton.title =
+            'Take this version into your workspace, recording where it came from, ' +
+            'so approving it again becomes a new version of this asset';
+        importButton.innerHTML = '<i class="bi bi-box-arrow-in-down"></i> Import';
+        actions.appendChild(importButton);
+    }
 
     tr.appendChild(actions);
 

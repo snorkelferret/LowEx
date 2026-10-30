@@ -8,7 +8,7 @@ For administrators.
 |---|---|
 | **user** | A tester. No extra privileges; the tester features are available to anyone signed in. |
 | **developer** | Works in their own private workspace. Uploads, versions, submits for review. |
-| **prod** | Production — a craft role, not a seniority. **Decides creative approvals and comments.** Managing categories and discussion boards is intended for this role and **is not built yet**. **No workspace, no admin powers, cannot deactivate or invite anybody.** |
+| **prod** | Production — a craft role, not a seniority. **Decides creative approvals and comments**, and **reads the store, the library and the releases**. Managing categories and discussion boards is intended for this role and **is not built yet**. **No workspace, no admin powers, cannot deactivate or invite anybody.** |
 | **admin** | Administers the system. Accounts, invitations, reports, settings, audit log, deactivation. **The top of the ladder — there is nothing above it.** |
 
 **The ladder is `user < developer < admin`.** `prod` sits between developer and

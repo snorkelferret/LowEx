@@ -52,6 +52,8 @@ const fs = require('fs');
 const db = require('../db');
 const audit = require('../lib/audit');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+// WHO MAY READ THE STORE, named once (item 83). Writes keep their own lists.
+const { CONTENT_READERS } = require('../lib/capabilities');
 const { blobPath } = require('../lib/storagePaths');
 const { buildVersionArchive } = require('../lib/assetArchive');
 // A version's content identity, computed the same way everywhere it is used —
@@ -297,7 +299,7 @@ const insertWorkspaceVersionFile = db.prepare(`
 router.get(
     '/',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         try {
@@ -360,7 +362,7 @@ router.get(
 router.get(
     '/:assetId',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const assetId = Number(req.params.assetId);
@@ -406,7 +408,7 @@ router.get(
 router.get(
     '/:assetId/versions/:versionId/download',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const assetId = Number(req.params.assetId);
@@ -512,7 +514,7 @@ router.get(
 router.get(
     '/:assetId/versions/:versionId/manifest',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const assetId = Number(req.params.assetId);
@@ -616,7 +618,7 @@ router.get(
 router.post(
     '/:assetId/versions/:versionId/archive',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const assetId = Number(req.params.assetId);
@@ -788,7 +790,7 @@ router.post(
 router.get(
     '/:assetId/versions/:versionId/files/:sha256',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const assetId = Number(req.params.assetId);
@@ -868,7 +870,7 @@ router.get(
 router.post(
     '/:assetId/versions/:versionId/downloaded',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const assetId = Number(req.params.assetId);

@@ -315,6 +315,15 @@ own.**
 `requireRole` checks the list literally — no rank, no implicit admin. Every route
 names the role whose *job* it is.
 
+**Production may READ the store and the library (item 83).** Reviewing is
+reading, and the person deciding on a submission is the person most likely to
+want to compare it against what is already there. The capability is named once —
+`CONTENT_READERS` in `backend/lib/capabilities.js` — and applied to the read
+routes only: `POST /import` writes a workspace asset and prod has no workspace,
+and the library's upload, update and remove stay developer/admin. The reads
+include the archive endpoint and the record-of-a-read, because a "may read"
+that withheld the routes a download actually uses would not be a read.
+
 **Two mechanisms reach the rest:**
 
 - **Multi-role, for permission-shaped acts** — approvals, categories, comments.

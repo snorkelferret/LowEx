@@ -38,7 +38,6 @@
       A <strong>named build</strong> — "0.4 Experimental, 12 Nov" — and the
       approved versions it ships. Pick a release to see what is in it and what
       it is made of.
-      <span id="releaseMineNote" class="d-block small mt-1"></span>
     </p>
 
     <div id="releaseAlert" class="alert py-2 px-3 small d-none"></div>
@@ -84,6 +83,11 @@
 
     <!-- ── One release, selected ────────────────────────────────── -->
     <div id="releaseDetail" class="d-none">
+
+      <!-- A LINE OF RESERVED HEIGHT: the note is one line whether it says
+           "3 of these are yours" or "none are", and it lives INSIDE the detail,
+           so opening a release does not push the rest of the page around. -->
+      <div id="releaseMineNote" class="small text-secondary" style="min-height:1.25rem;line-height:1.25rem"></div>
 
       <div class="d-flex justify-content-between align-items-baseline flex-wrap mb-2">
         <h3 class="h6 mb-0" id="releaseDetailTitle"></h3>

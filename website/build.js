@@ -74,6 +74,8 @@ const pageConfigurations = [
     scripts: [
       './src/header.js',          // Fills in who is signed in, and signs them out
       './src/prodPanel.js',       // The queue of what is waiting, and the decisions
+      './src/developerStore.js',  // The Game store, read-only
+      './src/developerLibrary.js',// The Library, read-only
       './src/releases.js',        // The releases: what ships, read-only
       './src/feedback.js',        // Report-a-problem button
       './src/utilityBar.js',      // The utility bar
@@ -82,6 +84,9 @@ const pageConfigurations = [
     modules: [
       'frontend/src/components/header.html',
       'frontend/src/components/prodPanel.html',
+      'frontend/src/components/store.html',
+      'frontend/src/components/library.html',
+      'frontend/src/components/libraryEditModal.html',
       'frontend/src/components/releases.html',
     ],
 },

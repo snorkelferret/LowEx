@@ -49,6 +49,16 @@ import { formatBytes } from '../../shared/formatBytes.mjs';
 // the part that is worth testing on its own — see that file.
 import { filterLibrary } from './libraryFilter.mjs';
 
+// WHO MAY CHANGE THE LIBRARY. Reading is open to production as well as
+// developers (item 83); uploading, editing and removing are not. The server
+// refuses them either way — this only avoids drawing a control it would.
+const ME = (() => {
+    try { return JSON.parse(localStorage.getItem('user_info') || '{}') || {}; }
+    catch { return {}; }
+})();
+
+const CAN_WRITE = ME.role === 'developer' || ME.role === 'admin';
+
 const API = '/api/library';
 
 // What is shown when there is no thumbnail. Chosen by TYPE, because that is
@@ -214,22 +224,24 @@ function tile(item) {
     download.innerHTML = '<i class="bi bi-download me-1"></i>Download';
     actions.appendChild(download);
 
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.className = 'btn btn-sm btn-outline-secondary py-0 px-1 ms-auto';
-    edit.dataset.edit = String(item.id);
-    edit.title = 'Name this, describe it, and tag what it shows';
-    edit.innerHTML = '<i class="bi bi-pencil"></i><span class="visually-hidden">Edit</span>';
-    actions.appendChild(edit);
+    if (CAN_WRITE) {
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'btn btn-sm btn-outline-secondary py-0 px-1 ms-auto';
+        edit.dataset.edit = String(item.id);
+        edit.title = 'Name this, describe it, and tag what it shows';
+        edit.innerHTML = '<i class="bi bi-pencil"></i><span class="visually-hidden">Edit</span>';
+        actions.appendChild(edit);
 
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'btn btn-sm btn-outline-danger py-0 px-1';
-    remove.dataset.remove = String(item.id);
-    remove.dataset.name = item.display_name;
-    remove.title = 'Remove this from the library';
-    remove.innerHTML = '<i class="bi bi-trash"></i><span class="visually-hidden">Remove</span>';
-    actions.appendChild(remove);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-sm btn-outline-danger py-0 px-1';
+        remove.dataset.remove = String(item.id);
+        remove.dataset.name = item.display_name;
+        remove.title = 'Remove this from the library';
+        remove.innerHTML = '<i class="bi bi-trash"></i><span class="visually-hidden">Remove</span>';
+        actions.appendChild(remove);
+    }
 
     body.appendChild(actions);
     card.appendChild(body);
@@ -712,6 +724,10 @@ async function onRemove(id) {
 // ------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (!CAN_WRITE) {
+        $('libraryUploadControls')?.classList.add('d-none');
+    }
+
     // Only present on the developer dashboard.
     if (!$('libraryGrid')) return;
 

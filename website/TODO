@@ -7972,9 +7972,17 @@ no upside. If something seems to need one of them, ask.
     routes asked the same question and got it wrong the same way. If a third
     route ever looks up a workspace asset by name, it wants the same answer.
 
-83) CAN 'prod' READ THE GAME STORE AND THE LIBRARY? PROBABLY YES, FOR THE READ
-    SIDE ONLY. DECIDE LATER.
+83) CAN 'prod' READ THE GAME STORE AND THE LIBRARY? DECIDED YES, READ SIDE ONLY —
+    BUILT 2026-10-30.
     Raised 2026-10-15, walking the download flow.
+
+    BUILT 2026-10-30, and the reasoning below is kept because it is the reason
+    the answer is a named capability rather than 'prod' added by hand: read
+    routes in routes/game.js and routes/library.js now use CONTENT_READERS from
+    backend/lib/capabilities.js (developer, prod, admin); writes keep their own
+    lists. The production dashboard carries the store and library panels,
+    read-only. scripts/check-library-access.js and check-download-round-trip
+    assert both halves.
 
     WHAT WAS SEEN. A session authenticated as prod, asking the game store for a
     version's archive:

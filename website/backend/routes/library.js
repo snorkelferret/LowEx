@@ -80,6 +80,9 @@ const { makePreview, previewKindOf } = require('../lib/thumbnails');
 const db = require('../db');
 const audit = require('../lib/audit');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+// WHO MAY READ THE LIBRARY, named once (item 83). Upload, update and remove
+// keep their own lists.
+const { CONTENT_READERS } = require('../lib/capabilities');
 const { TMP_DIR, THUMB_DIR, blobPath, thumbPath } = require('../lib/storagePaths');
 const { sha256OfFile, storeOne } = require('../lib/ingestFiles');
 
@@ -283,7 +286,7 @@ async function readHead(filePath) {
 router.get(
     '/',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         try {
@@ -654,7 +657,7 @@ router.post(
 router.get(
     '/:id/thumbnail',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const id = Number(req.params.id);
@@ -718,7 +721,7 @@ router.get(
 router.get(
     '/:id/content',
     authenticateToken,
-    requireRole('developer', 'admin'),
+    requireRole(...CONTENT_READERS),
 
     async (req, res) => {
         const id = Number(req.params.id);

@@ -1,0 +1,65 @@
+<!-- The Game store panel — everything approved for the game. ONE component, two
+     placements: the developer dashboard's tab and, read-only, the production
+     dashboard. Included by developerAssets.html and by build.js for prod. -->
+
+<div class="card panel-module mb-4">
+
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h2 class="h5 mb-0">
+            <i class="bi bi-box-seam"></i>
+            Game store
+          </h2>
+          <p class="text-secondary small mb-0">
+            Everything the studio has approved for the game, including work by
+            other developers. <strong>Import</strong> takes a copy into your own
+            workspace to work on; <strong>Download</strong> gives you the files,
+            with a manifest saying what they are.
+            <br>
+            Download asks which folder these belong in, and the button on that
+            folder dialog says <em>Upload</em>. <strong>That word belongs to the
+            browser, not to this page</strong> — reading a folder is the one
+            thing a browser only knows how to do with its upload control, so
+            every site's folder picker says it, whatever the site is doing.
+            <br>
+            <strong>No file ever leaves your machine.</strong> Your folder is read
+            <em>here, in this browser</em>, to see which files you already have.
+            The only thing sent to the server is <strong>a list of hashes</strong>
+            — sixty-four characters for each file you are missing, and nothing
+            else. That list is what tells the server which files to put in the
+            zip. A version of a thousand files you already have sends a thousand
+            short lines of text and no content at all.
+          </p>
+        </div>
+
+        <div id="storeCount" class="small text-secondary text-end"></div>
+      </div>
+
+      <div class="card-body">
+
+        <div id="storeAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+        <div id="storeResult" class="alert alert-success py-2 px-3 small d-none"></div>
+
+        <!-- WHERE THE DOWNLOAD EXPLAINS ITSELF. What is about to happen, what
+             is being worked out, what was found, and what is going to be
+             fetched — each one shown while it is true, with the decision in
+             the developer's hands rather than announced after the fact. -->
+        <div id="storePlan" class="d-none"></div>
+
+        <div class="mb-3">
+          <label for="storeSearch" class="visually-hidden">Search the game store</label>
+          <input
+            type="search"
+            id="storeSearch"
+            class="form-control form-control-sm"
+            placeholder="Search by name, category or description..."
+          >
+        </div>
+
+        <div id="storeList" class="text-secondary">
+          Loading the game store...
+        </div>
+
+      </div>
+
+    </div>

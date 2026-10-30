@@ -40,7 +40,7 @@ const CHECKS = [
         // workspace version is a deliverable, and a library item is source
         // material that is never approved into anything.
         client: 'frontend/src/developerLibrary.js',
-        pages: ['devDashboard.html'],
+        pages: ['devDashboard.html', 'prodDashboard.html'],
     },
     {
         // The Game store tab — the consumption side. Three clients on one page
@@ -48,7 +48,7 @@ const CHECKS = [
         // SPACES with three different access rules, and one file holding all
         // three would be the page nobody dares change.
         client: 'frontend/src/developerStore.js',
-        pages: ['devDashboard.html'],
+        pages: ['devDashboard.html', 'prodDashboard.html'],
     },
     {
         // Pre-auth: no header, no guard. Its ids live only on this page.
@@ -80,6 +80,12 @@ const CHECKS = [
     {
         client: 'frontend/src/discussion.js',
         pages: ['discussion.html'],
+    },
+    {
+        // ONE PANEL, THREE PAGES: admin, developer and production. The client
+        // is the same file in each, and must satisfy every page it runs on.
+        client: 'frontend/src/releases.js',
+        pages: ['adminDashboard.html', 'devDashboard.html', 'prodDashboard.html'],
     },
 ];
 

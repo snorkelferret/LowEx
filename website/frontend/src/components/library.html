@@ -1,0 +1,126 @@
+<!-- The Library panel — shared source material. ONE component, two placements:
+     the developer dashboard's tab and, read-only, the production dashboard.
+     Included by developerAssets.html and by build.js for prod. -->
+
+<div class="card panel-module mb-4">
+
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h2 class="h5 mb-0">
+            <i class="bi bi-images"></i>
+            Source material
+          </h2>
+          <p class="text-secondary small mb-0">
+            Shared with the studio. These are <strong>not</strong> game assets —
+            nothing here is approved into anything, and an image reaches the game
+            only as part of an asset you build.
+          </p>
+        </div>
+
+        <div id="libraryCount" class="small text-secondary text-end"></div>
+      </div>
+
+      <div class="card-body">
+
+        <div id="libraryAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+        <div id="libraryResult" class="alert alert-success py-2 px-3 small d-none"></div>
+
+        <!-- ------------------------------------------------------------
+             Adding. A plain file picker, multiple, because a library
+             upload is a BATCH of independent items — the opposite of a
+             workspace upload, where a set of files is one deliverable.
+             ------------------------------------------------------------ -->
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3" id="libraryUploadControls">
+
+          <input
+            type="file"
+            id="libraryFileInput"
+            class="d-none"
+            multiple
+          >
+
+          <!-- A FOLDER, WHICH IS WHAT REFERENCE MATERIAL USUALLY ARRIVES IN.
+               Browsers only allow the folder picker through this attribute, and
+               it is the difference between adding forty photographs and adding
+               forty photographs one dialog at a time.
+
+               THE FOLDER NAME IS NOT KEPT. Every file becomes its own item,
+               whatever directory it came from — the library is a shelf of
+               things, not a copy of somebody's filing. Keeping the name as a
+               collection label is item 54's idea and is not built. -->
+          <input
+            type="file"
+            id="libraryFolderInput"
+            class="d-none"
+            webkitdirectory
+            multiple
+          >
+
+          <button
+            type="button"
+            id="librarySelectBtn"
+            class="btn btn-outline-secondary btn-sm"
+          >
+            <i class="bi bi-folder2-open me-1"></i>Choose files
+          </button>
+
+          <button
+            type="button"
+            id="libraryFolderBtn"
+            class="btn btn-outline-secondary btn-sm"
+          >
+            <i class="bi bi-folder me-1"></i>Choose folder
+          </button>
+
+          <span id="libraryChosen" class="small text-secondary">No files chosen</span>
+
+          <button
+            type="button"
+            id="libraryUploadBtn"
+            class="btn btn-primary btn-sm ms-auto"
+            disabled
+          >
+            <i class="bi bi-cloud-arrow-up me-1"></i>Add to the library
+          </button>
+
+        </div>
+
+        <!-- ------------------------------------------------------------
+             Finding. A name search, because a flat list stops being
+             usable at about a screenful. Labels and content search are
+             steps 6 and 8 of TODO 54 and land later.
+             ------------------------------------------------------------ -->
+
+        <div class="mb-2">
+          <label for="librarySearch" class="visually-hidden">Search the library</label>
+          <input
+            type="search"
+            id="librarySearch"
+            class="form-control form-control-sm"
+            placeholder="Search by name, note or tag..."
+          >
+        </div>
+
+        <!-- ------------------------------------------------------------
+             FILTER BY TAG.
+
+             A different question from the search box above, and worth
+             its own control: "everything with river in the name, note
+             or tags" is not "everything TAGGED river". The first is a
+             guess at what somebody meant; the second is what they
+             filed it as.
+
+             Built by the script from the tags that actually exist, so
+             the options cannot drift from the items — and so an empty
+             library shows no filter at all rather than an empty row.
+             ------------------------------------------------------------ -->
+        <div id="libraryTagFilter" class="mb-3"></div>
+
+        <div id="libraryGrid" class="text-secondary">
+          Loading the library...
+        </div>
+
+      </div>
+
+    </div>

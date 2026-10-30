@@ -83,6 +83,22 @@ build, and this is where that shows.
 **You cannot add work to a release.** That is the administrator's job — putting
 content into the game is engineering, not craft.
 
+## The store and the library
+
+Below the queue are the **Game store** and **Source material** — the same
+panels developers use, read-only for you.
+
+- **The store** is everything approved for the game, including work by other
+  developers. It is what a submission is being compared against, and it is where
+  approved work lives before it is in a build.
+- **The library** is shared source material — reference photographs, textures,
+  scans. Nothing there is approved into anything; an image reaches the game only
+  as part of an asset somebody builds.
+
+**You can browse and download. You cannot import, upload, edit or remove.** An
+import writes into a personal workspace, and production has none; the rest is
+authoring. The page does not offer what the server would refuse.
+
 ## What you cannot do
 
 - **You cannot open the files themselves**, only the pictures of them. There is
@@ -91,8 +107,8 @@ content into the game is engineering, not craft.
   waiting, so what you looked at is what gets approved.
 - **You cannot manage categories or the discussion board yet.** That is intended
   for this role and is not built. (TODO 87)
-- **You cannot see the whole store from here yet.** The game store is a
-  developer's tab today.
+- **You cannot change what you can see.** You may read the store and the
+  library; importing, uploading and editing are not yours.
 
 ## If something is missing
 

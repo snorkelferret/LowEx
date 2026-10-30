@@ -154,7 +154,9 @@ async function main() {
         seed(db, dirs) {
             db.exec(`
                 INSERT INTO users (id, username, email, password_hash, role, is_active)
-                VALUES (1, 'dev-check', 'dev@check.invalid', 'x', 'developer', 1);
+                VALUES
+                    (1, 'dev-check',  'dev@check.invalid',  'x', 'developer', 1),
+                    (2, 'prod-check', 'prod@check.invalid', 'x', 'prod', 1);
             `);
 
             const insertFile = db.prepare(`
@@ -190,6 +192,7 @@ async function main() {
 
     const db = new Database(server.dbPath, { readonly: true });
     const dev = server.tokenFor(1);
+    const prod = server.tokenFor(2);
 
     const [A, B] = files;
 
@@ -408,6 +411,21 @@ async function main() {
     report.check('importing twice says it is already there',
         again.status === 200 && again.json?.status === 'already',
         `expected 200 already, got ${again.status} ${again.json?.status}`);
+
+    // -----------------------------------------------------------------
+    // PRODUCTION MAY READ (item 83), BUT NOT IMPORT
+    // -----------------------------------------------------------------
+
+    const prodManifest = await server.get('/1/versions/1/manifest', prod);
+
+    report.check('production can read the store', prodManifest.status === 200,
+        `expected 200, got ${prodManifest.status} — ${prodManifest.text.slice(0, 120)}`);
+
+    const prodImport = await server.post('/1/versions/1/import', {}, prod);
+
+    report.check('but production cannot import into a workspace',
+        prodImport.status === 403,
+        `expected 403, got ${prodImport.status}`);
 
     // -----------------------------------------------------------------
 

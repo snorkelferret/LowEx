@@ -1,0 +1,86 @@
+<!-- ============================================================
+     THE LIBRARY'S EDIT DIALOG — the labelling step
+     ============================================================
+
+     A MODAL RATHER THAN AN INLINE FORM, because a tile in a grid is
+     the wrong shape to type into: it is 150px wide, and a name, a note
+     and a set of tags do not fit in one.
+
+     OUTSIDE THE TAB PANES, like the bin modal above — a modal inside a
+     tab-pane disappears the moment a different tab is chosen, which
+     looks like the page eating the dialog.
+
+     NO COLOUR CLASSES. Bootstrap's dark theme already gives
+     .modal-content `--bs-modal-bg`, which is the same colour the bin
+     modal gets from its hardcoded bg-dark — so this matches the page
+     AND follows the theme, which is the rule at the top of
+     styles.css. -->
+<div class="modal fade" id="libraryEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <div class="d-flex align-items-center gap-3">
+          <img id="libraryEditThumb" src="" alt="" class="rounded d-none"
+               style="width:56px;height:56px;object-fit:cover;">
+          <div>
+            <h2 class="h5 modal-title mb-0" id="libraryEditTitle">Edit item</h2>
+            <p class="text-secondary small mb-0">
+              Say what this is and what it shows, so somebody can find it again.
+            </p>
+          </div>
+        </div>
+
+        <button type="button" class="btn-close"
+                data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div id="libraryEditAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+
+        <div class="mb-3">
+          <label for="libraryEditName" class="form-label">Name</label>
+          <input type="text" id="libraryEditName" class="form-control">
+          <div class="form-text">
+            What it was called when it arrived is kept separately, so nothing is
+            lost by renaming it.
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label for="libraryEditNote" class="form-label">
+            Note <span class="text-secondary fw-normal">(optional)</span>
+          </label>
+          <textarea id="libraryEditNote" class="form-control" rows="2"
+                    placeholder="Where it came from, what it is for, anything worth knowing."></textarea>
+        </div>
+
+        <div class="mb-1">
+          <label for="libraryEditTags" class="form-label">
+            What it shows <span class="text-secondary fw-normal">(optional)</span>
+          </label>
+          <input type="text" id="libraryEditTags" class="form-control"
+                 placeholder="trees, river, morning light">
+          <div class="form-text">
+            Separate them with commas. This is what the search looks at, so
+            "trees boat river" finds an image tagged any of those words.
+          </div>
+        </div>
+
+        <div id="libraryEditTagPreview" class="mt-2"></div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="libraryEditSave" class="btn btn-primary">
+          <i class="bi bi-check2 me-1"></i>Save
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
