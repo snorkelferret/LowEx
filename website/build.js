@@ -12,7 +12,7 @@ const pageConfigurations = [
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
       './src/adminUsers.js',      // Accounts table
       './src/adminReports.js',    // Reports - shared the same way
-      './src/adminReleases.js',   // Game releases: named builds and their contents
+      './src/releases.js',        // Game releases: named builds and their contents
       './src/adminAudit.js',      // Audit log - shared the same way
       './src/adminSettings.js',   // Settings - shared the same way
       './src/adminStorage.js',    // Storage - shared the same way
@@ -27,7 +27,7 @@ const pageConfigurations = [
       'frontend/src/components/adminPanel.html',
       'frontend/src/components/devInvites.html',
       'frontend/src/components/adminReports.html',
-      'frontend/src/components/adminReleases.html',
+      'frontend/src/components/releases.html',
       'frontend/src/components/adminAudit.html',
       'frontend/src/components/adminSettings.html',
       'frontend/src/components/adminStorage.html',
@@ -43,7 +43,7 @@ const pageConfigurations = [
 	'./src/developerWorkspace.js',
 	'./src/developerLibrary.js', // The Library tab: shared source material
 	'./src/developerStore.js',   // The Game store tab: approved work, read
-	'./src/adminReleases.js',    // The Releases tab: the SAME panel the admin has, read-only
+	'./src/releases.js',         // The Releases tab: the SAME panel, read-only
 	'./src/feedback.js',        // Report-a-problem button
 	'./src/utilityBar.js',     // The utility bar: manual, and whatever else a page adds
 	'./src/notBuilt.js'         // Menu stubs for features that are not built yet

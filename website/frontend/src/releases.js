@@ -1,4 +1,4 @@
-// frontend/src/adminReleases.js
+// frontend/src/releases.js
 //
 // The Game releases panel: named builds, what is in them, the queue of approved
 // work that could go into one, each version's FILES as a tree, and the DIFF
