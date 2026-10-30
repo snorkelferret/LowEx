@@ -105,6 +105,498 @@
 </section>
 
 
+<!-- Module: frontend/src/components/store.html -->
+<!-- The Game store panel — everything approved for the game. ONE component, two
+     placements: the developer dashboard's tab and, read-only, the production
+     dashboard. Included by developerAssets.html and by build.js for prod. -->
+
+<div class="card panel-module mb-4">
+
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h2 class="h5 mb-0">
+            <i class="bi bi-box-seam"></i>
+            Game store
+          </h2>
+          <p class="text-secondary small mb-0">
+            Everything the studio has approved for the game, including work by
+            other developers. <strong>Import</strong> takes a copy into your own
+            workspace to work on; <strong>Download</strong> gives you the files,
+            with a manifest saying what they are.
+            <br>
+            Download asks which folder these belong in, and the button on that
+            folder dialog says <em>Upload</em>. <strong>That word belongs to the
+            browser, not to this page</strong> — reading a folder is the one
+            thing a browser only knows how to do with its upload control, so
+            every site's folder picker says it, whatever the site is doing.
+            <br>
+            <strong>No file ever leaves your machine.</strong> Your folder is read
+            <em>here, in this browser</em>, to see which files you already have.
+            The only thing sent to the server is <strong>a list of hashes</strong>
+            — sixty-four characters for each file you are missing, and nothing
+            else. That list is what tells the server which files to put in the
+            zip. A version of a thousand files you already have sends a thousand
+            short lines of text and no content at all.
+          </p>
+        </div>
+
+        <div id="storeCount" class="small text-secondary text-end"></div>
+      </div>
+
+      <div class="card-body">
+
+        <div id="storeAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+        <div id="storeResult" class="alert alert-success py-2 px-3 small d-none"></div>
+
+        <!-- WHERE THE DOWNLOAD EXPLAINS ITSELF. What is about to happen, what
+             is being worked out, what was found, and what is going to be
+             fetched — each one shown while it is true, with the decision in
+             the developer's hands rather than announced after the fact. -->
+        <div id="storePlan" class="d-none"></div>
+
+        <div class="mb-3">
+          <label for="storeSearch" class="visually-hidden">Search the game store</label>
+          <input
+            type="search"
+            id="storeSearch"
+            class="form-control form-control-sm"
+            placeholder="Search by name, category or description..."
+          >
+        </div>
+
+        <div id="storeList" class="text-secondary">
+          Loading the game store...
+        </div>
+
+      </div>
+
+    </div>
+
+
+<!-- Module: frontend/src/components/library.html -->
+<!-- The Library panel — shared source material. ONE component, two placements:
+     the developer dashboard's tab and, read-only, the production dashboard.
+     Included by developerAssets.html and by build.js for prod. -->
+
+<div class="card panel-module mb-4">
+
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h2 class="h5 mb-0">
+            <i class="bi bi-images"></i>
+            Source material
+          </h2>
+          <p class="text-secondary small mb-0">
+            Shared with the studio. These are <strong>not</strong> game assets —
+            nothing here is approved into anything, and an image reaches the game
+            only as part of an asset you build.
+          </p>
+        </div>
+
+        <div id="libraryCount" class="small text-secondary text-end"></div>
+      </div>
+
+      <div class="card-body">
+
+        <div id="libraryAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+        <div id="libraryResult" class="alert alert-success py-2 px-3 small d-none"></div>
+
+        <!-- ------------------------------------------------------------
+             Adding. A plain file picker, multiple, because a library
+             upload is a BATCH of independent items — the opposite of a
+             workspace upload, where a set of files is one deliverable.
+             ------------------------------------------------------------ -->
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3" id="libraryUploadControls">
+
+          <input
+            type="file"
+            id="libraryFileInput"
+            class="d-none"
+            multiple
+          >
+
+          <!-- A FOLDER, WHICH IS WHAT REFERENCE MATERIAL USUALLY ARRIVES IN.
+               Browsers only allow the folder picker through this attribute, and
+               it is the difference between adding forty photographs and adding
+               forty photographs one dialog at a time.
+
+               THE FOLDER NAME IS NOT KEPT. Every file becomes its own item,
+               whatever directory it came from — the library is a shelf of
+               things, not a copy of somebody's filing. Keeping the name as a
+               collection label is item 54's idea and is not built. -->
+          <input
+            type="file"
+            id="libraryFolderInput"
+            class="d-none"
+            webkitdirectory
+            multiple
+          >
+
+          <button
+            type="button"
+            id="librarySelectBtn"
+            class="btn btn-outline-secondary btn-sm"
+          >
+            <i class="bi bi-folder2-open me-1"></i>Choose files
+          </button>
+
+          <button
+            type="button"
+            id="libraryFolderBtn"
+            class="btn btn-outline-secondary btn-sm"
+          >
+            <i class="bi bi-folder me-1"></i>Choose folder
+          </button>
+
+          <span id="libraryChosen" class="small text-secondary">No files chosen</span>
+
+          <button
+            type="button"
+            id="libraryUploadBtn"
+            class="btn btn-primary btn-sm ms-auto"
+            disabled
+          >
+            <i class="bi bi-cloud-arrow-up me-1"></i>Add to the library
+          </button>
+
+        </div>
+
+        <!-- ------------------------------------------------------------
+             Finding. A name search, because a flat list stops being
+             usable at about a screenful. Labels and content search are
+             steps 6 and 8 of TODO 54 and land later.
+             ------------------------------------------------------------ -->
+
+        <div class="mb-2">
+          <label for="librarySearch" class="visually-hidden">Search the library</label>
+          <input
+            type="search"
+            id="librarySearch"
+            class="form-control form-control-sm"
+            placeholder="Search by name, note or tag..."
+          >
+        </div>
+
+        <!-- ------------------------------------------------------------
+             FILTER BY TAG.
+
+             A different question from the search box above, and worth
+             its own control: "everything with river in the name, note
+             or tags" is not "everything TAGGED river". The first is a
+             guess at what somebody meant; the second is what they
+             filed it as.
+
+             Built by the script from the tags that actually exist, so
+             the options cannot drift from the items — and so an empty
+             library shows no filter at all rather than an empty row.
+             ------------------------------------------------------------ -->
+        <div id="libraryTagFilter" class="mb-3"></div>
+
+        <div id="libraryGrid" class="text-secondary">
+          Loading the library...
+        </div>
+
+      </div>
+
+    </div>
+
+
+<!-- Module: frontend/src/components/libraryEditModal.html -->
+<!-- ============================================================
+     THE LIBRARY'S EDIT DIALOG — the labelling step
+     ============================================================
+
+     A MODAL RATHER THAN AN INLINE FORM, because a tile in a grid is
+     the wrong shape to type into: it is 150px wide, and a name, a note
+     and a set of tags do not fit in one.
+
+     OUTSIDE THE TAB PANES, like the bin modal above — a modal inside a
+     tab-pane disappears the moment a different tab is chosen, which
+     looks like the page eating the dialog.
+
+     NO COLOUR CLASSES. Bootstrap's dark theme already gives
+     .modal-content `--bs-modal-bg`, which is the same colour the bin
+     modal gets from its hardcoded bg-dark — so this matches the page
+     AND follows the theme, which is the rule at the top of
+     styles.css. -->
+<div class="modal fade" id="libraryEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <div class="d-flex align-items-center gap-3">
+          <img id="libraryEditThumb" src="" alt="" class="rounded d-none"
+               style="width:56px;height:56px;object-fit:cover;">
+          <div>
+            <h2 class="h5 modal-title mb-0" id="libraryEditTitle">Edit item</h2>
+            <p class="text-secondary small mb-0">
+              Say what this is and what it shows, so somebody can find it again.
+            </p>
+          </div>
+        </div>
+
+        <button type="button" class="btn-close"
+                data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div id="libraryEditAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+
+        <div class="mb-3">
+          <label for="libraryEditName" class="form-label">Name</label>
+          <input type="text" id="libraryEditName" class="form-control">
+          <div class="form-text">
+            What it was called when it arrived is kept separately, so nothing is
+            lost by renaming it.
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label for="libraryEditNote" class="form-label">
+            Note <span class="text-secondary fw-normal">(optional)</span>
+          </label>
+          <textarea id="libraryEditNote" class="form-control" rows="2"
+                    placeholder="Where it came from, what it is for, anything worth knowing."></textarea>
+        </div>
+
+        <div class="mb-1">
+          <label for="libraryEditTags" class="form-label">
+            What it shows <span class="text-secondary fw-normal">(optional)</span>
+          </label>
+          <input type="text" id="libraryEditTags" class="form-control"
+                 placeholder="trees, river, morning light">
+          <div class="form-text">
+            Separate them with commas. This is what the search looks at, so
+            "trees boat river" finds an image tagged any of those words.
+          </div>
+        </div>
+
+        <div id="libraryEditTagPreview" class="mt-2"></div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="libraryEditSave" class="btn btn-primary">
+          <i class="bi bi-check2 me-1"></i>Save
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- Module: frontend/src/components/releases.html -->
+<!-- ============================================================
+     Game releases — named builds, and which approved versions are in them.
+
+     ONE PANEL, TWO PAGES. It is a top-level section on the admin dashboard and
+     a tab on the developer dashboard, from this single file. The script hides
+     the writing controls unless the viewer is an administrator, and the server
+     refuses them anyway — the panel is read-only for everybody else.
+
+     WHAT IT ANSWERS:
+
+       which of my assets were accepted, and into which release
+       what has gone into the game at all
+       what each version is made of (the manifest, as a tree)
+       what changed between two builds (the diff, by content hash)
+
+     AND THE COLUMNS SORT, because "find your work" is the first thing anybody
+     does here — on a release's contents and on the candidates, and each
+     release in the list carries a count of your own work.
+
+     THE WRAPPING MATCHES adminPanel.html and adminReports.html: card
+     panel-module, an h2 in the header, a card-body.
+     ============================================================ -->
+
+<section class="card panel-module mb-4" id="releases-module">
+
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h2 class="h5 mb-0">🎮 Game releases</h2>
+
+    <label class="small text-secondary mb-0 d-flex align-items-center gap-2" for="releaseMineOnly">
+      <input id="releaseMineOnly" class="form-check-input m-0" type="checkbox">
+      Only my work
+    </label>
+  </div>
+
+  <div class="card-body">
+
+    <p class="text-secondary">
+      A <strong>named build</strong> — "0.4 Experimental, 12 Nov" — and the
+      approved versions it ships. Pick a release to see what is in it and what
+      it is made of.
+    </p>
+
+    <div id="releaseAlert" class="alert py-2 px-3 small d-none"></div>
+
+    <!-- ── Create a release — administrators only, hidden by the script ── -->
+    <form id="releaseCreateForm" class="row g-2 align-items-end mb-4">
+
+      <div class="col-md-3">
+        <label class="form-label small mb-1" for="releaseName">Name</label>
+        <input id="releaseName" class="form-control form-control-sm"
+               placeholder="0.4 Experimental, 12 Nov" autocomplete="off" required>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label small mb-1" for="releaseDate">Released</label>
+        <input id="releaseDate" type="date" class="form-control form-control-sm">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label small mb-1" for="releaseChangelist">Changelist</label>
+        <input id="releaseChangelist" class="form-control form-control-sm"
+               inputmode="numeric" placeholder="15407" autocomplete="off">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label small mb-1" for="releaseNotes">Notes</label>
+        <input id="releaseNotes" class="form-control form-control-sm" autocomplete="off">
+      </div>
+
+      <div class="col-md-2">
+        <button id="releaseCreateBtn" class="btn btn-sm btn-primary w-100 text-nowrap" type="submit">
+          Create
+        </button>
+      </div>
+
+    </form>
+
+    <!-- ── Every release ────────────────────────────────────────── -->
+    <h3 class="h6">Releases</h3>
+    <div id="releaseList" class="list-group list-group-flush small mb-4">
+      <span class="text-secondary">Loading…</span>
+    </div>
+
+    <!-- ── One release, selected ────────────────────────────────── -->
+    <div id="releaseDetail" class="d-none">
+
+      <!-- A LINE OF RESERVED HEIGHT: the note is one line whether it says
+           "3 of these are yours" or "none are", and it lives INSIDE the detail,
+           so opening a release does not push the rest of the page around. -->
+      <div id="releaseMineNote" class="small text-secondary" style="min-height:1.25rem;line-height:1.25rem"></div>
+
+      <div class="d-flex justify-content-between align-items-baseline flex-wrap mb-2">
+        <h3 class="h6 mb-0" id="releaseDetailTitle"></h3>
+        <div class="d-flex align-items-center gap-3">
+          <span class="small text-secondary" id="releaseDetailMeta"></span>
+          <!-- CLICKING THE RELEASE AGAIN ALSO CLOSES IT (onClickList). This is
+               the second way, for somebody whose eye is already in the panel. -->
+          <button id="releaseHideBtn" type="button"
+                  class="btn btn-sm btn-outline-secondary py-0 px-2 text-nowrap">
+            Hide
+          </button>
+          <button id="releaseDeleteBtn" type="button"
+                  class="btn btn-sm btn-outline-danger py-0 px-2 text-nowrap">
+            Delete release
+          </button>
+        </div>
+      </div>
+
+      <div class="row g-4">
+
+        <div class="col-lg-6">
+          <h4 class="h6">
+            In this release
+            <span id="releaseMemberCount" class="text-secondary fw-normal small ms-1"></span>
+          </h4>
+          <div id="releaseMembers" class="small"></div>
+
+          <!-- THE MANIFEST OF ONE VERSION, as a tree. Folders and files are
+               native <details>, so every node is a button that opens; a file
+               opens to its hash, size and path. Read from the same endpoint a
+               downloader uses, so this is exactly what a download contains. -->
+          <div id="releaseManifest" class="d-none mt-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <h4 class="h6 mb-0" id="releaseManifestTitle"></h4>
+              <button id="releaseManifestClose" type="button"
+                      class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2">
+                Hide
+              </button>
+            </div>
+            <div id="releaseManifestTree" class="small"></div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <h4 class="h6">
+            Candidates
+            <span id="releaseCandidateCount" class="text-secondary fw-normal small ms-1"></span>
+          </h4>
+          <p class="small text-secondary mb-2">
+            Approved work this release does not hold yet. A version already in
+            another release is still a candidate here.
+          </p>
+
+          <div id="releaseCandidates" class="small"></div>
+
+          <div id="releaseAddControls" class="row g-2 align-items-end mt-2">
+            <div class="col-6">
+              <label class="form-label small mb-1" for="releaseAddChangelist">Changelist</label>
+              <input id="releaseAddChangelist" class="form-control form-control-sm"
+                     inputmode="numeric" placeholder="15407" autocomplete="off">
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="releaseAddNote">Note</label>
+              <input id="releaseAddNote" class="form-control form-control-sm"
+                     placeholder="why, or what else went with it" autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Compare two builds ─────────────────────────────────── -->
+      <hr class="my-4">
+
+      <h4 class="h6">Compare releases</h4>
+      <p class="small text-secondary mb-2">
+        What changed going from one build to another — by asset, and inside a
+        changed asset, by file content hash.
+      </p>
+
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label small mb-1" for="releaseDiffFrom">From</label>
+          <select id="releaseDiffFrom" class="form-select form-select-sm"></select>
+        </div>
+
+        <div class="col-md-5">
+          <label class="form-label small mb-1" for="releaseDiffTo">To</label>
+          <select id="releaseDiffTo" class="form-select form-select-sm"></select>
+        </div>
+
+        <div class="col-md-2">
+          <button id="releaseDiffBtn" type="button"
+                  class="btn btn-sm btn-outline-info w-100 text-nowrap">
+            Compare
+          </button>
+        </div>
+      </div>
+
+      <div id="releaseDiffResult" class="small mt-3"></div>
+
+    </div>
+
+    <p class="form-text mt-3 mb-0">
+      The changelist is recorded as an assertion, like the one on a store
+      version: the portal does not talk to Perforce. A release cannot ship two
+      versions of the same asset — the one in the way is named when that
+      happens.
+    </p>
+
+  </div>
+</section>
+
+
   </div>
 
   <!-- Bootstrap 5 JS Bundle (Always included prior to app logic) -->
@@ -113,6 +605,9 @@
   <!-- App Entry Scripts -->
   <script type="module" src="./src/header.js"></script>
   <script type="module" src="./src/prodPanel.js"></script>
+  <script type="module" src="./src/developerStore.js"></script>
+  <script type="module" src="./src/developerLibrary.js"></script>
+  <script type="module" src="./src/releases.js"></script>
   <script type="module" src="./src/feedback.js"></script>
   <script type="module" src="./src/utilityBar.js"></script>
 </body>
