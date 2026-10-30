@@ -769,11 +769,38 @@ function addVersion(versionId, name) {
         .catch(err => showAlert(err.message));
 }
 
+// CLOSING A RELEASE: the same entry that opened it closes it. Selecting is a
+// toggle, so the list is not a one-way door into whichever build was clicked
+// last.
+function hideDetail() {
+    selectedId = null;
+    currentDetail = null;
+
+    $('releaseDetail')?.classList.add('d-none');
+
+    hideManifest();
+    hideDiff();
+
+    for (const button of document.querySelectorAll('#releaseList [data-release-id]')) {
+        button.classList.remove('active');
+    }
+
+    const note = $('releaseMineNote');
+    if (note) note.textContent = '';
+}
+
 function onClickList(event) {
     const button = event.target.closest('button[data-release-id]');
     if (!button) return;
 
-    selectRelease(Number(button.dataset.releaseId));
+    const id = Number(button.dataset.releaseId);
+
+    if (id === selectedId) {
+        hideDetail();
+        return;
+    }
+
+    selectRelease(id);
 }
 
 // Sorting: any column header in either table.
@@ -878,6 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('releaseDiffTo')?.addEventListener('change', hideDiff);
     $('releaseManifestClose')?.addEventListener('click', hideManifest);
     $('releaseMineOnly')?.addEventListener('change', onMineChange);
+    $('releaseHideBtn')?.addEventListener('click', hideDetail);
 
     loadReleases();
 });

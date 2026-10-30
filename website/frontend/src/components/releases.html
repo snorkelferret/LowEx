@@ -89,6 +89,12 @@
         <h3 class="h6 mb-0" id="releaseDetailTitle"></h3>
         <div class="d-flex align-items-center gap-3">
           <span class="small text-secondary" id="releaseDetailMeta"></span>
+          <!-- CLICKING THE RELEASE AGAIN ALSO CLOSES IT (onClickList). This is
+               the second way, for somebody whose eye is already in the panel. -->
+          <button id="releaseHideBtn" type="button"
+                  class="btn btn-sm btn-outline-secondary py-0 px-2 text-nowrap">
+            Hide
+          </button>
           <button id="releaseDeleteBtn" type="button"
                   class="btn btn-sm btn-outline-danger py-0 px-2 text-nowrap">
             Delete release

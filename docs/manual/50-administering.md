@@ -183,6 +183,9 @@ Experimental, 12 Nov" — and where you can see what a build already contains.
 **Developers see the same panel read-only**; the controls that write are shown
 to administrators only, because the server refuses everybody else.
 
+**Selecting a release is a toggle.** Click one to open it; click it again, or
+press **Hide**, to close it — and opening another switches rather than stacking.
+
 Two lists, and the difference matters:
 
 - **In this release** — what this build ships. One version per asset: a build

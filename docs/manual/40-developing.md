@@ -202,7 +202,8 @@ kept alive by the store's own reference, and deleting your copy cannot remove it
 ## Releases
 
 **The Releases tab** shows the named builds the studio has made — and it is the
-same page the administrator sees, read-only.
+same page the administrator sees, read-only. **Click a release to open it, and
+click it again — or press Hide — to close it.**
 
 - **Each release in the list says how much of it is yours** — "3 of yours".
 - **Only my work** narrows both lists to versions you uploaded.
