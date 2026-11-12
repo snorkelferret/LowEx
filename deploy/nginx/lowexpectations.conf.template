@@ -1,3 +1,8 @@
+# A TEMPLATE. Do not install this file; run deploy/nginx/install.sh, which
+# substitutes PUBLIC_HOST, CERT_DIR and UPSTREAM from the environment. The
+# portal's address is therefore a VALUE, not a line in a file somebody edits
+# when the domain changes.
+#
 # deploy/nginx/lowexpectations.conf
 #
 # THE REVERSE PROXY IN FRONT OF THE PORTAL.
@@ -58,7 +63,7 @@ include /etc/nginx/cloudflare-ips.conf;
 server {
     listen      80;
     listen      [::]:80;
-    server_name lowexpectations.zone;
+    server_name ${PUBLIC_HOST};
 
     # Cloudflare already terminates TLS for visitors. This catches a stray
     # direct request — and a browser that typed the name without a scheme.
@@ -77,12 +82,12 @@ server {
     # `http2` to the two listen directives above.
     http2       on;
 
-    server_name lowexpectations.zone;
+    server_name ${PUBLIC_HOST};
 
     # The Cloudflare Origin Certificate. Paths are the ones Cloudflare's own
     # instructions use; the filenames can be anything, the pair must match.
-    ssl_certificate     /etc/ssl/cloudflare/lowexpectations.zone.pem;
-    ssl_certificate_key /etc/ssl/cloudflare/lowexpectations.zone.key;
+    ssl_certificate     ${CERT_DIR}/${PUBLIC_HOST}.pem;
+    ssl_certificate_key ${CERT_DIR}/${PUBLIC_HOST}.key;
 
     # TLS 1.0/1.1 are refused. The origin leg is between Cloudflare and this
     # machine; 1.2 and 1.3 are what both ends speak.
@@ -120,7 +125,7 @@ server {
     send_timeout        300s;
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://${UPSTREAM};
 
         # Keep the visitor's host so links and redirects the app builds are
         # right, and keep the scheme so anything that asks is told https.

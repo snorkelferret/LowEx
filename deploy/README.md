@@ -1,7 +1,8 @@
 # Deploying the proxy
 
 **What sits between the internet and the portal.** One file —
-[`nginx/lowexpectations.conf`](nginx/lowexpectations.conf) — and the four things
+[`nginx/lowexpectations.conf.template`](nginx/lowexpectations.conf.template) —
+rendered by [`nginx/install.sh`](nginx/install.sh) — and the four things
 around it that make it safe.
 
 ```
@@ -73,11 +74,19 @@ forge the forwarded headers. Do not set it before the origin is protected.
 ## Installing it
 
 ```bash
-sudo cp nginx/lowexpectations.conf /etc/nginx/sites-available/
-sudo ln -s /etc/nginx/sites-available/lowexpectations.conf /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+sudo -E PUBLIC_HOST=lowexpectations.zone \
+        CERT_DIR=/etc/ssl/cloudflare \
+        UPSTREAM=127.0.0.1:5000 \
+        bash nginx/install.sh
+sudo ln -sf /etc/nginx/sites-available/lowexpectations.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
+
+**The domain, the certificate and the upstream are values, not edits.** The file
+in git is a template; `install.sh` substitutes `PUBLIC_HOST`, `CERT_DIR` and
+`UPSTREAM`, and only those three — nginx's own `$host` and `$proxy_add_x_forwarded_for`
+must survive. `npm run check:config` refuses a literal address in the template,
+so it cannot quietly become a file somebody edits when the portal moves.
 
 `nginx -t` first, always. A reload with a bad config leaves the old one running,
 which is the good outcome; a restart would not.

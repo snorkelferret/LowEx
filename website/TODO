@@ -12198,3 +12198,40 @@ no upside. If something seems to need one of them, ask.
        the same; Compare becomes Hide diff and closes the result; changing a
        selection closes a stale diff. A control that only opens is a one-way
        door, and before this the only way back was to change release.
+
+105) NO HARDWIRED URLS — ANYWHERE, INCLUDING THE DEPLOYMENT FILES. 2026-11-12.
+     ======================================================================
+
+     ASKED FOR: "I would like to run everything locally with env variables for
+     the ultimate URLs... Remember there should be NO hardwired URLs."
+
+     THE CODE WAS ALREADY THERE: shared/config.mjs is the one place a default
+     lives, and check:config failed on a literal anywhere else. The gap was
+     `deploy/`, which the check did not scan.
+
+     --- WHAT WAS REMOVED ---
+
+       * deploy/perforce/change-commit.sh had DEFAULT ADDRESSES for PORTAL_URL
+         and P4PORT — `http://127.0.0.1:5000` and `127.0.0.1:1666`. A default in
+         a trigger is a notification sent somewhere nobody chose: harmless
+         locally, wrong the day the portal moves. ALL THREE values are now
+         REQUIRED from its environment file; without them it logs and sends
+         nothing. deploy/perforce/trigger.env.example documents the file.
+       * deploy/nginx/lowexpectations.conf was a real file naming the domain,
+         the certificate paths and the upstream. It is now
+         lowexpectations.conf.template with ${PUBLIC_HOST}, ${CERT_DIR} and
+         ${UPSTREAM}, rendered by deploy/nginx/install.sh with an EXPLICIT
+         envsubst list — nginx's own $host and $proxy_add_x_forwarded_for must
+         survive, and substituting those would break the proxy quietly.
+       * check:config now scans deploy/ — shell, nginx templates, systemd units
+         — and treats '#' as a comment marker. 77 files, one place.
+
+     --- WHAT "RUN IT ALL LOCALLY" MEANS ---
+
+       Two environment files: website/.env (PORT, BIND, PUBLIC_URL, CLIENT_URL,
+       SERVER_URL, PERFORCE_TRIGGER_TOKEN) and the trigger's file (PORTAL_URL,
+       P4PORT, the same token). Locally they name 127.0.0.1; on the server they
+       name the domain. THE SAME TWO FILES CHANGE; NO CODE DOES.
+
+     NOT BUILT: nothing about this — it is a property, checked. The deployment
+     itself (origin, certificate, DNS) is still DEPLOY §3.

@@ -26,8 +26,15 @@
  *   a port        5000, 5173, 5174 — the development ports
  *   an address    localhost, 127.0.0.1, lowexpectations.zone
  *
- * anywhere in the application's source, EXCEPT shared/config.mjs, which is
- * where they are supposed to be.
+ * anywhere in the application's source OR THE DEPLOYMENT CONFIG, EXCEPT
+ * shared/config.mjs, which is where the defaults are supposed to be.
+ *
+ * THE DEPLOYMENT FILES ARE SCANNED TOO — the trigger script, the systemd units
+ * and the nginx template. A hardwired address there is the same mistake as one
+ * in a route: it is the value somebody has to find and edit when the portal
+ * moves. The nginx file is a TEMPLATE (PUBLIC_HOST, CERT_DIR, UPSTREAM,
+ * substituted by install.sh) and the trigger requires its two addresses from
+ * its environment file rather than defaulting them.
  *
  * COMMENT LINES ARE SKIPPED. The code explains these values in prose — "the
  * socket is on 127.0.0.1:5000" — and forbidding that would make the code less
@@ -45,7 +52,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 
-const DIRECTORIES = ['backend', 'frontend/src', 'shared'];
+const DIRECTORIES = ['backend', 'frontend/src', 'shared', '../deploy'];
 const FILES = ['vite.config.mjs', 'build.js'];
 
 // The one place they are allowed.
@@ -62,7 +69,7 @@ function walk(dir, found = []) {
 
         if (entry.isDirectory()) {
             walk(full, found);
-        } else if (/\.(js|mjs)$/.test(entry.name)) {
+        } else if (/\.(js|mjs|sh|conf|template|service|timer)$/.test(entry.name)) {
             found.push(full);
         }
     }
@@ -72,7 +79,13 @@ function walk(dir, found = []) {
 
 const isCommentLine = line => {
     const trimmed = line.trim();
-    return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+
+    // JS, C-style, and SHELL/NGINX/SYSTEMD — the deployment files explain these
+    // values in prose too, and '#' is their comment marker.
+    return trimmed.startsWith('//')
+        || trimmed.startsWith('*')
+        || trimmed.startsWith('/*')
+        || trimmed.startsWith('#');
 };
 
 function main() {

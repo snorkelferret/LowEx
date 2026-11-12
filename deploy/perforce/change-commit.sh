@@ -31,7 +31,8 @@
 # The fourth argument is the environment file, and it is where the secrets
 # live — NOT in this file, which is in git. It needs:
 #
-#   PORTAL_URL=http://127.0.0.1:5000
+#   PORTAL_URL=<the portal's public base URL>
+#   P4PORT=<the Perforce server address, host:port>
 #   PERFORCE_TRIGGER_TOKEN=<the same value as the portal's .env>
 #
 # ============================================================
@@ -62,8 +63,13 @@ fi
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 
-PORTAL_URL="${PORTAL_URL:-http://127.0.0.1:5000}"
-P4PORT="${P4PORT:-127.0.0.1:1666}"
+# NO DEFAULTS, DELIBERATELY. A default address in a trigger is a notification
+# sent somewhere nobody chose — harmless locally, wrong the day the portal moves.
+# The environment file says where; if it does not, nothing is sent.
+if [ -z "${PORTAL_URL:-}" ] || [ -z "${P4PORT:-}" ]; then
+    log "PORTAL_URL or P4PORT is not set; notification not sent"
+    exit 0
+fi
 
 if [ -z "${PERFORCE_TRIGGER_TOKEN:-}" ]; then
     log "PERFORCE_TRIGGER_TOKEN is not set; notification not sent"

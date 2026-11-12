@@ -175,6 +175,33 @@ the same `PERFORCE_TRIGGER_TOKEN`; restart the portal after changing it.
 recorded the changelist, user, client, time and depot path, and advanced the
 cursor.
 
+## Running it all locally
+
+**Everything can run on this machine while the URLs are the eventual ones.** The
+addresses are values in two environment files; nothing in the code names them.
+
+| Where | What it sets |
+|---|---|
+| `website/.env` | `PORT`, `BIND`, `PUBLIC_URL`, `CLIENT_URL`, `SERVER_URL`, and `PERFORCE_TRIGGER_TOKEN` |
+| the trigger's env file (see *The Perforce trigger*) | `PORTAL_URL`, `P4PORT`, and the same `PERFORCE_TRIGGER_TOKEN` |
+
+Locally those might be `http://127.0.0.1:5000` and `127.0.0.1:1666`; on the
+server they become `https://lowexpectations.zone` and `vcs.lowexpectations.zone:1666`.
+**The same two files change; no code does.**
+
+Start them:
+
+```bash
+p4d -r /path/to/p4d -p 127.0.0.1:1666 -J .../journal -L .../log -d   # Perforce
+cd website && npm run dev                                             # portal + frontend
+```
+
+`npm run check:config` is the proof that this is true: it fails if a port, a
+hostname or the domain appears anywhere in the application's source **or in
+`deploy/`** outside `shared/config.mjs`. The nginx config is a template, and the
+trigger refuses to send anything without its environment — a hardwired address
+is a value somebody has to find when the portal moves.
+
 ## Before it goes public
 
 There is a separate page for this, because it is a sequence of steps rather than
@@ -182,7 +209,7 @@ a document to read: **`docs/DEPLOY.md`**. It covers the backup, the environment,
 rotating every known password, how the app is exposed, the decisions that must
 be taken in writing before it is reachable, and the run record.
 
-The exposure half has its own folder: **`deploy/`**. `deploy/nginx/lowexpectations.conf`
+The exposure half has its own folder: **`deploy/`**. `deploy/nginx/lowexpectations.conf.template` (rendered by `install.sh` from `PUBLIC_HOST`, `CERT_DIR` and `UPSTREAM`)
 is the reverse proxy, and `deploy/README.md` explains the Cloudflare Origin
 Certificate, the origin firewall (or Tunnel), and the checks that prove only
 Cloudflare can reach the app. Read the README before the config.
