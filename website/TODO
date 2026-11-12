@@ -10107,6 +10107,12 @@ no upside. If something seems to need one of them, ask.
           selector, and prod's release management. Item 53 decided the model;
           item 60 is the selector. (§8)
 
+          PARTLY DONE 2026-10-30 (item 104): releases, release_assets, the
+          candidates queue, the manifest tree and the diff are BUILT, and the
+          page is shared read-only by developer and prod. What remains is the
+          STORE SELECTOR (item 60), prod's release MANAGEMENT (writes stay
+          admin), membership derived from a delivered changelist, and a build.
+
       [ ] THE STUDIO'S OVERRIDE of a developer's metadata, at or after approval.
           Approval copies ONLY category today; name and description are set
           once and never updated. (§4, A5/A10)
