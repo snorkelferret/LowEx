@@ -12285,3 +12285,62 @@ no upside. If something seems to need one of them, ask.
          configuration and stay a checklist.
        * The units' BEHAVIOUR is still TODO 102's on-the-box checklist — this
          machine cannot run them the way the server will.
+
+107) THE PERFORCE PART OF THE INSTALLER. BUILT AND PROVEN 2026-11-12.
+     =================================================================
+
+     deploy/perforce/install.sh, implementing the six guards asked for:
+
+       1. DRY RUN BY DEFAULT. --apply changes anything.
+       2. CHECK BEFORE CREATING: depot, stream, typemap, groups, trigger are
+          read first; what exists is skipped, not recreated.
+       3. PROTECTIONS ARE SHOWN, NEVER APPLIED unless --apply-protections is
+          given separately (and requires --apply).
+       4. TYPEMAP BEFORE ANY ADD, and the installer REFUSES if the depot
+          already holds files the typemap does not cover — their type is fixed
+          at add and re-adding is the only repair.
+       5. THE TRIGGER IS MERGED into the existing table, the script installed,
+          and its 0600 environment file checked for all three values (the
+          secret is never created or printed).
+       6. PROOF AT THE END — p4 info, typemap, triggers, protections — and
+          --test-notification performs a REAL SUBMIT and reads the portal's
+          cursor back with the trigger's own credential (a cursor read added
+          to routes/perforce.js for exactly this).
+
+     --- PROVEN, AND ON WHAT ---
+
+       * DRY RUN against the sandbox: every step printed, nothing changed.
+       * FRESH SERVER: a throwaway p4d on another port, root under tmp/.
+         --apply created the depot (stream), mainline, typemap, the three
+         groups, and the trigger; the proof lines read back.
+       * IDEMPOTENCE: the second --apply reported "exists" / "covers" for
+         everything and changed nothing.
+       * PROTECTIONS: --apply --apply-protections wrote the six-line table on
+         the throwaway and `p4 protect -o` read it back.
+       * NOTIFICATION: against the sandbox, --apply --test-notification
+         submitted changelist 6, the trigger fired, and the portal's cursor
+         went 5 → 6. THE ONE-WAY PATH IS PROVEN WITH A REAL SUBMIT.
+
+     --- WHAT THE RUNS TAUGHT, ALL NOW IN THE SCRIPT ---
+
+       * a stream depot needs StreamDepth; the plan's streams (main, dev,
+         task-*) are all depth 1
+       * a mainline stream needs Name, Parent: none and ParentView: inherit
+       * stream Paths are RELATIVE to the stream ("share ...")
+       * a package/group form is refused with "not created" and no reason when
+         a required limit or a member is missing; the server's own template is
+         used and the super user is seeded in
+       * protections are stored TAB-indented, whatever was typed
+       * `p4d -d` must have its stdio detached, or a caller's pipeline waits
+         for EOF that never comes and the installer looks hung
+       * installing the trigger script over itself is an error; the installer
+         detects source == destination
+
+     --- STILL OPEN, AND NOT THIS SCRIPT'S JOB ---
+
+       * the real VPS, DNS and TLS; `p4 trust` on developer machines
+       * the trigger's credentials on the host (the installer checks the file,
+         it does not create the secret)
+       * the matcher: delivered depot paths -> an approved asset version
+       * members for the groups: seeded with the super user, and an operator
+         moves them

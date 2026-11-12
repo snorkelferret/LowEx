@@ -214,6 +214,24 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/perforce/cursor — the same credential, reading the cursor only
+// ---------------------------------------------------------------------------
+//
+// SO THE TRIGGER'S OWN SIDE CAN PROVE DELIVERY. The installer performs a test
+// submit and then asks what the portal last heard; an admin session belongs to
+// a person, and a deployment script is not one. The scope is deliberately a
+// single read: what the cursor says, and nothing else.
+
+router.get(
+    '/cursor',
+    requireTriggerToken,
+
+    (req, res) => {
+        return res.json(cursorNow.get());
+    }
+);
+
+// ---------------------------------------------------------------------------
 // GET /api/perforce/changes — what the portal has been told, for an admin
 // ---------------------------------------------------------------------------
 

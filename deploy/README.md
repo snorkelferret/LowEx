@@ -31,8 +31,16 @@ sudo -E bash deploy/install.sh --only portal
 | Part | What it installs | State |
 |---|---|---|
 | `portal` | Sanity checks, the proxy config, `lowex-portal.service`, `lowex-daily.service`/`.timer`, then proof (`systemctl is-active`, the portal answering, `npm run check`) | **built** |
-| `perforce` | The depot, typemap, protections, users, the trigger | not built (TODO 88) |
+| `perforce` | The depot, stream, typemap, groups, protections (on request), the trigger, and a real-submit proof | **built** (TODO 88) |
 | `backups` | Backup timers for the database, the uploads and the depot | not built (DEPLOY §5) |
+
+**The Perforce part is guarded rather than convenient.** It is a dry run
+unless `--apply` is given; protections are shown and never applied without
+`--apply-protections` as a separate decision; the typemap is checked **before**
+anything is added and the installer refuses if the depot already holds files it
+does not cover (their type is fixed at add); and `--test-notification` performs
+a **real submit** and reads the portal's cursor back with the trigger's own
+credential.
 
 Each part is self-contained, idempotent, and reads the same `site.env` — that is
 what lets them be run alone and combined. **No part holds an address of its

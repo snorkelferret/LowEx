@@ -198,6 +198,21 @@ async function main() {
     // READ
     // -----------------------------------------------------------------
 
+    // THE CURSOR READ, for the trigger's own credential: the installer proves
+    // delivery with it after a test submit.
+    const cursorWithToken = await (await fetch(`${server.base}/cursor`, {
+        headers: { Authorization: `Bearer ${TOKEN}` }
+    })).json();
+
+    report.check('the trigger credential can read the cursor',
+        cursorWithToken?.last_changelist === 110,
+        `cursor: ${JSON.stringify(cursorWithToken)}`);
+
+    const cursorNoToken = await fetch(`${server.base}/cursor`);
+
+    report.check('and only with the credential', cursorNoToken.status === 401,
+        `expected 401, got ${cursorNoToken.status}`);
+
     const asDeveloper = await server.get('/changes', dev);
 
     report.check('a developer cannot list the notifications', asDeveloper.status === 403,
