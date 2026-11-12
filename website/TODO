@@ -12344,3 +12344,48 @@ no upside. If something seems to need one of them, ask.
        * the matcher: delivered depot paths -> an approved asset version
        * members for the groups: seeded with the super user, and an operator
          moves them
+
+108) THE BACKUPS PART. BUILT AND PROVEN 2026-11-12.
+     ==============================================
+
+     deploy/backups/backup.sh and deploy/backups/install.sh, plus
+     lowex-backup.service/.timer (04:47 daily, Persistent=true).
+
+     --- WHAT A BACKUP CONTAINS ---
+
+       portal/     database.db, made with `sqlite3 .backup` (safe against a
+                   live server), and uploads/files.
+       perforce/   the newest checkpoint AND ITS .md5, the journal, and the
+                   depot's versioned files — which live under the depot's own
+                   name, not a "depot" directory. A checkpoint alone refers to
+                   files it does not carry.
+
+     --- AND IT IS VERIFIED, WHICH IS THE POINT ---
+
+       check:store runs against the copy with DB_PATH and STORE_DIR. A backup
+       that does not pass is not a backup: the run fails, the timer records it,
+       and the new directory stays visibly partial rather than blending into
+       the last good one. Retention only runs AFTER the new backup succeeds.
+
+     --- PROVEN ---
+
+       * portal-only backup: 3 rows / 3 blobs copied, check:store PASS
+       * with the depot: checkpoint.N + md5 + journal + LowExpectations files
+       * two runs in one second do NOT collide (nanosecond stamps; otherwise the
+         second copy nests inside the first)
+       * retention: a directory older than BACKUP_KEEP_DAYS was removed
+       * dry run of the installer prints every step
+
+     --- WHAT IT DOES NOT DO, SAID SO IT IS NOT MISTAKEN FOR DONE ---
+
+       * IT DOES NOT GO OFF THE BOX. BACKUP_DIR on the same volume protects
+         against deletion and corruption, not against the disk. The installer
+         WARNS when BACKUP_DIR is on the checkout's filesystem; pointing it at a
+         mount is the operator's job.
+       * NO RESTORE DRILL. DEPLOY §5 says verify a restore; this proves the
+         copy passes check:store, which is necessary and not sufficient.
+       * NO JOURNAL ROTATION (`p4 admin journal`) — the journal grows until
+         somebody rotates it.
+       * databases are copied nightly; the depot is copied in full nightly,
+         which stops being sensible as the game grows (rsync and hard links are
+         the next step, deliberately not guessed at).

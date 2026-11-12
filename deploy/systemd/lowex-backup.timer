@@ -1,0 +1,12 @@
+# When the backup runs. 04:47 — half an hour after the cleanup (04:17), so the
+# two do not contend, and off the hour so it does not land with everything else.
+
+[Unit]
+Description=Nightly backup for the Low Expectations portal and depot
+
+[Timer]
+OnCalendar=*-*-* 04:47:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

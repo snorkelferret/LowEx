@@ -140,7 +140,7 @@ in the record below. Item numbers are in `website/TODO`.
 | Do | Why |
 |---|---|
 | Schedule the daily job | Without it, nothing is ever collected and deleted work is never purged. (See the manual, *Starting the box*.) |
-| Schedule the backup — **both halves** | The database and `backend/uploads/files` are one thing split in two. A database restored without its files is a store of references to content that is not there. |
+| Schedule the backup — **both halves**: `deploy/backups/install.sh --apply --run-backup` | The database and `backend/uploads/files` are one thing split in two, and the part verifies the copy with `check:store` before it reports success. The depot's checkpoint, journal and files travel together. **Point `BACKUP_DIR` at a different volume** — the installer warns if it is not. |
 | Verify a restore **now**, not on the day | Copy a backup elsewhere and run `check:store` against the copy. |
 | Press the alerts **test button** on the admin page | Email is a configuration, and the day to find out it is not configured is not the day of an incident. |
 

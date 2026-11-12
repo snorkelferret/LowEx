@@ -1,0 +1,20 @@
+# A TEMPLATE. Rendered by deploy/backups/install.sh from deploy/site.env.
+#
+# RUNS AS ROOT, deliberately: it reads the portal's database (owned by the
+# service account) and the depot's root (owned by Perforce), and no single
+# unprivileged user can read both. Its writes are confined to BACKUP_DIR.
+#
+# It is oneshot: a failure is recorded by systemd and visible in the journal,
+# which is the point of running it from a timer rather than by hand.
+
+[Unit]
+Description=Low Expectations — backup the portal and the depot
+After=local-fs.target
+RequiresMountsFor=${CHECKOUT}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash ${BACKUP_SCRIPT} ${CHECKOUT}/deploy/site.env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lowex-backup

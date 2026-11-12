@@ -32,7 +32,16 @@ sudo -E bash deploy/install.sh --only portal
 |---|---|---|
 | `portal` | Sanity checks, the proxy config, `lowex-portal.service`, `lowex-daily.service`/`.timer`, then proof (`systemctl is-active`, the portal answering, `npm run check`) | **built** |
 | `perforce` | The depot, stream, typemap, groups, protections (on request), the trigger, and a real-submit proof | **built** (TODO 88) |
-| `backups` | Backup timers for the database, the uploads and the depot | not built (DEPLOY §5) |
+| `backups` | A daily verified backup of the database + content store, and the depot's checkpoint, journal and files | **built** (DEPLOY §5) |
+
+**The backup part is verified, not assumed.** It copies the database with
+`sqlite3 .backup` (safe against a live server) and the content store, then runs
+`check:store` against the copy — a database without its files is a store full of
+references to content that is not there. A failed verification fails the run, so
+the timer records it. The depot is checkpointed and its journal and versioned
+files travel with the checkpoint. Old dated directories are removed only after a
+new backup has succeeded. It warns if `BACKUP_DIR` is on the same filesystem as
+the checkout: a backup on the failed disk is not a backup.
 
 **The Perforce part is guarded rather than convenient.** It is a dry run
 unless `--apply` is given; protections are shown and never applied without
