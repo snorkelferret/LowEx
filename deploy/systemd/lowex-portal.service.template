@@ -1,0 +1,26 @@
+# A TEMPLATE. Rendered by deploy/portal/install.sh from deploy/site.env:
+# CHECKOUT, SERVICE_USER and SERVICE_GROUP. Do not install this file directly.
+#
+# THE PORTAL ITSELF, under systemd. It binds loopback (check:bind proves the
+# code does); nginx is the only front door. The environment file is the
+# portal's own .env, which is where its secrets live.
+
+[Unit]
+Description=Low Expectations portal
+Documentation=file:${CHECKOUT}/docs/DEPLOY.md
+After=network.target
+RequiresMountsFor=${CHECKOUT}
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
+WorkingDirectory=${CHECKOUT}/website
+EnvironmentFile=${CHECKOUT}/website/.env
+ExecStart=/usr/bin/env node backend/server.js
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

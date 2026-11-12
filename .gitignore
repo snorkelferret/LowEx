@@ -179,3 +179,8 @@ docs/*.pdf
 # they belong somewhere tracked and named for what they are. `tmp` says
 # disposable, and a fixture is the opposite.
 tmp/
+
+# The facts file an installation is configured with. It may be copied
+# between machines, so it must never carry a credential — but it is still
+# local configuration, not repository content.
+deploy/site.env

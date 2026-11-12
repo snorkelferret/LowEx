@@ -196,6 +196,10 @@ p4d -r /path/to/p4d -p 127.0.0.1:1666 -J .../journal -L .../log -d   # Perforce
 cd website && npm run dev                                             # portal + frontend
 ```
 
+For a real installation on the server, the same facts drive the installer:
+`deploy/site.env`, then `deploy/install.sh --only portal` (dry-run first). See
+`deploy/README.md`.
+
 `npm run check:config` is the proof that this is true: it fails if a port, a
 hostname or the domain appears anywhere in the application's source **or in
 `deploy/`** outside `shared/config.mjs`. The nginx config is a template, and the

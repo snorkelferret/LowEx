@@ -1,3 +1,6 @@
+# A TEMPLATE. Rendered by deploy/portal/install.sh from deploy/site.env:
+# CHECKOUT, SERVICE_USER and SERVICE_GROUP. Do not install this file directly.
+#
 # deploy/systemd/lowex-daily.service
 #
 # THE NIGHTLY CLEANUP, as a systemd service the timer starts.
@@ -16,16 +19,16 @@
 
 [Unit]
 Description=Low Expectations — purge expired bins and collect unreferenced content
-Documentation=file:/srv/lowex/docs/DEPLOY.md
+Documentation=file:${CHECKOUT}/docs/DEPLOY.md
 After=local-fs.target
 # The database lives on local disk; do not start before it is mounted.
-RequiresMountsFor=/srv/lowex
+RequiresMountsFor=${CHECKOUT}
 
 [Service]
 Type=oneshot
-User=lowex
-Group=lowex
-WorkingDirectory=/srv/lowex/website
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
+WorkingDirectory=${CHECKOUT}/website
 
 # A LOCK, BECAUSE THE JOB HAS NONE OF ITS OWN.
 # A person running it by hand while the timer fires would give two collectors

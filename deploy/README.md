@@ -16,6 +16,34 @@ Both halves of that sentence are required; either one alone is decoration.
 
 ---
 
+## The installer
+
+**One facts file, one part per thing being deployed.**
+
+```bash
+cp deploy/site.env.example deploy/site.env     # addresses, paths, accounts
+$EDITOR deploy/site.env
+
+bash deploy/install.sh --dry-run --only portal # what it would do
+sudo -E bash deploy/install.sh --only portal
+```
+
+| Part | What it installs | State |
+|---|---|---|
+| `portal` | Sanity checks, the proxy config, `lowex-portal.service`, `lowex-daily.service`/`.timer`, then proof (`systemctl is-active`, the portal answering, `npm run check`) | **built** |
+| `perforce` | The depot, typemap, protections, users, the trigger | not built (TODO 88) |
+| `backups` | Backup timers for the database, the uploads and the depot | not built (DEPLOY §5) |
+
+Each part is self-contained, idempotent, and reads the same `site.env` — that is
+what lets them be run alone and combined. **No part holds an address of its
+own**, and `npm run check:config` refuses one in `deploy/` as it would in the
+application.
+
+`site.env` carries **no credential**: secrets stay in the portal's `.env` and in
+the trigger's own 0600 file.
+
+---
+
 ## Before the config goes in
 
 ### 1. The origin is reachable only from Cloudflare

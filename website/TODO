@@ -12235,3 +12235,53 @@ no upside. If something seems to need one of them, ask.
 
      NOT BUILT: nothing about this — it is a property, checked. The deployment
      itself (origin, certificate, DNS) is still DEPLOY §3.
+
+106) DEPLOYMENT PARTS — SELF-CONTAINED SCRIPTS THAT COMPOSE. SCAFFOLDING 2026-11-12.
+     ======================================================================
+
+     ASKED FOR: "a self contained script for each part - and then they can be
+     combined together". The rule that makes it work: they share ONE facts file
+     and none of them decides an address.
+
+     --- BUILT ---
+
+       deploy/site.env.example   public host, upstream, cert dir, portal URL,
+                                 P4PORT, checkout, service account, backup dir.
+                                 NO CREDENTIAL — secrets stay in the portal's
+                                 .env and the trigger's own 0600 file.
+       deploy/install.sh         the orchestrator: --only portal|perforce|backups,
+                                 --dry-run, --env. Runs what exists; names what
+                                 does not.
+       deploy/portal/install.sh  sanity (checkout, node, .env, JWT_SECRET),
+                                 renders the proxy, renders and installs the
+                                 systemd units, enables them, then PROVES it:
+                                 service active, portal answering, checks pass.
+                                 Idempotent; dry-run by default on request;
+                                 refuses system steps without root.
+       systemd templates         lowex-portal.service ($CHECKOUT, $SERVICE_USER,
+                                 $SERVICE_GROUP) and lowex-daily.service. The
+                                 timer has no variables and stays a plain file.
+
+     THIS ALSO CLOSES the portal's own service unit that TODO 102 recorded as
+     outstanding — as a template and an installer, not a hand-written file.
+
+     --- VERIFIED HERE ---
+
+       * dry run end to end against a temporary site.env: every action printed,
+         nothing changed
+       * --only perforce exits 2 with "not built yet" rather than pretending
+       * the rendered nginx config passes `nginx -t` (temporary include, cert and
+         high ports), with nginx's own $host/$scheme/$proxy_add_x_forwarded_for
+         intact
+       * the rendered portal unit passes `systemd-analyze verify`; the daily
+         service's only complaint is /usr/bin/flock, absent on this NixOS
+         machine and present on Debian
+       * check:config now covers 80 files including deploy/
+
+     --- NOT BUILT ---
+
+       * perforce/install.sh and backups/install.sh (TODO 88, DEPLOY §5)
+       * Cloudflare is not a part: DNS, WAF and rate limits are account
+         configuration and stay a checklist.
+       * The units' BEHAVIOUR is still TODO 102's on-the-box checklist — this
+         machine cannot run them the way the server will.
