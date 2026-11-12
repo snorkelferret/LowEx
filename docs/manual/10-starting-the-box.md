@@ -138,6 +138,43 @@ it runs the same read-only commands you could run. If it is ever given the power
 to act, it needs its own identity first, so its actions are not recorded as
 yours.
 
+## The Perforce trigger
+
+Perforce **tells** the portal when a changelist is committed. The portal never
+asks Perforce anything — no query, no poll, no write — so this is the whole of
+the coupling.
+
+The pieces:
+
+| | |
+|---|---|
+| `deploy/perforce/change-commit.sh` | The trigger script. It describes the changelist, builds a JSON notification and posts it. **It always exits 0** — a failure loses a notification, never a submit. |
+| `POST /api/perforce/change-commit` | The portal's receiving end, authenticated by `PERFORCE_TRIGGER_TOKEN`. If that is unset the route refuses everything (503) rather than trusting anything. |
+| `perforce_cursor` | The last changelist seen. A jump is reported as a gap, so a missed notification is visible rather than silent. |
+
+**Install it** by adding one line to the trigger table (`p4 triggers`), for the
+streams that matter:
+
+```
+lowex-change-commit change-commit //LowExpectations/... \
+    "bash /path/to/change-commit.sh %changelist% %user% %client% /etc/lowex/perforce-trigger.env"
+```
+
+That last argument is the **environment file**, which is where the secret lives
+— not in the script, which is in git:
+
+```
+PORTAL_URL=https://lowexpectations.zone
+PERFORCE_TRIGGER_TOKEN=<the same value as the portal's .env>
+```
+
+Keep it readable by the Perforce service account only. The portal's `.env` needs
+the same `PERFORCE_TRIGGER_TOKEN`; restart the portal after changing it.
+
+**Proven on the local sandbox**: a submit fired the trigger and the portal
+recorded the changelist, user, client, time and depot path, and advanced the
+cursor.
+
 ## Before it goes public
 
 There is a separate page for this, because it is a sequence of steps rather than

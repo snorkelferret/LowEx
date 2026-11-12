@@ -94,6 +94,15 @@ app.set('trust proxy', 'loopback');
 // Enable CORS dynamically for client URL
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
 //app.use(cors());
+
+// THE PERFORCE NOTIFICATION, MOUNTED BEFORE THE GLOBAL BODY PARSER.
+//
+// It has its own, larger body limit — a changelist's file list is not a browser
+// form — and it authenticates by its own shared secret rather than a session, so
+// it must not be behind the cookie middleware. The router parses the cookies it
+// needs for its admin read itself. See routes/perforce.js.
+app.use('/api/perforce', require('./routes/perforce'));
+
 app.use(express.json());
 app.use(passport.initialize());
 app.use(cookieParser());

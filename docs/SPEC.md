@@ -651,3 +651,32 @@ and its findings are proposals to the owner or to whoever is building.
 > collecting garbage — it needs its own identity first. Acting as `admin` would
 > record every agent action as the administrator's, and the "who did what"
 > record (§6, and the note on sessions in §7) would stop being true.
+
+---
+
+## 17. The portal and Perforce — the notification
+
+*State: BUILT — the notification path. The depot, the trigger installation and
+the asset matcher are not (TODO 88).*
+
+**The direction is one way.** Perforce tells the portal that a changelist was
+committed; the portal never asks it anything — no query, no poll, no write.
+
+**`change-commit`, not `change-submit`.** The trigger runs **after** the commit
+and cannot undo it, so a portal that is down or slow loses a notification and
+never a developer's submit. Nothing in this path can stop the studio working.
+
+**The credential can do one thing.** The notification is authenticated by its
+own shared secret — `PERFORCE_TRIGGER_TOKEN` — not by an admin account, which
+must never sit in a trigger script. Unset means the route answers 503 rather
+than trusting anything.
+
+**What is recorded:** `perforce_changes` keeps the changelist (UNIQUE, so a
+retried trigger inserts once), the user, client, description, perforce's time
+and the depot paths. `perforce_cursor` keeps the last changelist seen; a jump is
+reported as a **gap**, because a portal that cannot ask must be able to say what
+it last heard.
+
+**Not built:** matching delivered depot paths to an approved asset version, the
+real server and its protections, and anything that derives release membership
+from a delivered changelist.

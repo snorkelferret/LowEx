@@ -510,6 +510,54 @@ const applyAssetRepositorySchema = () => {
 
   /*
    * ----------------------------------------------------------
+   * perforce_changes — WHAT PERFORCE TOLD THE PORTAL
+   *
+   * THE PORTAL NEVER ASKS PERFORCE ANYTHING (TODO 88 §16). This table is
+   * therefore a RECORD OF NOTIFICATIONS, not a cache of the depot: a changelist
+   * nobody notified the portal about is absent, and the cursor below is what
+   * makes that VISIBLE rather than silent.
+   *
+   * THE CHANGELIST IS UNIQUE, which is what makes a retried trigger harmless:
+   * the same notification twice inserts once. Files are a JSON array of depot
+   * paths, kept whole because the matcher that maps them to an approved version
+   * does not exist yet (TODO 88 §15).
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS perforce_changes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      changelist INTEGER NOT NULL UNIQUE,
+
+      username TEXT NOT NULL,
+      client TEXT,
+      stream TEXT,
+      description TEXT,
+
+      -- As reported by Perforce, not when the portal heard about it.
+      submitted_at TEXT,
+      received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      files TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_perforce_changes_changelist
+      ON perforce_changes(changelist);
+
+    -- ONE ROW, id = 1. The last changelist seen, so a missed notification —
+    -- portal down, trigger failed — is a GAP rather than nothing at all.
+    CREATE TABLE IF NOT EXISTS perforce_cursor (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      last_changelist INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    INSERT OR IGNORE INTO perforce_cursor (id, last_changelist) VALUES (1, 0);
+  `);
+
+  /*
+   * ----------------------------------------------------------
    * stored_files — THE PHYSICAL CONTENT, AND THE ONLY COPY OF IT
    *
    * THERE IS ONE AND ONLY ONE COPY OF ANY SHA-256 IN THE

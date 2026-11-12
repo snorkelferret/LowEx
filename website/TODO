@@ -10906,18 +10906,32 @@ no upside. If something seems to need one of them, ask.
       happened. THE COUPLING RUNS ONE WAY AND CANNOT STOP A SUBMIT, which is why
       it does not contradict the "barely need to talk" rule — it obeys it.
 
-    --- NOT BUILT, AND WHAT IT NEEDS ---
+    --- BUILT 2026-11-12, and proven against the sandbox ---
 
-        [ ] A POST ENDPOINT on the portal to receive a submit. AUTHENTICATED
-            WITH A CREDENTIAL THAT CAN DO ONLY THIS — write notification rows,
-            not an admin account. The trigger runs on the Perforce server; a
-            token with admin rights sitting in a trigger script is the same
-            mistake as a password in a shell history.
-        [ ] THE TRIGGER SCRIPT itself, installed on the server.
-        [ ] A RECORD OF THE LAST CHANGELIST SEEN, so a missed event — portal
-            down, trigger failed — is VISIBLE rather than silently swallowed.
-            A notification system with no cursor cannot tell "nothing happened"
-            from "nothing was delivered".
+        [x] A POST ENDPOINT on the portal to receive a submit:
+            POST /api/perforce/change-commit. AUTHENTICATED WITH A CREDENTIAL
+            THAT CAN DO ONLY THIS — PERFORCE_TRIGGER_TOKEN, compared in
+            constant time; unset means 503 (disabled), never open. It writes
+            notification rows and nothing else.
+
+        [x] THE TRIGGER SCRIPT: deploy/perforce/change-commit.sh. It runs
+            `p4 -G describe` for the file list and always exits 0 — a failure
+            loses a notification, never a developer's submit.
+
+        [x] A RECORD OF THE LAST CHANGELIST SEEN: perforce_cursor, one row.
+            An incoming changelist beyond last + 1 is reported as a GAP, and
+            the same changelist twice inserts once (UNIQUE changelist).
+
+        PROVEN END TO END on the local sandbox: a change-commit trigger was
+        installed in the p4d trigger table; a submit (change 4, then 5) fired
+        it; the portal recorded the user, client, description, time and the
+        depot file path, and advanced the cursor. scripts/check-perforce-notify
+        covers auth, idempotency, the gap, validation and the admin read.
+
+        STILL OPEN: THE MATCH to an approved asset — the trigger delivers depot
+        paths, and mapping them to a portal version does not exist yet. The
+        `stream` field is also null from `p4 -G describe` in this build; the
+        depot path is the reliable identifier today.
 
     ============================================================
     16. THE DIRECTION IS ONE WAY — PERFORCE TELLS THE PORTAL
