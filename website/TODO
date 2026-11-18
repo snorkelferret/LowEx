@@ -12397,6 +12397,10 @@ no upside. If something seems to need one of them, ask.
      Or a command-line tool... with the portal verifying the file hashes in
      the depot rather than trusting a typed number."
 
+     THE CONTRACT IS docs/INTEGRATION.md — the receipt as built, and the build
+     record as proposed. Written 2026-11-18 for the agent working on the game
+     in this directory. Change it there; record the decision here.
+
      WHAT IT REPLACES: the ADMIN'S steps — import/reimport, submit, and the
      record. Not the developer's work and not production's decision.
 

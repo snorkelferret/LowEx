@@ -747,3 +747,7 @@ it last heard.
 **Not built:** matching delivered depot paths to an approved asset version, the
 real server and its protections, and anything that derives release membership
 from a delivered changelist.
+
+**The wire contract is `docs/INTEGRATION.md`** — the receipt as it is built,
+and the build record as it is proposed. It is what the Unreal side codes
+against, and the portal owns it because the portal validates against it.
