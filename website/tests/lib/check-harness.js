@@ -1,4 +1,4 @@
-// scripts/lib/check-harness.js
+// tests/lib/check-harness.js
 //
 // THE PIECES EVERY HTTP CHECK NEEDS — a throwaway database built from the live
 // schema, throwaway storage directories, the real routes mounted on a

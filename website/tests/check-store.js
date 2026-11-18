@@ -2,7 +2,7 @@
 /**
  * Checks the CONTENT-ADDRESSED STORE — the heart of the system.
  *
- *   node scripts/check-store.js            # exit 0 = clean
+ *   node tests/check-store.js            # exit 0 = clean
  *
  * THE DETECTION IS IN backend/lib/storeIntegrity.js, not here. That is not
  * tidiness: backend/jobs/daily.js refuses to collect garbage unless the store

@@ -79,11 +79,14 @@ content that is not there. Nothing else on disk is worth keeping.
 
 ## Keeping it healthy
 
-Twelve checks, safe against a running server, and one command to run them all:
+Twenty checks, safe against a running server, and one command to run them all:
 
 ```bash
-npm run check            # all twelve, stopping at the first failure
+npm run check            # all twenty, stopping at the first failure
 ```
+
+`docs/TESTING.md` maps each check to the aspect it covers, and says what is
+not covered.
 
 | Check | What it proves |
 |---|---|
@@ -95,16 +98,20 @@ npm run check            # all twelve, stopping at the first failure
 | `check:collector` | the nightly cleanup removes garbage and nothing else |
 | `check:preview` | the preview route serves production, and nobody else |
 | `check:approval` | submit, lock, approve, reject and unlock behave |
+| `check:upload` | the folder names the asset, bytes are stored once, an unchanged version is refused |
 | `check:upload-pending` | an asset under review refuses changes |
 | `check:round-trip` | a version downloads as approved and imports back as references |
 | `check:releases` | releases, membership, the one-version rule and the diff behave |
 | `check:library` | the library is readable by content roles and writable by the right ones |
 | `check:perforce` | the portal is told once, can say what it last heard, and reports a gap |
 | `check:integration` | the destination gate and the tool's receipt behave |
+| `check:auth` | sign-in, session identity, deactivation and sign-out behave |
+| `check:admin` | settings are bounded and audited; the account ladder holds |
+| `check:feedback` | anyone may report; administrators read and resolve |
 | `check:bind` | the server starts, and listens on loopback only |
 | `check:config` | no port or address is defined outside `shared/config.mjs` |
 
-**Eight of them start the real routes against a throwaway database and
+**Twelve of them start the real routes against a throwaway database and
 directories** — they never touch the live data, but they do need `JWT_SECRET`
 and a free local port. `check:collector` runs the cleanup code without a
 server; `check:bind` starts the whole backend as a child process, which is also

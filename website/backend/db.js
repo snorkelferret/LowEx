@@ -1611,7 +1611,7 @@ const applyAssetWorkflowSchemaPatches = () => {
 /*
  * NOTHING IN THIS FILE MAY REQUIRE A SIBLING FILE.
  *
- * scripts/check-schema-drift.js copies db.js ALONE into a temp directory and
+ * tests/check-schema-drift.js copies db.js ALONE into a temp directory and
  * symlinks only node_modules — which is how it proves the schema comes from
  * db.js rather than from the live database. A require('./lib/...') here breaks
  * that check, and it broke it once: the manifest backfill lived here for an

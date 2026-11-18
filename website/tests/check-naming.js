@@ -6,7 +6,7 @@
  * point of the near-match prompt is that parsing is fuzzy. That makes it worth
  * pinning down with cases rather than trusting a reading of the pattern.
  *
- *   node scripts/check-naming.js     # exit 0 = clean
+ *   node tests/check-naming.js     # exit 0 = clean
  *
  * The cases marked with a source below came from real decisions, not
  * invention — see docs/uploadmodel01.

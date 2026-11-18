@@ -3,7 +3,7 @@
  * Checks that NO PORT, HOSTNAME OR DOMAIN IS HARDWIRED OUTSIDE
  * shared/config.mjs.
  *
- *   node scripts/check-config.js       # exit 0 = clean
+ *   node tests/check-config.js       # exit 0 = clean
  *
  * ============================================================
  * WHY THIS EXISTS

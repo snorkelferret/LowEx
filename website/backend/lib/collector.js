@@ -74,7 +74,7 @@ function createCollector({ db, blobPath, thumbPath, say = () => {} }) {
     // makes the DELETE below fail with a constraint error — the whole run
     // aborts, and the collector stops freeing disk until somebody reads the log.
     // The row goes too, scoped to `is_active = 0` so an active item can never be
-    // removed by mistake. This was found by scripts/check-collector.js, not by
+    // removed by mistake. This was found by tests/check-collector.js, not by
     // reading: the rule had been stated and never exercised.
     //
     // FILE_THUMBNAILS IS THE FIRST REFERENCER THAT DOES NOT BELONG IN THE LIST

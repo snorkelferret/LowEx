@@ -4,7 +4,7 @@
 //
 // A LIBRARY, because two callers need the answer and they must not disagree:
 //
-//   * scripts/check-store.js — the command someone runs by hand.
+//   * tests/check-store.js — the command someone runs by hand.
 //   * backend/jobs/daily.js — which REFUSES TO COLLECT GARBAGE unless the
 //     store is sound. Collecting from a store you cannot trust is how a
 //     repairable problem becomes an unrepairable one.
@@ -111,7 +111,7 @@ async function findProblems(db, storeDir, { deep = true } = {}) {
         }
 
         // Built from THIS function's storeDir argument, not from BLOB_DIR:
-        // scripts/check-store.js points this at a backup or a copy via STORE_DIR,
+        // tests/check-store.js points this at a backup or a copy via STORE_DIR,
         // and a global path here would quietly check the live store instead of
         // the one it was asked about.
         //

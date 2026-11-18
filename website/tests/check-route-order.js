@@ -15,7 +15,7 @@
  *
  * Add new routes above the fallback block, then run this.
  *
- *   node scripts/check-route-order.js      # exit 0 = clean
+ *   node tests/check-route-order.js      # exit 0 = clean
  *
  * listen() is stubbed, so this never binds a port and is safe to run against
  * the real .env and database.

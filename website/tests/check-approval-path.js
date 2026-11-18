@@ -2,7 +2,7 @@
 /**
  * Checks the APPROVAL PATH over HTTP — submit, lock, approve, reject, unlock.
  *
- *   node scripts/check-approval-path.js      # exit 0 = clean
+ *   node tests/check-approval-path.js      # exit 0 = clean
  *
  * ============================================================
  * WHY THIS ONE
@@ -60,7 +60,7 @@
  * HOW
  * ============================================================
  *
- * scripts/lib/check-harness.js copies the schema into a throwaway database,
+ * tests/lib/check-harness.js copies the schema into a throwaway database,
  * mounts the REAL router on a throwaway Express app, and points the
  * application at throwaway directories. The technical check is SEEDED rather
  * than run: this check is about what happens after a check passes, and running

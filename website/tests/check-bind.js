@@ -2,7 +2,7 @@
 /**
  * Checks WHERE THE SERVER LISTENS — loopback, not every interface.
  *
- *   node scripts/check-bind.js         # exit 0 = clean
+ *   node tests/check-bind.js         # exit 0 = clean
  *
  * ============================================================
  * WHY THIS EXISTS

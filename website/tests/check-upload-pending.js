@@ -2,7 +2,7 @@
 /**
  * Checks that an asset UNDER REVIEW cannot be changed by uploading to it.
  *
- *   node scripts/check-upload-pending.js     # exit 0 = clean
+ *   node tests/check-upload-pending.js     # exit 0 = clean
  *
  * ============================================================
  * WHY THIS ONE
@@ -40,7 +40,7 @@
  * HOW
  * ============================================================
  *
- * scripts/lib/check-harness.js provides the throwaway server and database. The
+ * tests/lib/check-harness.js provides the throwaway server and database. The
  * upload is a real multipart request through the real multer middleware — the
  * first check to send one — because nothing else would exercise the field
  * names, the temp files or the transaction.

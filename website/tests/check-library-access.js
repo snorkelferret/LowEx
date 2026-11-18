@@ -2,7 +2,7 @@
 /**
  * Checks who may READ the library and who may CHANGE it.
  *
- *   node scripts/check-library-access.js    # exit 0 = clean
+ *   node tests/check-library-access.js    # exit 0 = clean
  *
  * ============================================================
  * WHY THIS ONE

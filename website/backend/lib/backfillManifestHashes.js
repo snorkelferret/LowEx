@@ -7,7 +7,7 @@
 // WHY THIS IS NOT IN db.js, WHICH IS WHERE THE SCHEMA LIVES
 // ============================================================
 //
-// db.js MUST BE SELF-CONTAINED. scripts/check-schema-drift.js copies it ALONE
+// db.js MUST BE SELF-CONTAINED. tests/check-schema-drift.js copies it ALONE
 // into a temp directory and symlinks only node_modules, which is how it proves
 // the schema comes from db.js rather than from the live database. A sibling
 // require there breaks that check — and it did: this code lived in db.js for an

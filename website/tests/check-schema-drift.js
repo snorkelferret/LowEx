@@ -32,7 +32,7 @@
  *
  * USAGE
  *   npm run check:schema                    # exit 0 = in sync, 1 = drift
- *   node scripts/check-schema-drift.js <db>  # check a specific database file
+ *   node tests/check-schema-drift.js <db>  # check a specific database file
  *
  * The optional path argument is for checking a backup or a copy — useful for
  * confirming the check actually detects a known-drifted database.
@@ -71,7 +71,7 @@ const scratchPath = path.join(scratchDir, 'database.db');
 // DB_PATH POINTS THE SCRATCH COPY AT THE SCRATCH DATABASE, and this line is not
 // optional. db.js used to hardcode its path; it now honours DB_PATH so that a
 // check can run the real code against its own database (see
-// scripts/check-preview-access.js). Without this, running check:schema with
+// tests/check-preview-access.js). Without this, running check:schema with
 // DB_PATH set in the environment would open THAT database, apply migrations to
 // it, and compare it with itself — a check that always passes, against a file
 // it was told not to touch.

@@ -3,7 +3,7 @@
  * Checks the RELEASES PATH — naming a build, putting approved work into it,
  * taking it out, the one-version-per-asset rule, and the DIFF between builds.
  *
- *   node scripts/check-releases.js       # exit 0 = clean
+ *   node tests/check-releases.js       # exit 0 = clean
  *
  * ============================================================
  * WHAT IT PROVES
@@ -29,7 +29,7 @@
  * HOW
  * ============================================================
  *
- * scripts/lib/check-harness.js. Two assets are seeded with approved versions
+ * tests/lib/check-harness.js. Two assets are seeded with approved versions
  * and real file rows — the release path reads approvals and files rather than
  * performing or uploading them, and those have their own checks.
  */

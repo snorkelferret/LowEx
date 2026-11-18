@@ -3,7 +3,7 @@
  * Checks the PERFORCE NOTIFICATION — the one-way path by which the portal is
  * told that a changelist was committed.
  *
- *   node scripts/check-perforce-notify.js    # exit 0 = clean
+ *   node tests/check-perforce-notify.js    # exit 0 = clean
  *
  * ============================================================
  * WHY THIS ONE

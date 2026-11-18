@@ -3,7 +3,7 @@
  * Checks the PREVIEW ROUTE over HTTP — who may see a submitted file, and who
  * may not.
  *
- *   node scripts/check-preview-access.js     # exit 0 = clean
+ *   node tests/check-preview-access.js     # exit 0 = clean
  *
  * ============================================================
  * WHY THIS EXISTS
@@ -40,7 +40,7 @@
  * HOW, WITHOUT TOUCHING ANYTHING REAL
  * ============================================================
  *
- * scripts/lib/check-harness.js copies the schema into a throwaway database,
+ * tests/lib/check-harness.js copies the schema into a throwaway database,
  * creates throwaway storage directories, and mounts the REAL router on a
  * throwaway Express app. The live database is opened read-only and never
  * written; nothing is added to the live store or the live previews.

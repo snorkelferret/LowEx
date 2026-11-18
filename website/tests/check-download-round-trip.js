@@ -3,7 +3,7 @@
  * Checks the DOWNLOAD ROUND TRIP — manifest, partial archive, single file,
  * the record of a read, and the import back into a workspace.
  *
- *   node scripts/check-download-round-trip.js    # exit 0 = clean
+ *   node tests/check-download-round-trip.js    # exit 0 = clean
  *
  * ============================================================
  * WHY THIS ONE
@@ -44,7 +44,7 @@
  * HOW
  * ============================================================
  *
- * scripts/lib/check-harness.js. The store is seeded, not built through the
+ * tests/lib/check-harness.js. The store is seeded, not built through the
  * approval path — this check is about reading, and the write path has its own.
  * The ZIP is read by the little parser below, because the archive is written
  * with STORE entries (method 0) and a real reader is the only way to prove

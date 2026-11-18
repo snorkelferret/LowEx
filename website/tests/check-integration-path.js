@@ -2,7 +2,7 @@
 /**
  * Checks the DESTINATION AND THE RECEIPT over HTTP.
  *
- *   node scripts/check-integration-path.js      # exit 0 = clean
+ *   node tests/check-integration-path.js      # exit 0 = clean
  *
  * ============================================================
  * WHY THIS ONE

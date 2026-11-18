@@ -2,7 +2,7 @@
 /**
  * Checks the COLLECTOR — the one thing in this system that destroys content.
  *
- *   node scripts/check-collector.js        # exit 0 = clean
+ *   node tests/check-collector.js        # exit 0 = clean
  *
  * ============================================================
  * WHY THIS EXISTS
