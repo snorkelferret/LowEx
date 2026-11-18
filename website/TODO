@@ -12436,6 +12436,36 @@ no upside. If something seems to need one of them, ask.
        seats (self-hosted is quote-only; P4 Cloud is published at $39/user/
        month) before it is needed, not on the day it is.
 
+     --- THE CONTENT DEPENDENCY, SETTLED 2026-11-18 ---
+
+       THE LIST PLUS THE LOCAL STORE IS SUFFICIENT. The portal's store is
+       content-addressed (uploads/files/<sha>), so the list from the portal is a
+       set of ADDRESSES, not a request to an API. With the game, the list and the
+       store on the same machine — true during the development phase — the tool
+       reads each approved blob by SHA, hashes it locally against the list, and
+       imports. NO PORTAL REQUEST IS NEEDED FOR THE CONTENT, and no export of
+       bytes: an earlier proposal to package the content was solving a problem
+       that co-location removes.
+
+       THE TOOL LIVES WHERE THE CONTENT IS, not where Perforce is: a p4 client
+       connects to a remote server, so when the depot moves to its own VPS the
+       tool stays beside the store.
+
+       AND OWNERSHIP IS SETTLED (SPEC §2, 2026-11-18): once out of the
+       workspace, everything belongs to the studio. The tool reading approved
+       content is therefore reading the studio's own files.
+
+       WHAT REMAINS OF THE READ QUESTION: the blob directory also holds
+       UNRELEASED workspace uploads, because the store is flat and
+       content-addressed. The tool reading the directory can therefore open
+       blobs that belong to a private workspace. Two answers:
+         (a) accept it — an admin-class process on the box can already read the
+             store with shell; record that this is accepted;
+         (b) scope it — an export of HARD LINKS to the approved blobs only,
+             beside the list, so filesystem access matches the approval record.
+       RECOMMENDED: (b); it is a hard-link directory, no extra space, and it
+       makes the rule true at both layers rather than merely intended.
+
      --- THE OPEN QUESTIONS, ALL NEEDING THE OWNER ---
 
        * THE DEPENDENCY: the content comes from the portal, so integration

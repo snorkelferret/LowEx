@@ -85,7 +85,11 @@ is §8, unbuilt.
 | | owned by | what that means |
 |---|---|---|
 | **private** (in a workspace) | the developer | only they read it, only they delete it |
-| **published, in the store, in the game** | **the studio** | **none.** The original developer has no more right to it than anyone else |
+| **published, in the store, in the game, in the library** | **the studio** | **none.** The original developer has no more right to it than anyone else |
+
+**Leaving the workspace is the act that transfers ownership.** Everything outside
+a private workspace belongs to the studio — the store, the game, the library —
+and nothing outside it belongs to an individual. Decided 2026-11-18.
 
 **Once it is uploaded, the developer has no special privileges.** Anyone with the
 role may add a version to it. The original version is untouched, and the
