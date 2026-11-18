@@ -12485,6 +12485,8 @@ no upside. If something seems to need one of them, ask.
          admin.
        * THE RECEIPT: endpoint, schema, a scoped credential (one capability),
          and the cross-check against the change-commit trigger's file list.
+         THE RECEIPT ALSO CARRIES THE BUILD IT TESTED IN — the `game` field
+         the portal's own check leaves null. See item 110.
        * THE HASH PROBLEM, which the proposal did not account for: the depot
          holds imported `.uasset` files, not the approved source, so a depot
          hash cannot equal the portal's manifest hash. The receipt must record
@@ -12492,3 +12494,139 @@ no upside. If something seems to need one of them, ask.
          not provenance.
        * THE MATCHER: delivered depot paths -> an approved asset version, still
          not built (TODO 88 §15).
+
+
+110) THE APPROVAL DESTINATION — AND WHERE THE GAME VERSION COMES FROM.
+     2026-11-18. DESIGN SETTLED; NOTHING BUILT.
+     ====================================================================
+
+     THE FLOW THE OWNER DESCRIBED, IN HIS WORDS:
+
+       "The approval should say which version the asset is supposed to be
+        loaded into" ... "It is not a release it can be a wip or dev or
+        experimental not a production version" ... "The store and the library
+        are the same thing" ... "Devs can upload things to the library without
+        prod approval" ... "When the devs are developing an asset they checkout
+        a version of the game which they want to put the new asset into - I
+        guess there is some way that perforce can know this - or that when the
+        asset is submitted there is a token which says which version of the
+        game it has been tested against".
+
+     ============================================================
+     WHAT THE LAST TWO SENTENCES SETTLE
+     ============================================================
+
+     THE LIBRARY IS NOT A DESTINATION. It is the place. A version that is
+     published and goes no further is finished there; it needs no approval
+     and no destination. So the destination list at submit names GAME VERSIONS
+     ONLY — there is no "library / future use" option, because that is the
+     path that never submits. This retires the question that was open between
+     TODO 86 and 109.
+
+     A BUILDING BLOCK (item 58) IS THE SAME RULE, NOT AN EXCEPTION. A loose
+     image can live in the library; it cannot enter a game version, because
+     what enters a game is an assembled asset. The restriction is on the
+     destination, not on the upload.
+
+     ============================================================
+     PERFORCE ALREADY KNOWS WHERE THE WORK WAS MADE
+     ============================================================
+
+     THE CHANGE-COMMIT NOTIFICATION CARRIES THE STREAM. `p4 describe` reports
+     it, the trigger already sends it, and the portal already stores it:
+
+       deploy/perforce/change-commit.sh     "stream": field("stream")
+       backend/routes/perforce.js           perforce_changes.stream
+       backend/db.js                        perforce_changes (column)
+
+     SO THE DEVELOPER TYPES NOTHING TO SAY WHERE THE WORK LIVES. With the
+     task-stream model (TODO 88 §3), the developer works in a task stream
+     branched from the game version they intend, submits there, and the
+     notification names the stream, the user, the client, the changelist and
+     the file list.
+
+     THE DESTINATION IS THE TASK STREAM'S PARENT, NOT THE TASK STREAM ITSELF.
+     A task stream is "here is my one change" (TODO 88 §3); the game version
+     is what it was branched from. `p4 describe` does not carry the parent, so
+     the trigger sends one more field: it already talks to the Perforce server,
+     and `p4 -G streams -o <stream>` reports `Parent:`. That is still PERFORCE
+     TELLING THE PORTAL — RULE 8 holds, because the trigger runs on the
+     Perforce host and posts what it was told.
+
+     IF THE DEVELOPER WORKS DIRECTLY ON A GAME STREAM, the stream IS the
+     destination and there is no parent to resolve.
+
+     ============================================================
+     WHAT IT WAS TESTED AGAINST IS A DIFFERENT FACT
+     ============================================================
+
+     THE STREAM SAYS WHERE THE WORK WAS MADE. IT DOES NOT SAY WHAT IT WAS TESTED
+     IN. The spec is emphatic (TODO 86): "You cannot simply type: 'Tested
+     against Development.' The system knows exactly which build was used."
+
+     THE RECEIPT ALREADY HAS THE FIELD AND IT IS NULL:
+
+       developerWorkspace.js  receipt = { ..., game: null }
+
+     with the comment saying why: no game build exists. THE ONLY THING THAT CAN
+     FILL IT IS A CHECK THAT RUNS INSIDE THE GAME — the in-editor tool (TODO
+     109). The portal has no game content and never asks Perforce, so a build
+     identifier can only arrive from the process that was actually running the
+     build. That is the "token" the owner described, and it cannot be typed.
+
+     THE JOIN IS THE CHANGELIST. The notification row and the receipt both name
+     it; the receipt already binds to content by manifest hash, and the submit
+     route already refuses a receipt whose hash does not match the version.
+
+     ============================================================
+     THE RULE THAT FOLLOWS, AND THE OWNER'S RETARGET CASE
+     ============================================================
+
+       developer suggests   the destination is derived from the changelist's
+                            stream (its parent, if it is a task stream)
+       prod may overrule    choosing another game version
+       admin may overrule   only as a special case, with a written explanation,
+                            audited like every other privileged act
+
+     A RECEIPT NAMES A BUILD ON A STREAM. IT IS EVIDENCE FOR THAT DESTINATION
+     AND NO OTHER. So an overrule that changes the destination makes the check
+     stale, the version returns to needing a test, and the test may fail — which
+     is exactly what the owner said should happen, and it falls out of binding
+     the receipt to the build rather than to the approval.
+
+     WITH NO CHANGELIST (the portal was down when it was committed, or the work
+     is not in Perforce yet) the developer picks the game version from the small
+     register instead. The derived value is the norm; the typed one is the
+     fallback, and the record says which it was.
+
+     ============================================================
+     OPEN — WHAT COUNTS AS "A BUILD"
+     ============================================================
+
+       (a) A CHANGELIST ON THE GAME STREAM. Simple, and it is what "the stream
+           at the time" means. But a candidate build from a task stream is not
+           any changelist on main.
+
+       (b) MAIN PLUS THE TASK CHANGE — the candidate build of TODO 88 §3 step
+           4, which is what lets a change be tested in the game without
+           changing the game. Its identity is compound: task stream @ its
+           changelist, over the game stream @ the changelist it was based on.
+           The tool can read both from the client it is running in.
+
+     RECOMMENDATION: (b), because it is the build the owner already said makes
+     "check it works" possible. The receipt records the compound identity; the
+     portal stores it whole rather than reconstructing it.
+
+     ============================================================
+     BUILT / NOT BUILT
+     ============================================================
+
+       BUILT     the stream, user, client, changelist and files arrive and are
+                 stored (perforce_changes)
+       BUILT     the check receipt, bound by manifest hash, with game: null
+       NOT BUILT the parent stream in the notification
+       NOT BUILT the receipt's game field, and the tool that fills it
+       NOT BUILT a destination on the submission, and the overrules
+       NOT BUILT the retarget rule
+       NOT BUILT the game-version register (which streams are game versions)
+       NOT BUILT the library/store unification this model rests on (item 86)

@@ -75,10 +75,23 @@ a finished Unreal asset. Every asset in it carries three things:
 **The workspace is the private end of the same thing**, not a separate place with
 separate files.
 
-**The game store is the subset approved into it** — not, yet, the subset in a
-game *version*. Those are different questions and only the first is built: what
-is in the store is content the studio has approved, and which release holds it
-is §8, unbuilt.
+**The store and the library are the same collection.** The menu has two
+entries; the model has one place. What the code calls `library_items` and what
+it calls `assets`/`asset_versions` are two implementations of one idea, and
+that split is the gap, not the design.
+
+**Publishing needs nobody's approval.** A developer uploads into the library —
+settled 2026-11-18. The technical check at upload is what stops anything
+entering untested (TODO 86, 2026-10-16); production does not decide whether a
+version may exist there. **Production's approval is about the game**: whether a
+version may enter a **game version**, and which one. A published version that is
+never submitted stays in the library, which is a finished outcome rather than a
+version waiting for something.
+
+> **NOT BUILT:** the code still writes an `asset_version` only at approval, so
+> it makes production the gate to the store. Under this model the gates are the
+> other way round: the technical check admits to the library, and approval
+> admits to a game version. See TODO 86 and 110.
 
 ### Who owns it
 
@@ -291,10 +304,12 @@ PRIVATE → PUBLISHED → SUBMIT FOR GAME → TECHNICAL TEST → DIRECTOR REVIEW
 - **DIRECTOR REVIEW** — the artistic decision, recorded **separately** from the
   technical one. `prod` is the director (TODO 87, A6).
 
-> **OPEN:** whether the technical test against a *build* happens here or at
-> upload. The owner settled that **upload** is gated (above); the PDF's
-> "tested against Build 203" rule belongs to this stage. They are two tests at
-> two stages, and only this one is about a build.
+> **SETTLED:** there are **two tests at two stages**. The library admits nothing
+> untested — that is the portal's check, run at upload against the files. The
+> PDF's "tested against Build 203" rule belongs here, at submit, and **only a
+> check that ran inside the game can say which build it was** — the portal has
+> no game content and never asks Perforce. The receipt's `game` field is the
+> place that fact goes; it is null until the in-editor tool fills it (TODO 110).
 
 > **OPEN:** a version can be withdrawn (deleted) but never rewritten. Withdrawal
 > is a last resort behind deliberately heavy friction, decided 2026-10-02, and
@@ -356,6 +371,12 @@ that withheld the routes a download actually uses would not be a read.
 A developer submits a workspace version; `prod` approves or rejects it. Approval
 writes an immutable `asset_version` into the store, copies the file references
 (never the bytes — one copy), and records which asset and version it came from.
+
+> **UNDER THE SETTLED MODEL THAT IS THE WRONG GATE** (§2, TODO 110).
+> Publishing should admit to the library without approval, and approval should
+> decide **which game version** the content may enter. The code makes approval
+> the gate to the store because the library/store split has not been undone
+> (TODO 86). What follows describes the code as it runs, not the destination.
 
 **The store version records two people, not one.** `created_by` is the
 **approver** — who let it in — and `uploaded_by` is the **author**, taken from
