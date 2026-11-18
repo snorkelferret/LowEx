@@ -1781,6 +1781,29 @@ async function submitForApproval(asset, version, button, block) {
 let pendingSubmission = null;
 let streamsPromise = null;
 
+// Whether the dialog has finished OPENING.
+//
+// Bootstrap ignores hide() while the opening transition is still running, and
+// a submission can complete inside those 300 ms — a fast double-click or an
+// Enter on the button is enough. The POST goes through, the page reloads, and
+// the dialog sits there over work that is already submitted. So the close is
+// deferred until the opening finishes when it has to be.
+let destinationShown = false;
+
+function closeDestinationDialog() {
+    const element = $('destinationModal');
+    if (!element || !window.bootstrap) return;
+
+    const instance = window.bootstrap.Modal.getOrCreateInstance(element);
+
+    if (destinationShown) {
+        instance.hide();
+        return;
+    }
+
+    element.addEventListener('shown.bs.modal', () => instance.hide(), { once: true });
+}
+
 function knownStreams() {
     if (!streamsPromise) {
         streamsPromise = apiFetch('/api/perforce/streams', { credentials: 'include' })
@@ -1886,6 +1909,11 @@ async function openDestinationDialog(asset, version) {
 
     showDestinationFields();
 
+    destinationShown = false;
+    modalElement.addEventListener('shown.bs.modal', () => {
+        destinationShown = true;
+    }, { once: true });
+
     window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
 }
 
@@ -1941,7 +1969,7 @@ async function sendSubmission() {
 
         pendingSubmission = null;
 
-        window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        closeDestinationDialog();
 
         await loadDeveloperWorkspace();
 
@@ -1969,6 +1997,7 @@ function initialiseDestinationModal() {
     // never send the previous one.
     modal.addEventListener('hidden.bs.modal', () => {
         pendingSubmission = null;
+        destinationShown = false;
         setDestinationAlert('');
     });
 }

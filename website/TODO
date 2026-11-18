@@ -12692,6 +12692,29 @@ no upside. If something seems to need one of them, ask.
        receipt, the gate, the retarget and the approval, mounting BOTH routers
        because the gate is the seam between them.
 
+       PROVEN IN A BROWSER, 2026-11-18. Headless Chrome over CDP, signed in
+       as the developer and as production with minted sessions (no password
+       was typed or stored):
+         * uploaded a folder holding an FBX, a .ma and a PNG;
+         * the dialog enabled the game option and listed //LowExpectations/main;
+         * a game submit was REFUSED for having no receipt, and the dialog
+           said so;
+         * after a receipt was posted through the real endpoint, the dialog
+           preselected the game version and showed "Tested in
+           //LowExpectations/main at changelist 7 — /Game/Levels/LE_Forest_01";
+         * the submit was accepted and the version locked;
+         * production's queue showed the destination and the receipt;
+           retargeting to a stream with no test was refused, retargeting to
+           the library and back succeeded, and the row said "changed by prod";
+         * approve put the version in the store, with uploaded_by = the
+           developer and created_by = production.
+
+       AND ONE UI DEFECT FOUND AND FIXED: Bootstrap ignores hide() while the
+       opening transition is running, so a Submit clicked inside those 300 ms
+       left the dialog open over a submission that had already succeeded. The
+       close is now deferred to `shown.bs.modal` when it has to be, and the
+       fast-submit case was re-run: the dialog closes.
+
        STILL NOT BUILT:
          * the tool itself (item 109), so no receipt is produced in anger yet;
          * no page draws the ADMIN override — the route exists and is audited;
