@@ -74,6 +74,100 @@ function previewUrl(approvalId, sha256) {
     return `${API}/creative-approvals/${approvalId}/preview/${sha256}`;
 }
 
+// THE STREAMS THE PORTAL KNOWS ABOUT, so retargeting is a choice rather than a
+// path typed from memory. Cached for the page: they change when somebody
+// submits, not while production is looking at the queue.
+let cachedStreams = [];
+
+function destinationCell(item) {
+    const td = document.createElement('td');
+    td.className = 'small';
+
+    const current = document.createElement('div');
+    current.textContent = item.destination_kind === 'game'
+        ? (item.destination_stream || 'A game version')
+        : 'The library';
+    td.appendChild(current);
+
+    if (item.destination_kind === 'game') {
+        current.textContent = `Game: ${item.destination_stream || 'unnamed'}`;
+    }
+
+    if (item.destination_source === 'prod' || item.destination_source === 'admin') {
+        const by = document.createElement('div');
+        by.className = 'text-secondary small';
+        by.textContent = `changed by ${item.destination_source}`;
+        td.appendChild(by);
+    }
+
+    // WHAT WAS TESTED, WHERE. The receipt is the evidence production is being
+    // asked to rely on; its absence next to a game destination is a fact worth
+    // seeing rather than a blank.
+    if (item.receipt) {
+        const tested = document.createElement('div');
+        tested.className = 'text-secondary small';
+        tested.textContent =
+            `${item.receipt.result === 'passed' ? 'Tested' : 'Test failed'} in ` +
+            `${item.receipt.parent_stream || item.receipt.stream} at CL ` +
+            `${item.receipt.changelist}` +
+            `${item.receipt.levels?.length ? ` — ${item.receipt.levels.join(', ')}` : ''}`;
+        td.appendChild(tested);
+    } else if (item.destination_kind === 'game') {
+        const none = document.createElement('div');
+        none.className = 'text-warning small';
+        none.textContent = 'No test receipt';
+        td.appendChild(none);
+    }
+
+    // A DECIDED SUBMISSION IS NOT RETARGETED, so the control is not drawn.
+    // The server refuses it (409); drawing a control that cannot work is the
+    // thing the page avoids everywhere else.
+    if (item.status !== 'pending') {
+        return td;
+    }
+
+    const controls = document.createElement('div');
+    controls.className = 'd-flex gap-1 mt-1';
+
+    const select = document.createElement('select');
+    select.className = 'form-select form-select-sm bg-dark text-light border-secondary py-0';
+    select.dataset.destinationId = String(item.id);
+
+    const libraryOption = document.createElement('option');
+    libraryOption.value = 'library';
+    libraryOption.textContent = 'The library';
+    select.appendChild(libraryOption);
+
+    const streams = new Set(cachedStreams);
+
+    if (item.destination_kind === 'game' && item.destination_stream) {
+        streams.add(item.destination_stream);
+    }
+
+    for (const stream of [...streams].sort()) {
+        const option = document.createElement('option');
+        option.value = stream;
+        option.textContent = stream;
+        select.appendChild(option);
+    }
+
+    select.value = item.destination_kind === 'game'
+        ? (item.destination_stream || 'library')
+        : 'library';
+
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.className = 'btn btn-sm btn-outline-secondary py-0 px-2';
+    apply.dataset.destination = String(item.id);
+    apply.textContent = 'Set';
+
+    controls.appendChild(select);
+    controls.appendChild(apply);
+    td.appendChild(controls);
+
+    return td;
+}
+
 function row(item) {
     const tr = document.createElement('tr');
 
@@ -139,6 +233,8 @@ function row(item) {
     }
 
     tr.appendChild(what);
+
+    tr.appendChild(destinationCell(item));
 
     // Who, and what they said about it. The version note is the developer's own
     // words about what changed, which is often the most useful thing on the row.
@@ -212,6 +308,7 @@ function renderQueue(queue) {
       <thead class="text-uppercase">
         <tr>
           <th>Version</th>
+          <th>Destination</th>
           <th>Submitted by</th>
           <th>Their note</th>
           <th>When</th>
@@ -233,6 +330,16 @@ async function loadQueue() {
     if (!box) return;
 
     try {
+        // The game versions the portal has been told about. Fetched once; a
+        // queue reload does not need to ask again.
+        if (cachedStreams.length === 0) {
+            const streams = await apiFetch('/api/perforce/streams', { credentials: 'include' })
+                .then(response => response.ok ? response.json() : { streams: [] })
+                .catch(() => ({ streams: [] }));
+
+            cachedStreams = (streams.streams || []).map(row => row.stream);
+        }
+
         const response = await apiFetch(`${API}/creative-approvals`, { credentials: 'include' });
         const data = await response.json().catch(() => ({}));
 
@@ -286,7 +393,56 @@ async function decide(id, decision, comment) {
 
 // One delegated listener for the whole table, so a reload cannot leave
 // listeners attached to rows that no longer exist.
+// RETARGETING IS PRODUCTION'S CALL, AND THE SERVER STILL CHECKS THE EVIDENCE.
+// Moving a submission to a game version without a passing test in that version
+// is refused — so this reports the refusal rather than hiding it.
+async function retarget(id) {
+    const select = document.querySelector(`select[data-destination-id="${id}"]`);
+    if (!select) return;
+
+    const value = String(select.value || '').trim();
+    const kind = value === 'library' ? 'library' : 'game';
+
+    showAlert('');
+
+    try {
+        const response = await apiFetch(`${API}/creative-approvals/${id}/destination`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                destination_kind: kind,
+                destination_stream: kind === 'game' ? value : undefined,
+            }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not change the destination.');
+        }
+
+        showAlert(
+            kind === 'library'
+                ? 'Destination changed to the library.'
+                : `Destination changed to ${value}.`,
+            'success'
+        );
+
+        await loadQueue();
+
+    } catch (err) {
+        showAlert(err.message, 'danger');
+    }
+}
+
 function onDecision(event) {
+    const retargetButton = event.target.closest('button[data-destination]');
+    if (retargetButton) {
+        retarget(Number(retargetButton.dataset.destination));
+        return;
+    }
+
     const button = event.target.closest('button[data-decision]');
     if (!button) return;
 

@@ -1107,7 +1107,11 @@ const applyAssetWorkflowSchemaPatches = () => {
    * ----------------------------------------------------------
    */
 
-  db.exec(`
+  // ONE DEFINITION. The create and the rebuild below must agree, so the DDL
+  // is written once and the table name substituted. Two copies is how a
+  // rebuilt table comes to differ from a fresh one, and the difference is
+  // invisible until something depends on it.
+  const creativeApprovalsDdl = `
     CREATE TABLE IF NOT EXISTS creative_approvals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -1137,6 +1141,27 @@ const applyAssetWorkflowSchemaPatches = () => {
       repository_asset_id INTEGER,
       repository_version_id INTEGER,
 
+      -- WHERE IT IS HEADED (TODO 110). 'library' is the published end of the
+      -- same store and needs nothing further. 'game' names a game version,
+      -- and then two gates apply at submit: an exchange file must be in the
+      -- version, and a passing receipt must have been produced inside that
+      -- game version.
+      destination_kind TEXT NOT NULL DEFAULT 'library'
+        CHECK (destination_kind IN ('library', 'game')),
+
+      -- The Perforce stream that IS the game version. Null for 'library'.
+      -- A task stream's PARENT is what belongs here, not the task stream: the
+      -- task is where the work lives, the parent is what it is for.
+      destination_stream TEXT,
+
+      -- WHO LAST SET IT. The developer suggests at submit; prod may overrule;
+      -- admin may overrule with a written reason (the special case).
+      destination_source TEXT NOT NULL DEFAULT 'developer'
+        CHECK (destination_source IN ('developer', 'prod', 'admin')),
+      destination_decided_by INTEGER,
+      destination_decided_at DATETIME,
+      destination_reason TEXT,
+
       FOREIGN KEY (workspace_asset_id)
         REFERENCES workspace_assets(id),
 
@@ -1149,12 +1174,164 @@ const applyAssetWorkflowSchemaPatches = () => {
       FOREIGN KEY (decided_by)
         REFERENCES users(id),
 
+      FOREIGN KEY (destination_decided_by)
+        REFERENCES users(id),
+
       FOREIGN KEY (repository_asset_id)
         REFERENCES assets(id),
 
       FOREIGN KEY (repository_version_id)
         REFERENCES asset_versions(id)
     );
+  `;
+
+  db.exec(creativeApprovalsDdl);
+
+  /*
+   * The destination columns, and why this is a REBUILD rather than six
+   * ALTERs.
+   *
+   * SQLite's ALTER TABLE ADD COLUMN cannot add a table-level constraint: no
+   * CHECK, no FOREIGN KEY. Adding destination_kind as plain TEXT would leave a
+   * database that accepts 'gmae', and adding destination_decided_by without
+   * its reference would lose the guard that it names a real person.
+   * check:schema compares the declaration with the database and reports
+   * exactly that drift — which is what it is for.
+   *
+   * So an existing table is rebuilt to the definition above, keeping every row
+   * and every column it already has. The defaults make a pre-existing approval
+   * 'library', set by 'developer', which is the truthful reading: nothing
+   * before this named a game version.
+   */
+  const approvalColumns = db
+    .prepare('PRAGMA table_info(creative_approvals)')
+    .all()
+    .map(c => c.name);
+
+  const approvalForeignKeys = db
+    .prepare('PRAGMA foreign_key_list(creative_approvals)')
+    .all();
+
+  const destinationColumnsPresent = approvalColumns.includes('destination_kind');
+  const destinationReferencePresent = approvalForeignKeys
+    .some(fk => fk.from === 'destination_decided_by');
+
+  if (!destinationColumnsPresent || !destinationReferencePresent) {
+
+    const rebuild = () => {
+      db.exec(creativeApprovalsDdl.replace(
+        'CREATE TABLE IF NOT EXISTS creative_approvals',
+        'CREATE TABLE creative_approvals_rebuilt'
+      ));
+
+      const rebuiltColumns = new Set(
+        db
+          .prepare('PRAGMA table_info(creative_approvals_rebuilt)')
+          .all()
+          .map(c => c.name)
+      );
+
+      // ONLY THE COLUMNS BOTH TABLES HAVE. A database older than the
+      // destination columns simply does not have them, and the defaults fill
+      // them in on insert.
+      const carried = approvalColumns.filter(column => rebuiltColumns.has(column));
+
+      db.exec(
+        `INSERT INTO creative_approvals_rebuilt (${carried.join(', ')})
+         SELECT ${carried.join(', ')} FROM creative_approvals;`
+      );
+
+      db.exec('DROP TABLE creative_approvals;');
+      db.exec('ALTER TABLE creative_approvals_rebuilt RENAME TO creative_approvals;');
+    };
+
+    // FOREIGN KEYS OFF FOR THE SWAP, as the invitations rebuild does above:
+    // dropping a table something references is otherwise refused. The PRAGMA
+    // is a no-op inside a transaction, so it is set outside one.
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(rebuild)();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  }
+
+
+  /*
+   * ----------------------------------------------------------
+   * Test receipts from the in-editor tool
+   *
+   * THE TOKEN THE SPEC DEMANDS, IN A ROW. "You cannot simply type: 'Tested
+   * against Development.' The system knows exactly which build was used."
+   * Only a check that ran inside the game can name the build, and only the
+   * in-editor tool runs inside the game. This table is where that receipt
+   * lands (SPEC §5, TODO 110).
+   * ----------------------------------------------------------
+   */
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS integration_receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+      workspace_version_id INTEGER NOT NULL,
+
+      -- The version's content identity AT RECEIPT TIME. Submission compares
+      -- this with the version being submitted; a receipt is evidence for one
+      -- set of bytes and no other.
+      manifest_hash TEXT NOT NULL,
+
+      -- The stream the editor was on, and its parent when it is a task stream.
+      -- The destination may be either: a developer who works directly on a
+      -- game stream submits on that stream.
+      stream TEXT NOT NULL,
+      parent_stream TEXT,
+
+      -- The game changelist the client was synced to — what "the build" means.
+      changelist INTEGER NOT NULL,
+
+      -- The level(s) the asset was placed in, as a JSON array. A level is the
+      -- human-readable half of "which part of the game"; the changelist is the
+      -- precise half.
+      levels TEXT NOT NULL,
+
+      -- The exchange file the tool actually imported, and its hash. The server
+      -- compares the hash against the version's own file set, so the receipt
+      -- is bound to the uploaded bytes rather than to a claim about them.
+      exchange_filename TEXT NOT NULL,
+      exchange_sha256 TEXT NOT NULL,
+
+      result TEXT NOT NULL
+        CHECK (result IN ('passed', 'failed')),
+
+      -- The tool's own list of checks, as JSON.
+      checks TEXT,
+
+      -- What the tool says about the environment. Recorded, not trusted: the
+      -- portal cannot verify a Perforce account exists and never asks.
+      tool_account TEXT,
+      editor_build TEXT,
+
+      -- Whether the same changelist also arrived from the change-commit
+      -- trigger. Two independent statements of one fact are worth more than
+      -- one; an unconfirmed receipt is still evidence, so this is a flag, not
+      -- a refusal.
+      trigger_confirmed INTEGER NOT NULL DEFAULT 0,
+
+      received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+      FOREIGN KEY (workspace_version_id)
+        REFERENCES workspace_versions(id)
+        ON DELETE CASCADE,
+
+      -- IDEMPOTENT. The tool retrying after a timeout must not create a second
+      -- receipt for the same test.
+      UNIQUE (workspace_version_id, changelist)
+    );
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_integration_receipts_version
+      ON integration_receipts(workspace_version_id);
   `);
 
 

@@ -33,6 +33,7 @@ const {
     normaliseCategory,
     assetTypeOf,
     extensionOf,
+    isExchangeFile,
     checkFileContent,
     SIGNATURE_HEAD_BYTES
 } = require('../../shared/assetRules.mjs');
@@ -180,12 +181,104 @@ const latestApprovalForVersion = db.prepare(`
         requested_at,
         decision_comment,
         decided_at,
-        decided_by
+        decided_by,
+        destination_kind,
+        destination_stream,
+        destination_source,
+        destination_decided_by,
+        destination_decided_at,
+        destination_reason
     FROM creative_approvals
     WHERE workspace_version_id = ?
     ORDER BY id DESC
     LIMIT 1
 `);
+
+// The latest receipt from the in-editor tool, whatever its result. A failed
+// receipt is shown too: "it did not work in the build" is the useful fact.
+const latestReceiptForVersion = db.prepare(`
+    SELECT
+        id,
+        stream,
+        parent_stream,
+        changelist,
+        levels,
+        exchange_filename,
+        result,
+        trigger_confirmed,
+        received_at
+    FROM integration_receipts
+    WHERE workspace_version_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+`);
+
+// Whether the version holds anything a game could import. The submit route
+// enforces this for a game destination; the page shows it earlier, so a
+// developer is not surprised at the last step.
+const exchangeFileForVersion = db.prepare(`
+    SELECT wvf.filename
+    FROM workspace_version_files wvf
+    WHERE wvf.workspace_version_id = ?
+`);
+
+const passingReceiptForStream = db.prepare(`
+    SELECT id, changelist, stream, parent_stream
+    FROM integration_receipts
+    WHERE workspace_version_id = ?
+      AND manifest_hash = ?
+      AND result = 'passed'
+      AND (stream = ? OR parent_stream = ?)
+    ORDER BY id DESC
+    LIMIT 1
+`);
+
+const STREAM_PATH = /^\/\/[^\s]{1,198}$/;
+
+// THE GAME-DESTINATION GATE, IN ONE PLACE.
+//
+// Submit applies it, and so does a retarget: changing the destination to a
+// game version without a test inside that version is the same defect whoever
+// does it — a receipt names one stream and is evidence for no other
+// (TODO 110). Returns null when satisfied, or { status, error }.
+function gameDestinationProblem(versionId, manifestHash, stream) {
+    if (!stream || !STREAM_PATH.test(stream)) {
+        return {
+            status: 400,
+            error:
+                'A game destination must be a Perforce stream path, such as ' +
+                '//LowExpectations/dev.'
+        };
+    }
+
+    const files = exchangeFileForVersion.all(versionId);
+
+    if (!files.some(file => isExchangeFile(file.filename))) {
+        return {
+            status: 409,
+            error:
+                'A submission for a game version must contain an exchange file ' +
+                '(FBX, glTF or USD) — the form the game imports. This version has ' +
+                'none, so it can go into the library but not into the game.'
+        };
+    }
+
+    const receipt = passingReceiptForStream.get(
+        versionId, manifestHash, stream, stream
+    );
+
+    if (!receipt) {
+        return {
+            status: 409,
+            error:
+                'No passing test in ' + stream + ' covers this version. The ' +
+                'in-editor tool must test the content against that game version ' +
+                'before it can be sent there.'
+        };
+    }
+
+    return null;
+}
 
 const usernameById = db.prepare(`
     SELECT username FROM users WHERE id = ?
@@ -203,6 +296,23 @@ function withReviewState(version) {
 
     version.latest_check = check;
     version.latest_approval = latestApprovalForVersion.get(version.id) || null;
+
+    // WHERE IT WAS TESTED, IF ANYWHERE. The receipt is the tool's, not the
+    // portal's; the page shows it so the developer knows whether the game gate
+    // is likely to pass before pressing Submit.
+    const receipt = latestReceiptForVersion.get(version.id) || null;
+
+    if (receipt) {
+        receipt.levels = receipt.levels ? JSON.parse(receipt.levels) : [];
+    }
+
+    version.latest_receipt = receipt;
+
+    // Is there anything a game could import? The check warns; the game
+    // destination refuses without it.
+    version.has_exchange_file = exchangeFileForVersion
+        .all(version.id)
+        .some(file => isExchangeFile(file.filename));
 
     return version;
 }
@@ -1616,6 +1726,11 @@ router.get(
                         ca.decided_by,
                         ca.repository_asset_id,
                         ca.repository_version_id,
+                        ca.destination_kind,
+                        ca.destination_stream,
+                        ca.destination_source,
+                        ca.destination_reason,
+                        ca.destination_decided_at,
                         wa.name            AS asset_name,
                         wa.asset_type      AS asset_type,
                         wa.category        AS category,
@@ -1643,6 +1758,11 @@ router.get(
                         ca.decided_by,
                         ca.repository_asset_id,
                         ca.repository_version_id,
+                        ca.destination_kind,
+                        ca.destination_stream,
+                        ca.destination_source,
+                        ca.destination_reason,
+                        ca.destination_decided_at,
                         wa.name            AS asset_name,
                         wa.asset_type      AS asset_type,
                         wa.category        AS category,
@@ -1685,8 +1805,41 @@ router.get(
                     wvf.filename COLLATE NOCASE
             `);
 
+            // WHERE IT WAS TESTED, IF IT WAS. Production is being asked to
+            // decide on a submission for a game version; the receipt is the
+            // evidence that it ran there, and the absence of one is just as
+            // worth seeing.
+            const getReceipt = db.prepare(`
+                SELECT
+                    stream,
+                    parent_stream,
+                    changelist,
+                    levels,
+                    exchange_filename,
+                    result,
+                    trigger_confirmed,
+                    received_at
+                FROM integration_receipts
+                WHERE workspace_version_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            `);
+
             for (const row of rows) {
                 row.files = getFiles.all(row.workspace_version_id);
+
+                row.has_exchange_file = row.files
+                    .some(file => isExchangeFile(file.filename));
+
+                const receipt = getReceipt.get(row.workspace_version_id) || null;
+
+                if (receipt) {
+                    receipt.levels = receipt.levels
+                        ? JSON.parse(receipt.levels)
+                        : [];
+                }
+
+                row.receipt = receipt;
             }
 
             return res.json({
@@ -3898,6 +4051,38 @@ router.post(
 
 
             // ----------------------------------------------------
+            // Check: is there an exchange file?
+            //
+            // A WARNING, NOT A FAILURE. A reference photograph or a texture
+            // pack belongs in the library and has no FBX; refusing it would
+            // break the library path. But a submission for a GAME VERSION is
+            // refused without one (TODO 110), because the game imports the
+            // interchange file and the check can read nothing else: .blend,
+            // .ma and .mb are opaque without the authoring tool, which is not
+            // installed here.
+            //
+            // So the check says what it cannot see, early, rather than letting
+            // the developer discover it at Submit.
+            // ----------------------------------------------------
+
+            const exchangeFiles = files
+                .filter(file => isExchangeFile(file.filename))
+                .map(file => file.filename);
+
+            results.push({
+                name: 'exchange_file_present',
+
+                status: exchangeFiles.length ? 'passed' : 'warning',
+
+                message: exchangeFiles.length
+                    ? `Exchange file(s): ${exchangeFiles.join(', ')}.`
+                    : 'No exchange file (FBX, glTF or USD). This version can be ' +
+                      'published to the library, but it cannot be submitted for a ' +
+                      'game version, and the geometry is not machine-readable here.'
+            });
+
+
+            // ----------------------------------------------------
             // Check: is each file what its NAME says it is?
             //
             // The extension is a claim. checkFileContent() reads the first
@@ -4383,6 +4568,83 @@ router.post(
 
 
             // ----------------------------------------------------
+            // WHERE IT IS GOING (TODO 110).
+            //
+            // THE LIBRARY NEEDS NOTHING MORE. It is the published end of the
+            // same store: the technical check above is the whole gate.
+            //
+            // A GAME VERSION NEEDS TWO THINGS THE LIBRARY DOES NOT:
+            //
+            //   1. an exchange file — without one the game has nothing it can
+            //      import, and the check inspected a folder it could not read;
+            //   2. a passing receipt from the in-editor tool, for THIS content,
+            //      naming this version or its parent as the stream it ran on.
+            //
+            // The receipt is the "token" the owner described: it cannot be
+            // typed, because only a check inside the game knows which build it
+            // was inside. See backend/routes/integration.js.
+            // ----------------------------------------------------
+
+            const destinationKind =
+                req.body?.destination_kind === 'game' ? 'game' : 'library';
+
+            let destinationStream = null;
+
+            if (destinationKind === 'game') {
+
+                const requestedStream = String(
+                    req.body?.destination_stream || ''
+                ).trim();
+
+                const requestedChange = Number(req.body?.changelist || 0);
+
+                // DERIVED FIRST, TYPED SECOND. If the tool's changelist is
+                // given, the stream comes from the receipt the tool produced:
+                // the parent of a task stream is the game version, and the
+                // stream itself is the version when the developer works
+                // directly on a game stream.
+                if (!requestedStream && Number.isInteger(requestedChange) && requestedChange > 0) {
+                    const derived = db.prepare(`
+                        SELECT stream, parent_stream
+                        FROM integration_receipts
+                        WHERE workspace_version_id = ?
+                          AND manifest_hash = ?
+                          AND changelist = ?
+                          AND result = 'passed'
+                        ORDER BY id DESC
+                        LIMIT 1
+                    `).get(versionId, version.manifest_hash, requestedChange);
+
+                    if (derived) {
+                        destinationStream = derived.parent_stream || derived.stream;
+                    }
+                }
+
+                if (!destinationStream && requestedStream) {
+                    destinationStream = requestedStream;
+                }
+
+                if (!destinationStream) {
+                    return res.status(400).json({
+                        error:
+                            'A game destination must be named. Give destination_stream, ' +
+                            'or a changelist a receipt already names.'
+                    });
+                }
+
+                const problem = gameDestinationProblem(
+                    versionId,
+                    version.manifest_hash,
+                    destinationStream
+                );
+
+                if (problem) {
+                    return res.status(problem.status).json({ error: problem.error });
+                }
+            }
+
+
+            // ----------------------------------------------------
             // Make sure another approval is not already pending.
             // ----------------------------------------------------
 
@@ -4428,14 +4690,22 @@ router.post(
                                 workspace_version_id,
                                 requested_by,
                                 status,
-                                request_comment
+                                request_comment,
+                                destination_kind,
+                                destination_stream,
+                                destination_source,
+                                destination_decided_by,
+                                destination_decided_at
                             )
-                            VALUES (?, ?, ?, 'pending', ?)
+                            VALUES (?, ?, ?, 'pending', ?, ?, ?, 'developer', ?, CURRENT_TIMESTAMP)
                         `).run(
                             assetId,
                             versionId,
                             developerId,
-                            requestComment || null
+                            requestComment || null,
+                            destinationKind,
+                            destinationStream,
+                            developerId
                         );
 
 
@@ -4452,7 +4722,9 @@ router.post(
                             workspace_asset_id: assetId,
                             workspace_version_id: versionId,
                             version_number: version.version_number,
-                            approval_id: result.lastInsertRowid
+                            approval_id: result.lastInsertRowid,
+                            destination_kind: destinationKind,
+                            destination_stream: destinationStream
                         }
                     );
 
@@ -4664,6 +4936,160 @@ router.post(
             return res.status(500).json({
                 error:
                     'Failed to reject Creative Approval'
+            });
+        }
+    }
+);
+
+
+// ============================================================
+// CHANGE WHERE A SUBMISSION IS GOING (TODO 110)
+// ============================================================
+//
+// The developer suggests a destination at submit. Production may overrule it,
+// and an ADMINISTRATOR MAY OVERRULE PRODUCTION — the one craft-shaped act an
+// admin has a route for, and it is a special case: the reason is mandatory and
+// the change is audited with it.
+//
+// WHY ADMIN IS HERE AND NOT ON APPROVE. Approving is a judgement about the
+// work and stays `prod`-only (see the approve route). Correcting a destination
+// is a factual correction about where the work is going, which is the kind of
+// thing an administrator fixes when production has left it wrong.
+//
+// AND THE RETARGET RULE IS THE GATE. A receipt names one stream and is
+// evidence for no other, so retargeting to a game version without a test
+// inside it is refused — not because the person is distrusted, but because the
+// evidence does not exist. The version goes back to needing a test.
+// ============================================================
+
+router.post(
+    '/creative-approvals/:approvalId/destination',
+    authenticateToken,
+    requireRole('prod', 'admin'),
+
+    async (req, res) => {
+
+        const approvalId = Number(req.params.approvalId);
+        const decidedBy = req.user?.id;
+
+        if (!Number.isInteger(approvalId)) {
+            return res.status(400).json({ error: 'Invalid approval ID' });
+        }
+
+        if (!decidedBy) {
+            return res.status(401).json({
+                error: 'Authenticated user ID not found'
+            });
+        }
+
+        const destinationKind =
+            req.body?.destination_kind === 'game' ? 'game' : 'library';
+
+        const destinationStream =
+            destinationKind === 'game'
+                ? String(req.body?.destination_stream || '').trim()
+                : null;
+
+        const reason = String(req.body?.reason || '').trim();
+
+        // AN ADMINISTRATOR OVERRULING PRODUCTION HAS TO SAY WHY. Production
+        // changing its own mind does not: the change is recorded either way,
+        // and a required field on every ordinary retarget would become a field
+        // typed as ".".
+        if (req.user.role === 'admin' && reason.length < 10) {
+            return res.status(400).json({
+                error:
+                    'An administrator changing a destination must give a reason ' +
+                    'of at least 10 characters. It is stored with the change.'
+            });
+        }
+
+        try {
+            const approval = db.prepare(`
+                SELECT
+                    ca.id,
+                    ca.status,
+                    ca.workspace_version_id,
+                    ca.destination_kind,
+                    ca.destination_stream,
+                    wv.manifest_hash,
+                    wa.name AS asset_name
+                FROM creative_approvals ca
+                JOIN workspace_versions wv ON wv.id = ca.workspace_version_id
+                JOIN workspace_assets wa ON wa.id = ca.workspace_asset_id
+                WHERE ca.id = ?
+            `).get(approvalId);
+
+            if (!approval) {
+                return res.status(404).json({
+                    error: 'Creative Approval not found'
+                });
+            }
+
+            if (approval.status !== 'pending') {
+                return res.status(409).json({
+                    error:
+                        `Creative Approval is already ${approval.status}. ` +
+                        'A decided submission is not retargeted.'
+                });
+            }
+
+            if (destinationKind === 'game') {
+                const problem = gameDestinationProblem(
+                    approval.workspace_version_id,
+                    approval.manifest_hash,
+                    destinationStream
+                );
+
+                if (problem) {
+                    return res.status(problem.status).json({ error: problem.error });
+                }
+            }
+
+            const change = db.transaction(() => {
+                db.prepare(`
+                    UPDATE creative_approvals
+                    SET destination_kind = ?,
+                        destination_stream = ?,
+                        destination_source = ?,
+                        destination_decided_by = ?,
+                        destination_decided_at = CURRENT_TIMESTAMP,
+                        destination_reason = ?
+                    WHERE id = ?
+                `).run(
+                    destinationKind,
+                    destinationStream,
+                    req.user.role,
+                    decidedBy,
+                    reason || null,
+                    approvalId
+                );
+
+                audit.record(decidedBy, 'creative_approval.destination',
+                    approval.asset_name, {
+                        approval_id: approvalId,
+                        workspace_version_id: approval.workspace_version_id,
+                        from_kind: approval.destination_kind,
+                        from_stream: approval.destination_stream,
+                        to_kind: destinationKind,
+                        to_stream: destinationStream,
+                        source: req.user.role,
+                        reason: reason || null
+                    });
+            });
+
+            change();
+
+            const updated = latestApprovalForVersion.get(
+                approval.workspace_version_id
+            );
+
+            return res.json({ approval: updated });
+
+        } catch (err) {
+            console.error('Could not change a destination:', err);
+            return res.status(500).json({
+                error: 'Could not change the destination'
             });
         }
     }

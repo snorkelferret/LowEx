@@ -97,10 +97,14 @@ npm run check            # all twelve, stopping at the first failure
 | `check:approval` | submit, lock, approve, reject and unlock behave |
 | `check:upload-pending` | an asset under review refuses changes |
 | `check:round-trip` | a version downloads as approved and imports back as references |
+| `check:releases` | releases, membership, the one-version rule and the diff behave |
+| `check:library` | the library is readable by content roles and writable by the right ones |
+| `check:perforce` | the portal is told once, can say what it last heard, and reports a gap |
+| `check:integration` | the destination gate and the tool's receipt behave |
 | `check:bind` | the server starts, and listens on loopback only |
 | `check:config` | no port or address is defined outside `shared/config.mjs` |
 
-**Five of them start the real code against a throwaway database and
+**Eight of them start the real routes against a throwaway database and
 directories** — they never touch the live data, but they do need `JWT_SECRET`
 and a free local port. `check:collector` runs the cleanup code without a
 server; `check:bind` starts the whole backend as a child process, which is also

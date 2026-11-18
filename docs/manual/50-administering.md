@@ -252,6 +252,23 @@ The critical level must stay above the warning level, and equal is refused as
 well as inverted — a warning level equal to the critical level means nothing is
 ever warned about in time.
 
+### Keys for the editor tool
+
+The in-editor tool reports test receipts with a **key**, not a sign-in. Keys
+are issued at the machine, never on a page — the plaintext appears once and is
+never stored:
+
+```bash
+node scripts/api-key.js --create "unreal-editor-tool"
+node scripts/api-key.js --list
+node scripts/api-key.js --revoke <id>
+```
+
+A key can do exactly one thing: post a receipt. It has no role, cannot read
+anything, and does nothing at all while **Integration tooling** is off. Put the
+key in the tool's environment file with mode 0600, never in a command line and
+never in git.
+
 ### Urgent alerts
 
 Below the settings is a **test button** for the alerts that go out when
@@ -327,6 +344,12 @@ It cannot resolve one; that is your click, and the note is the record.
 - **Storage by game version** — shown as an empty section on the Storage tab,
   because nothing records which content belongs to which version yet. Provision
   only, on purpose. (TODO 38)
+- **Correcting a submission's destination from the admin pages** — the route
+  exists, refuses a game version nothing was tested in, and demands a written
+  reason that is audited. **No page draws it yet**, so an administrator cannot
+  reach it from the browser. (TODO 110)
+- **The in-editor integration tool** — the portal accepts its receipts; nothing
+  produces them yet. (TODO 109)
 
 ## The menu on these pages
 

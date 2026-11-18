@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initialiseUploadUI();
     initialiseHistoryTab();
     initialiseBin();
+    initialiseDestinationModal();
     loadDeveloperWorkspace();
 
 });
@@ -1725,16 +1726,6 @@ async function runTechnicalCheck(asset, version, button, block) {
 async function submitForApproval(asset, version, button, block) {
     const originalLabel = button.textContent;
 
-    const ok = window.confirm(
-        `Submit "${asset.name}" version ${version.version_number} for creative ` +
-        'approval?\n\n' +
-        'The version is LOCKED while it is reviewed, so nothing about it can ' +
-        'change underneath the reviewer — including re-running the check. ' +
-        'Ownership passes to the game if it is approved.'
-    );
-
-    if (!ok) return;
-
     button.disabled = true;
 
     block?.querySelector('.submit-error')?.remove();
@@ -1753,28 +1744,10 @@ async function submitForApproval(asset, version, button, block) {
             }
         }
 
-        button.textContent = 'Submitting…';
+        button.textContent = originalLabel;
+        button.disabled = false;
 
-        const response = await apiFetch(
-            `${API_URL}/assets/${asset.id}/versions/${version.id}/creative-approval`,
-            {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                // No comment. The reviewer's queue shows the VERSION NOTE
-                // already — the developer's own words about what changed — and
-                // asking again at the last moment is a field that gets skipped.
-                body: JSON.stringify({ request_comment: '' })
-            }
-        );
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            throw new Error(data.error || 'The submission could not be sent.');
-        }
-
-        await loadDeveloperWorkspace();
+        await openDestinationDialog(asset, version);
 
     } catch (err) {
         console.error('Could not submit for approval:', err);
@@ -1789,6 +1762,215 @@ async function submitForApproval(asset, version, button, block) {
             block.appendChild(message);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// The destination question
+//
+// ASKED ONCE, AT SUBMIT, because it decides what else has to be true. The
+// library needs nothing beyond the check already run. A game version needs an
+// exchange file and a passing receipt from the in-editor tool in THAT version —
+// and the version object already carries both answers, so the page can refuse
+// before the server does.
+//
+// THE DEFAULT IS THE LIBRARY, except when the tool has already tested the
+// version in a game stream: then the work has plainly been done for that
+// destination, and making the developer pick it again would be theatre.
+// ---------------------------------------------------------------------------
+
+let pendingSubmission = null;
+let streamsPromise = null;
+
+function knownStreams() {
+    if (!streamsPromise) {
+        streamsPromise = apiFetch('/api/perforce/streams', { credentials: 'include' })
+            .then(response => response.ok ? response.json() : { streams: [] })
+            .then(data => (data.streams || []).map(row => row.stream))
+            .catch(() => []);
+    }
+
+    return streamsPromise;
+}
+
+function setDestinationAlert(message) {
+    const box = $('destinationAlert');
+    if (!box) return;
+
+    if (!message) {
+        box.textContent = '';
+        box.classList.add('d-none');
+        return;
+    }
+
+    box.className = 'alert alert-danger py-2 px-3 small';
+    box.textContent = message;
+}
+
+function showDestinationFields() {
+    const game = $('destinationGame');
+    const fields = $('destinationGameFields');
+
+    if (!game || !fields) return;
+
+    fields.classList.toggle('d-none', !game.checked);
+}
+
+async function openDestinationDialog(asset, version) {
+    const modalElement = $('destinationModal');
+    if (!modalElement || !window.bootstrap) {
+        throw new Error('The destination dialog did not load. Reload the page.');
+    }
+
+    const title = $('destinationTitle');
+    const library = $('destinationLibrary');
+    const game = $('destinationGame');
+    const note = $('destinationGameNote');
+    const select = $('destinationStream');
+    const receiptNote = $('destinationReceipt');
+
+    pendingSubmission = { asset, version };
+
+    title.textContent = `Submit "${asset.name}" v${version.version_number}`;
+
+    setDestinationAlert('');
+
+    // THE EXCHANGE FILE DECIDES WHETHER THE OPTION EXISTS AT ALL. Disabling the
+    // radio is not the rule — the server refuses it — it is so the reason is
+    // visible now rather than as an error after pressing Submit.
+    const hasExchange = Boolean(version.has_exchange_file);
+
+    game.disabled = !hasExchange;
+
+    note.textContent = hasExchange
+        ? 'Requires a passing test in that version, from the in-editor tool.'
+        : 'This version has no exchange file (FBX, glTF or USD), so it cannot ' +
+          'be submitted for a game version. The library is the destination.';
+
+    // THE STREAMS THE PORTAL HAS BEEN TOLD ABOUT — a receipt can name one the
+    // portal has not seen in a notification yet, so it is added rather than
+    // rejected.
+    const streams = await knownStreams();
+    const options = new Set(streams);
+
+    const receipt = version.latest_receipt;
+    const testedStream = receipt ? (receipt.parent_stream || receipt.stream) : null;
+
+    if (testedStream) options.add(testedStream);
+
+    select.innerHTML = '<option value="">Choose a game version…</option>';
+
+    for (const stream of [...options].sort()) {
+        const option = document.createElement('option');
+        option.value = stream;
+        option.textContent = stream;
+        select.appendChild(option);
+    }
+
+    if (receipt && receipt.result === 'passed' && hasExchange) {
+        library.checked = false;
+        game.checked = true;
+        select.value = testedStream || '';
+        receiptNote.textContent =
+            `Tested in ${testedStream} at changelist ${receipt.changelist}` +
+            `${receipt.levels?.length ? ` — ${receipt.levels.join(', ')}` : ''}` +
+            `${receipt.trigger_confirmed ? '' : ' (not confirmed by the Perforce trigger)'}.`;
+    } else {
+        library.checked = true;
+        game.checked = false;
+
+        receiptNote.textContent = receipt
+            ? `The last test in the tool ${receipt.result === 'passed' ? 'passed' : 'did not pass'} ` +
+              `in ${receipt.stream} at changelist ${receipt.changelist}.`
+            : 'No test receipt for this version yet.';
+    }
+
+    showDestinationFields();
+
+    window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+async function sendSubmission() {
+    const game = $('destinationGame');
+    const select = $('destinationStream');
+    const submit = $('destinationSubmit');
+    const modalElement = $('destinationModal');
+
+    if (!pendingSubmission || !submit) return;
+
+    const kind = game?.checked ? 'game' : 'library';
+    const stream = kind === 'game' ? String(select?.value || '').trim() : '';
+
+    if (kind === 'game' && !stream) {
+        setDestinationAlert('Choose the game version this is for.');
+        return;
+    }
+
+    const { asset, version } = pendingSubmission;
+
+    submit.disabled = true;
+    submit.textContent = 'Submitting…';
+    setDestinationAlert('');
+
+    try {
+        const response = await apiFetch(
+            `${API_URL}/assets/${asset.id}/versions/${version.id}/creative-approval`,
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                // No comment. The reviewer's queue shows the VERSION NOTE
+                // already — the developer's own words about what changed — and
+                // asking again at the last moment is a field that gets skipped.
+                body: JSON.stringify({
+                    request_comment: '',
+                    destination_kind: kind,
+                    destination_stream: stream || undefined
+                })
+            }
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            // KEPT IN THE DIALOG, not thrown to the page behind it: a refusal
+            // about the receipt is something the developer acts on HERE, by
+            // choosing another destination or going back to run the test.
+            setDestinationAlert(data.error || 'The submission could not be sent.');
+            return;
+        }
+
+        pendingSubmission = null;
+
+        window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+
+        await loadDeveloperWorkspace();
+
+        showUploadStatus('Submitted for approval.', 'success');
+
+    } catch (err) {
+        console.error('Could not submit for approval:', err);
+        setDestinationAlert(err.message || 'The submission could not be sent.');
+
+    } finally {
+        submit.disabled = false;
+        submit.textContent = 'Submit for approval';
+    }
+}
+
+function initialiseDestinationModal() {
+    const modal = $('destinationModal');
+    if (!modal) return;
+
+    $('destinationLibrary')?.addEventListener('change', showDestinationFields);
+    $('destinationGame')?.addEventListener('change', showDestinationFields);
+    $('destinationSubmit')?.addEventListener('click', sendSubmission);
+
+    // Cancelling forgets the submission: reopening for another version must
+    // never send the previous one.
+    modal.addEventListener('hidden.bs.modal', () => {
+        pendingSubmission = null;
+        setDestinationAlert('');
+    });
 }
 
 // ---------------------------------------------------------------------------

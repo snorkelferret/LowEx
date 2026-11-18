@@ -101,13 +101,17 @@ function copySchema(target) {
  *   prefix  a name for the temporary directory, so a leftover is identifiable
  *   route   the router to mount, relative to the repository root
  *   mount   where to mount it, as the real server does
+ *   routes  several routers at once: [{ route, mount }, ...]. Use this when a
+ *           check spans two route families (the integration receipt and the
+ *           submission that requires it). `base` is then the ORIGIN ONLY, and
+ *           requests pass the full path.
  *   seed    (db, dirs) => {}, called against the throwaway database and the
  *           throwaway directories before the application requires it. This is
  *           where fixtures go.
  *
  * Returns { dbPath, tmp, dirs, base, tokenFor, get, post, close }.
  */
-async function startCheckServer({ prefix, route, mount, seed }) {
+async function startCheckServer({ prefix, route, mount, routes, seed }) {
     if (!fs.existsSync(SOURCE_DB)) {
         console.error(`\n  FAIL — no database at ${SOURCE_DB} to copy the schema from\n`);
         process.exit(1);
@@ -147,12 +151,23 @@ async function startCheckServer({ prefix, route, mount, seed }) {
 
     let express;
     let cookieParser;
-    let router;
+
+    // A SINGLE ROUTE, OR SEVERAL. Both shapes are required by real checks: most
+    // mount one family; the destination check spans the receipt route and the
+    // submission that consults it.
+    const mounts = routes || [{ route, mount }];
+    const routers = [];
 
     try {
         express = require('express');
         cookieParser = require('cookie-parser');
-        router = require(path.join(ROOT, route));
+
+        for (const entry of mounts) {
+            routers.push({
+                mount: entry.mount,
+                router: require(path.join(ROOT, entry.route))
+            });
+        }
     } finally {
         console.log = realLog;
     }
@@ -160,12 +175,17 @@ async function startCheckServer({ prefix, route, mount, seed }) {
     const app = express();
     app.use(express.json());
     app.use(cookieParser());
-    app.use(mount, router);
+
+    for (const entry of routers) app.use(entry.mount, entry.router);
 
     const server = app.listen(0, '127.0.0.1');
     await new Promise(resolve => server.once('listening', resolve));
 
-    const base = `http://127.0.0.1:${server.address().port}${mount}`;
+    const origin = `http://127.0.0.1:${server.address().port}`;
+
+    // With several mounts there is no single prefix, so the caller passes full
+    // paths. With one, the prefix is kept: every existing check depends on it.
+    const base = routes ? origin : `${origin}${mount}`;
 
     const jwt = require('jsonwebtoken');
 
@@ -177,8 +197,12 @@ async function startCheckServer({ prefix, route, mount, seed }) {
         { expiresIn: '1h' }
     );
 
-    const request = async (method, url, { token, body, form } = {}) => {
-        const headers = {};
+    const request = async (method, url, { token, body, form, headers: extra } = {}) => {
+        // EXTRA HEADERS ARE FOR CREDENTIALS THAT ARE NOT COOKIES. The
+        // integration receipt is authenticated by a key in an Authorization
+        // header, and a check that could not send one would not be testing the
+        // route as it is actually called.
+        const headers = { ...(extra || {}) };
 
         if (token) headers.Cookie = `token=${token}`;
 
@@ -220,6 +244,9 @@ async function startCheckServer({ prefix, route, mount, seed }) {
         dirs,
         base,
         tokenFor,
+        // The general form, for headers the four convenience methods do not
+        // cover. Paths are relative to `base`.
+        call: request,
         get: (url, token) => request('GET', url, { token }),
         post: (url, body, token) => request('POST', url, { token, body }),
         postForm: (url, form, token) => request('POST', url, { token, form }),

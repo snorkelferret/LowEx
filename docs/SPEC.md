@@ -444,6 +444,47 @@ who said so, and when (`asset_integrations`).
 > shows `v2 · CL 15407`, or `—`. A dash covers both "never integrated" and
 > "nobody recorded it", and the portal does not pretend to tell them apart.
 
+### Where it is going
+
+*State: BUILT 2026-11-18 — destination, gate, receipt, retarget*
+
+**Every submission names a destination: the library, or a game version.** The
+developer chooses at submit; production may overrule; an administrator may
+overrule production with a written reason, and that is the one craft-shaped act
+an admin has a route for.
+
+**The library needs nothing further** — the technical check at upload is its
+whole gate. **A game version needs two things**, and the submit route refuses
+without either:
+
+- an **exchange file** in the version — FBX, glTF or USD — because that is the
+  form a game imports and the only artefact a server without Maya or Unreal
+  can inspect;
+- a **passing receipt from the in-editor tool**, produced inside that game
+  version.
+
+**The receipt is what makes "tested against" a fact.** It records the stream the
+editor was on, that stream's parent, the game changelist the client was synced
+to, the level(s) the asset was placed in, and the tool's checks. It is bound to
+the content twice: by the version's `manifest_hash`, and by the hash of the
+exchange file the tool actually imported, which the server compares against the
+version's own file set. The same receipt twice is one row.
+
+**A receipt names one stream and is evidence for no other.** So retargeting a
+submission to a game version nothing was tested in is refused — by the server,
+for anyone — and the version returns to needing a test. That is the rule the
+owner asked for, not an extra one.
+
+**A failed receipt is kept.** "It did not work in the build" is a fact
+production should see; discarding it would leave only the passing tests
+visible.
+
+> **NOT BUILT:** the tool that produces receipts (TODO 109), the screenshot a
+> receipt will eventually carry, the parent stream in the change-commit
+> notification (the receipt supplies it for now), a game-version register (the
+> list comes from the streams the notifications named), and a page for the
+> administrator's override — the route is built and audited; no page draws it.
+
 ---
 
 ## 8. Releases, and the game's versions

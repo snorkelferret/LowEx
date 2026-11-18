@@ -129,7 +129,7 @@ in the record below. Item numbers are in `website/TODO`.
 | **Sessions** | Fixed lifetime from the `session_hours` setting (2 by default, 1–24). No idle timeout, no revocation. Deactivation **is** immediate — the role is re-read every request. | Accept a stolen session for up to its lifetime, or build the session table. (TODO 87, A1) |
 | **Impersonation** | **Not built.** There is no admin read path into a workspace at all. | Accept that support means asking the developer, or build it. Previews (TODO 89) are the only sight of a submission. |
 | **Multi-role** | **Not built.** An administrator cannot act as prod, so approvals need a real `prod` account. | Accept separate accounts, or build the role switch. (TODO 87) |
-| **Perforce notification** | **Not built.** The portal is told nothing by Perforce yet; the trigger and its cursor do not exist. | Accept a portal that shows no changelists that nobody recorded, or build §15. (TODO 88) |
+| **Perforce notification** | **Built and proven** (SPEC §17, `deploy/perforce/`). The trigger and its cursor exist; the real server has not had them installed yet. | Install the trigger on the real server and prove one submit. (TODO 88, 107) |
 | **Releases, builds, distribution** | Nothing exists. | Out of scope until the game is being built. |
 | **Alerts** | Email only, and only if SMTP is configured. The portal cannot report its own failure. | Accept, and watch the box some other way. (TODO 41) |
 
@@ -172,7 +172,7 @@ when it comes back.
 
 ```bash
 npm run build             # generated pages; the backend serves dist, not source
-npm run check             # all nine checks
+npm run check             # the whole suite
 ```
 
 Three of them — `check:preview`, `check:approval` and `check:upload-pending` —

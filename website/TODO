@@ -12624,9 +12624,80 @@ no upside. If something seems to need one of them, ask.
        BUILT     the stream, user, client, changelist and files arrive and are
                  stored (perforce_changes)
        BUILT     the check receipt, bound by manifest hash, with game: null
-       NOT BUILT the parent stream in the notification
-       NOT BUILT the receipt's game field, and the tool that fills it
-       NOT BUILT a destination on the submission, and the overrules
-       NOT BUILT the retarget rule
+       NOT BUILT the parent stream in the notification (the receipt supplies it)
+       NOT BUILT the receipt's game field in the PORTAL's check — the tool's
+                 receipt is a separate row, and the two are not merged
        NOT BUILT the game-version register (which streams are game versions)
        NOT BUILT the library/store unification this model rests on (item 86)
+
+     ============================================================
+     BUILT 2026-11-18 — THE DESTINATION, THE GATE AND THE RECEIPT
+     ============================================================
+
+       THE SUBMISSION NAMES A DESTINATION. `creative_approvals` gained
+       destination_kind ('library' | 'game'), destination_stream,
+       destination_source, destination_decided_by/at and destination_reason.
+       The columns were added by a TABLE REBUILD, not six ALTERs, because
+       SQLite's ADD COLUMN cannot carry a CHECK or a table-level FOREIGN KEY
+       and check:schema reports exactly that drift.
+
+       THE GATE (developerWorkspace.js, gameDestinationProblem):
+         destination 'library'   no exchange file, no receipt
+         destination 'game'      an exchange file must be in the version, and
+                                 a PASSING receipt must exist whose manifest
+                                 hash matches and whose stream or parent is
+                                 the destination
+
+       THE DEVELOPER'S DESTINATION IS DERIVED FIRST. If the submit names a
+       changelist, the receipt for that changelist supplies the stream (its
+       parent when it is a task stream); a typed stream is the fallback.
+
+       THE RECEIPT ROUTE (backend/routes/integration.js):
+         POST /api/integration/receipts
+           authenticated by an API key (api_keys, unused until now),
+           refuses while integration_tooling is off, validates the version,
+           the changelist, the stream, the levels and the exchange file, and
+           checks that the exchange file's hash is IN THE VERSION. Idempotent
+           on (workspace_version_id, changelist). A failed test is recorded.
+           trigger_confirmed is set when the changelist is already in
+           perforce_changes — two records of one fact, not one.
+
+       THE RETARGET ROUTE:
+         POST /api/developer/workspace/creative-approvals/:id/destination
+           prod and admin. Pending only. Admin needs a reason of at least 10
+           characters; prod does not. The same gate applies: a game version
+           with no matching test is refused. Audited as
+           creative_approval.destination with the reason.
+
+       THE PAGES:
+         * the developer's Submit now opens a destination dialog; the game
+           option is disabled when the version has no exchange file, and a
+           passing receipt preselects its stream;
+         * the prod queue shows the destination and the receipt (stream,
+           changelist, levels), and a select + Set to retarget.
+
+       THE TECHNICAL CHECK gained exchange_file_present — a WARNING when there
+       is none, because a reference image or texture pack is a library item and
+       must not be refused.
+
+       GET /api/perforce/streams lists the streams the notifications named, so
+       the destination is chosen rather than typed. It is a read of what
+       Perforce has already SAID, not a query to Perforce (RULES 8).
+
+       A KEY FOR THE TOOL: scripts/api-key.js --create/--list/--revoke. The
+       plaintext is printed once and never stored; only a prefix and a sha256
+       are kept, and the comparison is timing-safe.
+
+       THE CHECK: scripts/check-integration-path.js — 30 assertions over the
+       receipt, the gate, the retarget and the approval, mounting BOTH routers
+       because the gate is the seam between them.
+
+       STILL NOT BUILT:
+         * the tool itself (item 109), so no receipt is produced in anger yet;
+         * no page draws the ADMIN override — the route exists and is audited;
+         * the receipt is not shown on the developer's version card until an
+           approval exists (it is in `latest_receipt`, on the dialog);
+         * a screenshot on the receipt;
+         * merging the portal's own technical-check `game` field with the
+           tool's receipt — they are two rows, and the tool's is the one the
+           gate reads.

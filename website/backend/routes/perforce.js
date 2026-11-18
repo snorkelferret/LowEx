@@ -53,6 +53,7 @@ const cookieParser = require('cookie-parser');
 
 const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const { CONTENT_READERS } = require('../lib/capabilities');
 
 const router = express.Router();
 
@@ -234,6 +235,38 @@ router.get(
 // ---------------------------------------------------------------------------
 // GET /api/perforce/changes — what the portal has been told, for an admin
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// GET /api/perforce/streams — the game versions the portal has been told about
+// ---------------------------------------------------------------------------
+//
+// FOR THE DESTINATION CONTROL, AND NOT A PERFORCE QUERY. These are streams
+// that have appeared in a change-commit notification — what Perforce has
+// already SAID, not what it would say if asked (RULES 8). An empty list is a
+// truthful answer: nobody has submitted on a stream yet, or the portal was
+// down when they did.
+//
+// Every content role may read it. A developer needs it to name a destination;
+// production needs it to retarget; an administrator already reads the changes.
+
+router.get(
+    '/streams',
+    authenticateToken,
+    requireRole(...CONTENT_READERS),
+
+    (req, res) => {
+        const streams = db.prepare(`
+            SELECT stream, MAX(changelist) AS last_changelist
+            FROM perforce_changes
+            WHERE stream IS NOT NULL AND stream <> ''
+            GROUP BY stream
+            ORDER BY stream
+        `).all();
+
+        return res.json({ streams });
+    }
+);
+
 
 router.get(
     '/changes',

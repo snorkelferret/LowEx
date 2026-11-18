@@ -115,8 +115,26 @@ as you like. See below for what it looks at.
 
 **2. Submit for creative approval.** Only possible once the technical check has
 passed **on exactly this content** — the check records what it tested, and a
-submission whose content differs is refused. This locks the version *and the
-asset*, so what a reviewer looks at cannot change underneath them. While it is pending you cannot change or delete
+submission whose content differs is refused.
+
+You are then asked **where it is going**:
+
+- **The library** — it stays in the studio's collection and goes into no game
+  version. Nothing further is needed.
+- **A game version** — a Perforce stream such as `//LowExpectations/dev`. Two
+  extra things must be true, and the server says which is missing if not:
+  - the version contains an **exchange file** — FBX, glTF or USD — because
+    that is the form a game imports;
+  - the in-editor tool has **tested this version inside that game version**,
+    and the receipt says so.
+
+  The tool records the stream, the game changelist and the level the asset was
+  placed in, and binds the result to the content by the exchange file's hash.
+  A receipt names one stream and counts for no other, so if production moves
+  the submission to a different version it goes back to needing a test.
+
+This locks the version *and the asset*, so what a reviewer looks at cannot
+change underneath them. While it is pending you cannot change or delete
 the asset, and you cannot re-run the check.
 
 **3. Review.** **Production** — the `prod` role — approves or rejects it. Not an
@@ -147,6 +165,7 @@ just the failures, and you are shown the whole list.
 | `files_present` | The version has files. |
 | `stored_file:*` | Each file exists on disk and its size matches what was recorded. |
 | `logical_paths_unique` | No two files claim the same path. |
+| `exchange_file_present` | There is an FBX, glTF or USD file — what a game can import. **A warning, not a failure**: a reference image or a texture pack is a library item and has none. A game version cannot be chosen without one. |
 | `files_not_empty` | No file is zero bytes. A failed export passes everything else. |
 | `asset_types_recognised` | Every file's extension is one the system knows. |
 | `no_executable_content` | Nothing contains a program, whatever it is named. |

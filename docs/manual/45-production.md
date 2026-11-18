@@ -22,7 +22,16 @@ nobody has decided yet. For each one you see:
   category, if the developer chose one;
 - **who submitted it**, their note on what changed, and anything they wrote when
   they submitted it;
+- **where it is going** — the library, or a named game version — and **what was
+  tested where**: the stream, the game changelist and the level, from the
+  in-editor tool's receipt. A game destination with **no receipt** is called out
+  in the row;
 - **when** it arrived.
+
+**You may change the destination.** Pick the library or a game version and
+press **Set**. The server refuses a game version that has no passing test in it
+— the evidence does not exist for that version, and no decision changes that.
+Moving it back to its tested version, or to the library, always works.
 
 The list is the whole job. There is no separate "review" screen to open.
 
@@ -58,7 +67,9 @@ reads as a limitation rather than a fault.
 
 **Approve** copies the version into the game's asset store. It does not put it
 in the game: getting it into Unreal is an administrator's work, and the portal
-records the changelist they used afterwards.
+records the changelist they used afterwards. The destination on the row says
+which game version it was submitted for; that is the build the integrator is
+expected to put it into.
 
 **Reject** hands the work back with your reason. The developer can change it
 again immediately.

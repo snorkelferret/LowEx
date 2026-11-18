@@ -635,5 +635,91 @@
 </div>
 
 
+<!-- ============================================================
+     WHERE IS THIS GOING?
+     ============================================================
+     Asked once, at submit, because the destination decides what else has to be
+     true. The library needs nothing beyond the technical check already run. A
+     game version needs an exchange file AND a passing test from the in-editor
+     tool inside that version — and the page knows the first when it opens, so
+     it disables the second rather than letting the server refuse it later.
+
+     Outside the tab content, like the bin modal, for the same reason. -->
+<div class="modal fade" id="destinationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+
+    <div class="modal-content bg-dark text-light border-secondary">
+
+      <div class="modal-header border-secondary">
+        <div>
+          <h2 class="h5 modal-title mb-1" id="destinationTitle">
+            Where is this going?
+          </h2>
+          <p class="text-secondary small mb-0">
+            The library keeps it for the studio. A game version puts it into
+            the build.
+          </p>
+        </div>
+
+        <button type="button" class="btn-close btn-close-white"
+                data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div id="destinationAlert" class="alert alert-danger py-2 px-3 small d-none"></div>
+
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="destinationKind"
+                 id="destinationLibrary" value="library" checked>
+          <label class="form-check-label" for="destinationLibrary">
+            <strong>The library</strong>
+            <span class="d-block text-secondary small">
+              For the studio's library. It goes into no game version, so it
+              needs no exchange file and no build test.
+            </span>
+          </label>
+        </div>
+
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="destinationKind"
+                 id="destinationGame" value="game">
+          <label class="form-check-label" for="destinationGame">
+            <strong>A game version</strong>
+            <span class="d-block text-secondary small" id="destinationGameNote">
+              Requires an exchange file and a passing test in that version.
+            </span>
+          </label>
+        </div>
+
+        <div id="destinationGameFields" class="ms-4 mb-2 d-none">
+          <label class="form-label small mb-1" for="destinationStream">
+            Game version (Perforce stream)
+          </label>
+          <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                  id="destinationStream">
+            <option value="">Choose a game version…</option>
+          </select>
+
+          <div class="small text-secondary mt-2" id="destinationReceipt">
+            No test receipt for this version yet.
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-success" id="destinationSubmit">
+          Submit for approval
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
 <!-- Include: frontend/src/components/libraryEditModal.html -->
 

@@ -153,6 +153,12 @@ app.use('/api/game', require('./routes/game'));
 // rather than craft — see routes/releases.js.
 app.use('/api/releases', require('./routes/releases'));
 
+// THE RECEIPT FROM THE IN-EDITOR TOOL. A program's route, authenticated by a
+// key of its own rather than a session, and closed while `integration_tooling`
+// is off. It records what ran inside the game and where; it cannot approve,
+// browse or administer anything. See routes/integration.js.
+app.use('/api/integration', require('./routes/integration'));
+
 // Bug reports and suggestions. Reachable from every page, signed in or not —
 // the route applies its own optionalAuth rather than requiring a session,
 // because someone who cannot sign in is the most likely person to want to

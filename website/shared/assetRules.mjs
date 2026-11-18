@@ -110,6 +110,31 @@ const ASSET_TYPE_EXTENSIONS = {
     Other:       ['exe', 'dll', 'so', 'db', 'sqlite', 'log'],
 };
 
+// ---------------------------------------------------------------------------
+// The exchange file — the form a game can actually import
+// ---------------------------------------------------------------------------
+//
+// A .blend or .ma is the WORKING file. Neither Unreal nor any other engine
+// opens it. What an engine imports is the interchange file exported beside it,
+// and that file is the only artefact in an upload a technical check can read
+// without the authoring tool installed.
+//
+// So "does this version contain an exchange file?" is a real question with a
+// real consequence: without one, a submission for a game version has no
+// machine-readable content behind it, and the integrator has nothing to import
+// (TODO 110).
+//
+// FBX FIRST because it is the shortest path from both Maya and Blender into
+// Unreal. glTF and USD are listed because both are genuine import paths and
+// refusing them would be refusing work that already exists. `.dxf` is
+// deliberately NOT here: it is 2D CAD interchange and no game pipeline uses it.
+const EXCHANGE_EXTENSIONS = new Set(['fbx', 'glb', 'gltf', 'usd', 'usda', 'usdc', 'usdz']);
+
+function isExchangeFile(filename) {
+    const extension = extensionOf(filename);
+    return Boolean(extension) && EXCHANGE_EXTENSIONS.has(extension);
+}
+
 // A name ending in one of these is a file, not an asset or a directory. Kept as
 // an explicit list rather than "contains a dot", which would wrongly reject
 // legitimate names — `tree.v2` is not a file.
@@ -652,6 +677,8 @@ export {
     RESERVED_EXTENSIONS,
     ASSET_TYPE_EXTENSIONS,
     assetTypeOf,
+    EXCHANGE_EXTENSIONS,
+    isExchangeFile,
     CONTENT_FORMATS,
     BLOCKED_CONTENT,
     SIGNATURE_HEAD_BYTES,
