@@ -12455,16 +12455,23 @@ no upside. If something seems to need one of them, ask.
        workspace, everything belongs to the studio. The tool reading approved
        content is therefore reading the studio's own files.
 
-       WHAT REMAINS OF THE READ QUESTION: the blob directory also holds
-       UNRELEASED workspace uploads, because the store is flat and
-       content-addressed. The tool reading the directory can therefore open
-       blobs that belong to a private workspace. Two answers:
-         (a) accept it — an admin-class process on the box can already read the
-             store with shell; record that this is accepted;
-         (b) scope it — an export of HARD LINKS to the approved blobs only,
-             beside the list, so filesystem access matches the approval record.
-       RECOMMENDED: (b); it is a hard-link directory, no extra space, and it
-       makes the rule true at both layers rather than merely intended.
+       THE READ QUESTION — ANSWERED 2026-11-18, AND THE ANSWER IS "NONE".
+       The blob directory also holds unreleased workspace uploads, and the tool
+       reading it could in principle open one. THE OWNER'S POINT IS THE RIGHT
+       ONE: the tool has the list of approved SHAs and opens those files. IT IS
+       FIRST-PARTY CODE, RUN BY THE ADMIN, ON THIS MACHINE — a code-level filter
+       is sufficient, and chgrp groups or a hard-link directory were solving a
+       threat that does not exist here.
+
+       CONSIDERED AND REJECTED: a `studio` group on approved blobs (chgrp at
+       approval) and a hard-link directory of approved blobs. Both work; both
+       are machinery for an untrusted tool.
+
+       WHEN TO REVISIT, so the assumption is not forgotten: if the tool ever
+       becomes a SERVICE on the server, running as an account that can read the
+       store for others; or if the host starts carrying other accounts that must
+       not read the store. Then the OS boundary matters, and the list alone
+       stops being the access control.
 
      --- THE OPEN QUESTIONS, ALL NEEDING THE OWNER ---
 
