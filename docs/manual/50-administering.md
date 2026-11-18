@@ -233,6 +233,8 @@ audit log with who changed it and what it was before.
 | **Warning level** | When a disk, file table or quota is called "filling up" |
 | **Critical level** | When it is called "nearly full" |
 | **Session lifetime** | How long a sign-in lasts before it is refused — **2 hours by default**, between 1 and 24 |
+| **Integration tooling** | Whether the portal accepts an integration recorded by the Unreal tool rather than typed in by hand. **Off by default**; every change is audited. It does not let the portal see Perforce — the tool sends a receipt |
+| **Integration account** | The Perforce user the integration tool runs as. Empty means not configured. The portal cannot check that the account exists |
 
 Three things about these are worth knowing in advance:
 

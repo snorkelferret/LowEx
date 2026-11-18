@@ -585,6 +585,7 @@ portal role does not carry over.
 | a storage-provider abstraction | local disk |
 | the Browser Sandbox as an asset consumer | a canvas minigame that fetches nothing |
 | `user`-role access to assets made available to users | no route names `user` |
+| an integration tool that records its own act (receipts) | **DECIDED** — the switch and the account are settings; the tool and the receipt endpoint are not built (TODO 109) |
 | deploying a branch to a shared online sandbox | **superseded** — no git, no shared sandbox, and deploying is the build machine's job, not the portal's |
 | anti-piracy: HWID fingerprinting, signed build URLs, telemetry in client binaries | nothing at all — asserted as architecture in `Specification_v04_web.html` §01, no code anywhere |
 

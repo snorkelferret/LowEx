@@ -61,11 +61,24 @@ function row(setting) {
 
     const range = document.createElement('div');
     range.className = 'text-secondary small';
-    range.textContent =
-        `${setting.min}–${setting.max} ${setting.unit}` +
-        (setting.overridden
-            ? ` · default ${setting.default}`
-            : ' · this is the default');
+
+    if (setting.type === 'boolean') {
+        range.textContent = setting.overridden
+            ? `default ${setting.default ? 'on' : 'off'}`
+            : 'this is the default';
+    } else if (setting.type === 'string') {
+        range.textContent =
+            (setting.overridden
+                ? `default ${setting.default ? `"${setting.default}"` : 'not set'}`
+                : 'this is the default');
+    } else {
+        range.textContent =
+            `${setting.min}–${setting.max} ${setting.unit}` +
+            (setting.overridden
+                ? ` · default ${setting.default}`
+                : ' · this is the default');
+    }
+
     label.appendChild(range);
 
     head.appendChild(label);
@@ -74,27 +87,46 @@ function row(setting) {
     const control = document.createElement('div');
     control.className = 'd-flex align-items-start gap-2';
 
+    // A BOOLEAN IS A SWITCH, not a number that happens to be 0 or 1.
     const input = document.createElement('input');
-    input.type = 'number';
-    input.className = 'form-control form-control-sm bg-dark text-light border-secondary';
-    input.style.width = '7rem';
-    input.value = setting.value;
-    input.min = String(setting.min);
-    input.max = String(setting.max);
     input.id = `setting-${setting.key}`;
     input.setAttribute('aria-label', setting.label);
+
+    if (setting.type === 'boolean') {
+        input.type = 'checkbox';
+        input.className = 'form-check-input m-0';
+        input.checked = Boolean(setting.value);
+        input.dataset.saved = setting.value ? '1' : '0';
+    } else if (setting.type === 'string') {
+        input.type = 'text';
+        input.className = 'form-control form-control-sm bg-dark text-light border-secondary';
+        input.style.width = '14rem';
+        input.value = setting.value || '';
+        input.placeholder = 'not set';
+        input.dataset.saved = String(setting.value || '');
+    } else {
+        input.type = 'number';
+        input.className = 'form-control form-control-sm bg-dark text-light border-secondary';
+        input.style.width = '7rem';
+        input.value = setting.value;
+        input.min = String(setting.min);
+        input.max = String(setting.max);
+        input.dataset.saved = String(setting.value);
+    }
+
     // What the server last said this value was. Kept ON THE INPUT so it
     // survives the re-render that follows every save — a stale one would let an
     // unchanged value be saved again, writing an audit entry saying nothing
     // happened.
-    input.dataset.saved = String(setting.value);
     control.appendChild(input);
 
-    const unit = document.createElement('span');
-    unit.className = 'text-secondary small pt-1';
-    unit.style.minWidth = '2.5rem';
-    unit.textContent = setting.unit;
-    control.appendChild(unit);
+    if (setting.type !== 'boolean' && setting.type !== 'string') {
+        const unit = document.createElement('span');
+        unit.className = 'text-secondary small pt-1';
+        unit.style.minWidth = '2.5rem';
+        unit.textContent = setting.unit;
+        control.appendChild(unit);
+    }
 
     const save = document.createElement('button');
     save.type = 'button';
@@ -111,7 +143,11 @@ function row(setting) {
         reset.className = 'btn btn-outline-secondary btn-sm';
         reset.dataset.action = 'reset';
         reset.textContent = 'Reset';
-        reset.title = `Back to the default of ${setting.default} ${setting.unit}`;
+        reset.title = setting.type === 'boolean'
+            ? `Back to the default: ${setting.default ? 'on' : 'off'}`
+            : setting.type === 'string'
+                ? `Back to the default: ${setting.default || 'not set'}`
+                : `Back to the default of ${setting.default} ${setting.unit}`;
         control.appendChild(reset);
     }
 
@@ -181,9 +217,13 @@ async function onAction(event) {
     const key = row.dataset.key;
     const input = row.querySelector('input');
 
+    const offered = () => (input.type === 'checkbox'
+        ? (input.checked ? '1' : '0')
+        : String(input.value));
+
     // Nothing to save is not an error, and sending it would write an audit
     // entry recording that nothing changed.
-    if (button.dataset.action === 'save' && String(input.value) === String(input.dataset.saved)) {
+    if (button.dataset.action === 'save' && offered() === String(input.dataset.saved)) {
         showAlert('That is already the value.', 'secondary');
         return;
     }
@@ -201,7 +241,7 @@ async function onAction(event) {
         };
 
         if (action === 'save') {
-            options.body = JSON.stringify({ value: input.value });
+            options.body = JSON.stringify({ value: offered() });
         }
 
         const response = await apiFetch(
@@ -223,7 +263,11 @@ async function onAction(event) {
         showAlert(
             action === 'reset'
                 ? `${key} is back to its default.`
-                : `${key} is now ${data.value}. The change is in force — no restart needed.`,
+                : `${key} is now ${typeof data.value === 'boolean'
+                      ? (data.value ? 'on' : 'off')
+                      : (data.value === '' || data.value === null || data.value === undefined)
+                          ? 'unset'
+                          : data.value}. The change is in force — no restart needed.`,
             'success'
         );
 

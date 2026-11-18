@@ -107,6 +107,46 @@ const DEFINITIONS = {
               'from anyone.',
     },
 
+    // WHICH PERFORCE ACCOUNT THE TOOL RUNS AS. Val's own account to begin
+    // with; a dedicated process account when a seat is bought, and neither the
+    // tool nor the portal changes — this value does.
+    //
+    // THE PORTAL CANNOT CHECK IT. It never talks to Perforce, so an account
+    // named here may not exist; the tool learns that when p4 refuses. The
+    // receipt records the account it actually used, which is the check that
+    // matters.
+    integration_p4_user: {
+        type: 'string',
+        default: '',
+        max_length: 64,
+        pattern: /^[A-Za-z0-9._-]*$/,
+        patternMessage: 'use letters, digits, dots, dashes or underscores',
+        label: 'Integration account',
+        note: 'The Perforce user the integration tool runs as. Empty means ' +
+              'not configured, and the tool should refuse to record ' +
+              'anything. The portal cannot check that the account exists. ' +
+              'Each change is audited.',
+    },
+
+    integration_tooling: {
+        type: 'boolean',
+        default: false,
+        label: 'Integration tooling',
+        // THE EXCEPTION, WITH A DATE AND A NAME. Unreal is off limits by
+        // standing rule (RULES 2); this switch is the portal's side of the
+        // only exception — whether it will accept an integration recorded by
+        // the editor tool rather than typed in by hand.
+        //
+        // IT IS NOT "THE PORTAL CAN SEE PERFORCE": it decides whether a
+        // receipt is accepted, and nothing else. Off by default, so a fresh
+        // install is closed, and every change is audited by the settings
+        // machinery like any other.
+        note: 'Whether the portal accepts an integration recorded by the ' +
+              'Unreal tool rather than typed in by hand. Off unless ' +
+              'deliberately opened, and each change is recorded. It does not ' +
+              'let the portal see Perforce — the tool sends a receipt.',
+    },
+
     session_hours: {
         type: 'integer',
         default: 2,
@@ -219,6 +259,21 @@ function definitionOf(key) {
  * by definition safe. It would take deliberate damage to reach this branch.
  */
 function coerce(definition, raw) {
+    if (definition.type === 'string') {
+        if (raw === null || raw === undefined) return null;
+
+        return String(raw).trim();
+    }
+
+    if (definition.type === 'boolean') {
+        const text = String(raw ?? '').trim().toLowerCase();
+
+        if (['1', 'true', 'on', 'yes'].includes(text)) return true;
+        if (['0', 'false', 'off', 'no', ''].includes(text)) return false;
+
+        return null;
+    }
+
     if (definition.type === 'integer') {
         const value = Number(raw);
 
@@ -276,6 +331,7 @@ function getSettings() {
 
         return {
             key,
+            type: definition.type || 'integer',
             value,
             is_default,
             default: definition.default,
@@ -315,6 +371,38 @@ const remove = db.prepare('DELETE FROM app_settings WHERE key = ?');
 function validate(key, raw) {
     const definition = definitionOf(key);
     const value = coerce(definition, raw);
+
+    // A STRING HAS A SHAPE RATHER THAN BOUNDS. Empty is allowed where the
+    // definition permits it — "not configured" is a state, not an error.
+    if (definition.type === 'string') {
+        if (value === null) {
+            throw new Error(`${definition.label} must be text.`);
+        }
+
+        if (definition.max_length && value.length > definition.max_length) {
+            throw new Error(
+                `${definition.label} must be ${definition.max_length} characters or fewer.`
+            );
+        }
+
+        if (definition.pattern && !definition.pattern.test(value)) {
+            throw new Error(
+                `${definition.label} may ${definition.patternMessage || 'contain only letters, digits and punctuation'}.`
+            );
+        }
+
+        return value;
+    }
+
+    // A BOOLEAN HAS NO BOUNDS. It is on or off, and there is no pair of values
+    // for it to stay in order with.
+    if (definition.type === 'boolean') {
+        if (value === null) {
+            throw new Error(`${definition.label} must be on or off.`);
+        }
+
+        return value;
+    }
 
     if (value === null) {
         throw new Error(
