@@ -1,13 +1,20 @@
 # The integration contract
 
 **Between the portal and the Unreal side.** For whoever works on the game —
-person or agent — and for the portal's own receipts.
+person or agent — and for the portal's own records.
 
-*State: the test receipt is **built and proven**. The build record is
-**proposed and not built**: everything under "The build record" is a contract
-to build against, not a description of something that answers today. That
-distinction is kept throughout, because a contract that describes an endpoint
-that returns 404 is worse than one that says so.*
+It covers three questions, and they are separate:
+
+| question | record | state |
+|---|---|---|
+| was this asset tested, and where? | **test receipt** | **built and proven** |
+| what version of the game exists? | **build record** | proposed |
+| which approved assets are in the game? | **approved list** (portal → tool) and **inclusion receipt** (tool → portal) | proposed |
+
+*State: only the test receipt answers today. Everything marked **proposed** is
+a contract to build against, not a description of something that answers now.
+That distinction is kept throughout, because a contract that describes an
+endpoint returning 404 is worse than one that says so.*
 
 ---
 
@@ -32,6 +39,10 @@ build. A push can be queued and retried; a query has to succeed.
 **The same rule applies to content.** The tool reads approved blobs from the
 store by SHA on the machine where the store lives (TODO 109). It does not ask
 the portal for files.
+
+**The tool may read from the portal** — the approved list below is exactly
+that. The rule forbids the portal from calling out, not the tool from asking a
+question the portal can answer from its own records.
 
 ---
 
@@ -190,7 +201,108 @@ matches no known build is a test in something the portal cannot name.
 
 ---
 
-## How the two join
+## 3. The approved list — PROPOSED, NOT BUILT
+
+**`GET /api/integration/approved?stream=//LowExpectations/main`** does not
+exist yet. This is the portal → tool half of "which assets are in the game".
+
+The tool needs to know **what it is allowed to import** into a game version,
+and where the bytes are. It should not browse the store's filesystem and guess,
+and it must not be able to read a private workspace.
+
+### Response
+
+```json
+{
+  "stream": "//LowExpectations/main",
+  "versions": [
+    {
+      "asset_id": 4,
+      "asset_name": "Factory",
+      "asset_version_id": 4,
+      "manifest_hash": "77dc…",
+      "category": "Prop",
+      "approved_at": "2026-11-18 17:55:36",
+      "files": [
+        {
+          "relative_path": "export",
+          "filename": "factory.fbx",
+          "sha256": "be28…",
+          "size": 4119
+        }
+      ]
+    }
+  ]
+}
+```
+
+**The list is a set of addresses, not a content API.** The SHAs are paths into
+the store on the same machine (`uploads/files/<sha>`, TODO 109). The tool
+verifies each file against its SHA as it reads it; no bytes travel through the
+portal.
+
+**Scope of the key.** Approved versions only. Never a workspace version, never
+a private asset, never a session. The key that posts receipts may hold this
+read as well — the same key, one capability set: *receive the approved list,
+report what you did*.
+
+**When the portal is unavailable**, the tool can start from a list fetched
+earlier: the addresses do not change, and an import of a version that is still
+approved is still correct. The receipt is what cannot happen offline.
+
+---
+
+## 4. The inclusion receipt — PROPOSED, NOT BUILT
+
+**`POST /api/integration/inclusions`** does not exist yet. This is the tool →
+portal half, and the one that answers **"which assets are in the game?"**
+
+Today the portal has `asset_integrations`: an administrator types a changelist
+after integrating. It is an assertion. The inclusion is the same fact **pushed
+by the thing that did it**.
+
+### Body
+
+| field | type | required | meaning |
+|---|---|---|---|
+| `asset_version_id` | integer | yes | the approved version that went in |
+| `changelist` | integer ≥ 1 | yes | the Perforce changelist that contains it |
+| `stream` | string | yes | the stream written to |
+| `depot_paths` | string[] | yes | the depot files the integration wrote, 1–2000 |
+| `levels` | string[] | no | levels the asset was placed in |
+| `result` | `included` \| `failed` | yes | a failed integration is recorded too |
+| `notes` | string | no | |
+
+**Proposed behaviour**, following the receipt's rules:
+
+- the same key, refused while integration tooling is off;
+- idempotent on `(asset_version_id, changelist)`;
+- writes the `asset_integrations` record (who, when, changelist) marked as
+  **reported**, not typed;
+- `depot_paths` is the **matcher's answer, supplied rather than guessed**: the
+  change-commit notification says which depot files changed, and this says
+  which approved version those files are. Without it the portal has a file
+  list and no way to resolve it (TODO 88 §15).
+
+### What it enables
+
+- **The release shows what is actually in it.** An asset appears in a build
+  because an inclusion names that build's changelist — not because somebody
+  ticked a box.
+- **"Is this in the game?" stops being a dash.** The store's `In the game`
+  column currently means "somebody typed a changelist"; after an inclusion it
+  means the thing that wrote the files said so.
+- **A build's contents can be reconstructed** from inclusions + the trigger,
+  and two independent statements of the same changelist are worth more than
+  one.
+
+**Not decided:** whether an inclusion replaces the administrator's assertion
+entirely, or coexists while both paths exist. The direction of the record
+suggests replacement; the transition needs to be stated before it is built.
+
+---
+
+## How the records join
 
 **The changelist is the join.**
 
@@ -200,6 +312,16 @@ matches no known build is a test in something the portal cannot name.
    submission     destination //LE/main
                                               ↓
    tested in CL 7, which is a build of //LE/main, for a submission to //LE/main
+```
+
+And for what is in the game:
+
+```
+   inclusion      asset version 4, stream //LE/main, CL 9, depot paths…
+   build record   stream //LE/main, CL 9, "0.4"
+                                              ↓
+   asset "Factory" v1 is in build 0.4, because the integration that wrote the
+   files said so and Perforce's notification names the same changelist
 ```
 
 The submission gate (built) requires a passing receipt whose stream **or
