@@ -88,6 +88,11 @@ npm run check            # all twenty, stopping at the first failure
 `docs/TESTING.md` maps each check to the aspect it covers, and says what is
 not covered.
 
+There is also an **opt-in** `npm run check:browser`, which drives a real
+browser through the destination flow. It needs Chrome on the machine and the
+built pages, so it is not part of the twenty and will fail rather than skip
+when either is missing.
+
 | Check | What it proves |
 |---|---|
 | `check:routes` | no route is shadowed by a catch-all |

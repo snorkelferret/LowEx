@@ -12715,6 +12715,14 @@ no upside. If something seems to need one of them, ask.
        close is now deferred to `shown.bs.modal` when it has to be, and the
        fast-submit case was re-run: the dialog closes.
 
+       AND IT IS NOW A TEST, NOT A RECORD: `npm run check:browser` repeats
+       the whole flow in headless Chrome — seeded version, dialog state, the
+       refusal in the dialog, the receipt, the preselect, the submit inside
+       the opening transition, the production queue, the retarget refusals,
+       the approval and the store row. Opt-in because it needs Chrome and the
+       built pages; it fails plainly when either is missing rather than
+       skipping. See docs/TESTING.md.
+
        STILL NOT BUILT:
          * the tool itself (item 109), so no receipt is produced in anger yet;
          * no page draws the ADMIN override — the route exists and is audited;

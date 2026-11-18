@@ -1,7 +1,8 @@
 # Testing
 
-**The suite is `npm run check`.** Twenty checks, one exit code. Run it after
-every significant change, and after any migration:
+**The suite is `npm run check`.** Twenty checks, one exit code, plus an
+opt-in browser check that is not part of it. Run the suite after every
+significant change, and after any migration:
 
 ```bash
 npm run build     # check:dom reads the built pages, not the source
@@ -43,6 +44,27 @@ and exits 1.
 | binding | `check:bind` | whole server | it starts, and listens on loopback only |
 | configuration | `check:config` | static | no port or address outside `shared/config.mjs` |
 
+## The opt-in browser check
+
+```bash
+npm run build
+npm run check:browser
+```
+
+`check:browser` is **not one of the twenty** and is not in `npm run check`. It
+starts the real backend, serves `frontend/dist`, launches headless Chrome and
+drives the destination flow: the dialog opens, the game option is enabled, a
+submit without a receipt is refused in the dialog, a receipt preselects its
+version, the submit closes the dialog, production retargets and approves, and
+the store row names both people.
+
+It needs Chrome or Chromium on `PATH` and the built pages. Missing either, it
+says so and **fails** rather than skipping: a check that reports PASS without
+running is worse than one that is not there.
+
+On failure it leaves a screenshot at `$TMPDIR/lowex-browser-check-failure.png`
+and prints the path.
+
 **A "route" check starts the real router on a throwaway Express app, against a
 throwaway database whose schema is copied from the live one.** The real
 middleware runs; tokens are minted; requests go over HTTP. Nothing in the live
@@ -73,11 +95,10 @@ Two failure modes this catches, in the record:
 
 Said plainly, so nobody assumes the suite is more than it is.
 
-- **The browser.** There is no committed browser check. The destination and
-  receipt flow was driven end to end in headless Chrome on 2026-11-18, and that
-  run is recorded in TODO 110 — but it is a record, not a test. The pages are
-  checked structurally by `check:dom`; whether a click does the right thing is
-  not.
+- **The browser, beyond the destination flow.** `check:browser` covers that
+  flow end to end, and it is opt-in because it needs Chrome. No other click in
+  the portal is exercised: the upload picker, the bin, the library and the
+  releases panel are checked structurally by `check:dom` and not driven.
 - **Registration, invitations, 2FA and Google sign-in.** `check:auth` covers the
   username/password path only.
 - **The views and manual pages.** That they render, and that a link lands where
