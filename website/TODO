@@ -5776,6 +5776,19 @@ no upside. If something seems to need one of them, ask.
               depots. Do not create one "just in case" — it is for
               server-to-server and it buys nothing here.
 
+          THE GAME AGENT SHARES VAL'S ACCOUNT — DECIDED 2026-11-18. "We are
+          going to use my (Val) account for the moment - with a view to being
+          able to get more licenses later." That keeps the count at five and
+          makes the agent's submits read as `val` in the depot history, which
+          is true of the account and not of the person. Two things make it
+          livable until a seat is bought: the agent uses its OWN CLIENT, named
+          for what it is (`val-agent`), because the change-commit notification
+          records the client and that is the only thing that will tell the two
+          apart; and it authenticates by TICKET, not by a typed password.
+          Revisit when the seat quote arrives — a dedicated account later
+          leaves this work attributed to val for ever, which is the cost of
+          starting now. See item 109 for the tool's own account.
+
       [ ] AND WATCH THE WORKSPACES, NOT THE PEOPLE. The second limit is 20, and
           workspaces multiply per MACHINE per person — a developer with a laptop
           and a desktop is two. The build machine needs one. Five people is
@@ -12419,6 +12432,12 @@ no upside. If something seems to need one of them, ask.
          true. A DEDICATED PROCESS ACCOUNT is the later answer, when a seat is
          bought: it keeps the tool's authority to one job and can be revoked
          alone.
+
+         AND THE GAME AGENT USES THE SAME ACCOUNT — decided 2026-11-18. It
+         works in its own CLIENT (`val-agent`), so the notification's client
+         field distinguishes it, and it authenticates by ticket rather than a
+         typed password. Recorded with the account-count reasoning in the
+         Perforce section above.
        * THE PORTAL CANNOT VERIFY THE ACCOUNT EXISTS. It never talks to
          Perforce; the receipt records the account the tool actually used.
 

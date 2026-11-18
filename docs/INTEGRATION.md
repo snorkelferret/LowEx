@@ -67,6 +67,23 @@ off withdraws the capability without a deploy.
 
 Revoke with `node scripts/api-key.js --revoke <id>`.
 
+## The Perforce account, for now
+
+**The game agent runs as `val`** — decided 2026-11-18, to stay inside the five
+standard users until more seats are bought.
+
+- **Use your own client**, named for what it is: `val-agent`. The change-commit
+  notification records the client, so that is what tells the agent's submits
+  apart from Val's. Nothing else will.
+- **Authenticate by ticket**, not by typing a password into a script. Keep the
+  ticket file at mode 0600 on the machine that uses it; never in a message,
+  a repository, or a command line.
+- **Report `p4_user: "val"`** in a receipt, because that is the account that
+  did the work. The portal stores what the tool reports; it cannot verify it.
+- **When the seats are bought**, a dedicated account changes nothing already
+  submitted: that work stays attributed to `val`. That is the cost of starting
+  now.
+
 ---
 
 ## 1. The test receipt — BUILT
