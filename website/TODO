@@ -12857,3 +12857,55 @@ no upside. If something seems to need one of them, ask.
        [ ] Build review from the admin dashboard without opening Builds — the
            page is the place.
        [ ] A notification when an accepted build is superseded by a newer one.
+
+
+113) WHAT THE BUILD MACHINE MEASURED. 2026-11-19. BUILT.
+     =====================================================
+
+     ASKED: "admin should be able to get stats back from the game build - can
+     the compilation fail? Could it be too big or slow - what can we get back
+     easily?"
+
+     ANSWERED IN THE CONTRACT, AND BUILT: docs/INTEGRATION.md §2.
+
+     --- THE FIELDS, ALL OPTIONAL ---
+
+       result            succeeded | failed          (the exit code)
+       failed_stage      cook | compile | package    (the step that stopped)
+       duration_seconds  wall clock of the build
+       output_bytes      size of the packaged build
+       warnings/errors   counts from the build tool's summary
+       log_excerpt       the first errors, at most 2000 characters
+
+     EASY VS NOT. The seven above are the easy set: exit code, two timestamps,
+     one folder size, two greps, and the last step that ran. Per-stage
+     timings, peak memory and shader counts are in UAT's log but their format
+     varies by engine version; promising them would produce fields nobody
+     fills. They are not in the contract.
+
+     BUILD DURATION IS NOT RUNTIME SPEED. How long the machine took is a build
+     stat; how slowly the level loads is a test result, and belongs in the
+     receipt's checks. Two different questions, kept apart.
+
+     --- THE RULES ---
+
+       * POST /api/integration/builds accepts them; a retry fills gaps and
+         never overwrites. Counts and sizes are non-negative integers; a bad
+         result, a negative duration or an oversized excerpt is a 400.
+       * THE BUILD PAGE SHOWS THEM — result, duration, size, warnings, errors,
+         the failing stage, and the excerpt. ONE component (builds.html +
+         builds.js) on the admin, prod and developer dashboards; check:dom
+         asserts the ids on all three.
+       * A FAILED BUILD CANNOT BE ACCEPTED (409). Rejecting it, with the
+         reason, is the record; a fixed build is a new build at a new
+         changelist.
+       * A failed build is never offered as the "newer build" advice, and if
+         the build a receipt was tested in failed, the queue says so with the
+         stage.
+
+     --- NOT BUILT ---
+
+       [ ] Thresholds (maximum size, maximum time) that would mark a build as
+           over the line. The numbers are now there to compare; the comparison
+           and the two settings are not.
+       [ ] Pushing the rejection or the stats to the build machine.

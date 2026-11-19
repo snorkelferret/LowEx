@@ -62,6 +62,8 @@ const listBuilds = db.prepare(`
         r.stream, r.build_id, r.built_at,
         r.base_stream, r.base_changelist, r.source,
         r.status, r.review_note, r.reviewed_at,
+        r.result, r.failed_stage, r.duration_seconds, r.output_bytes,
+        r.warnings, r.errors, r.log_excerpt,
         r.created_at,
         u.username AS created_by_username,
         (SELECT COUNT(*) FROM build_assets ra WHERE ra.build_id = r.id)
@@ -215,6 +217,13 @@ function detailOf(buildId) {
             review_note: build.review_note,
             reviewed_by: build.reviewed_by_username,
             reviewed_at: build.reviewed_at,
+            result: build.result,
+            failed_stage: build.failed_stage,
+            duration_seconds: build.duration_seconds,
+            output_bytes: build.output_bytes,
+            warnings: build.warnings,
+            errors: build.errors,
+            log_excerpt: build.log_excerpt,
             notes: build.notes,
             created_by: build.created_by_username,
             created_at: build.created_at
@@ -491,6 +500,17 @@ router.post('/:id/review', authenticateToken, requireRole('prod', 'admin'), (req
     const build = buildById.get(id);
 
     if (!build) return res.status(404).json({ error: 'Build not found' });
+
+    // A BUILD THAT DID NOT COMPILE CANNOT BE GOOD. Accepting one would make
+    // the accepted mark mean nothing; rejecting it, with the reason, is the
+    // record. A fixed build is a new build at a new changelist.
+    if (status === 'accepted' && build.result === 'failed') {
+        return res.status(409).json({
+            error:
+                'That build failed. A build that did not compile cannot be accepted — ' +
+                'reject it, or fix it and report the new build.'
+        });
+    }
 
     if (status === 'rejected' && reason.length < 3) {
         return res.status(400).json({

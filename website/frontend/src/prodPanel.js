@@ -132,6 +132,15 @@ function destinationCell(item) {
             td.appendChild(rejected);
         }
 
+        if (item.receipt.build?.result === 'failed') {
+            const failed = document.createElement('div');
+            failed.className = 'text-danger small';
+            failed.textContent =
+                'That build failed' +
+                `${item.receipt.build.failed_stage ? ` at ${item.receipt.build.failed_stage}` : ''}.`;
+            td.appendChild(failed);
+        }
+
         // ADVICE, NOT A REFUSAL. A newer build on the destination stream is
         // worth knowing; whether it matters is production's judgement.
         if (item.receipt.newer_build) {

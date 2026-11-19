@@ -232,6 +232,9 @@ builds.
 Each build shows whether production has **accepted** or **rejected** it, and
 the reason when it was rejected.
 
+Each build also shows what the build machine measured: whether it succeeded,
+how long it took, its size, and its warning and error counts.
+
 **Click a build to open it, and click it again — or press Hide — to close it.**
 
 - **Each build in the list says how much of it is yours** — "3 of yours".

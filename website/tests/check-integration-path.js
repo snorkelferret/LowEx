@@ -530,6 +530,73 @@ async function main() {
         && candidate.json?.build?.base_changelist === 500,
         `build: ${JSON.stringify(candidate.json?.build)}`);
 
+    // WHAT THE MACHINE MEASURED, including a failed build.
+    const stats = await reportBuild({
+        stream: '//LE/exp',
+        changelist: 700,
+        result: 'failed',
+        failed_stage: 'cook',
+        duration_seconds: 2734,
+        output_bytes: 19327352832,
+        warnings: 41,
+        errors: 3,
+        log_excerpt: 'LogCook: Error: could not cook /Game/Levels/LE_Forest_01'
+    });
+
+    report.check('a failed build is recorded with its stats', stats.status === 201
+        && stats.json?.build?.result === 'failed'
+        && stats.json?.build?.failed_stage === 'cook'
+        && stats.json?.build?.duration_seconds === 2734
+        && stats.json?.build?.output_bytes === 19327352832
+        && stats.json?.build?.warnings === 41
+        && stats.json?.build?.errors === 3,
+        `build: ${JSON.stringify(stats.json?.build)}`);
+
+    report.check('and the log excerpt is kept',
+        /could not cook/.test(stats.json?.build?.log_excerpt || ''),
+        `excerpt: ${stats.json?.build?.log_excerpt}`);
+
+    const badResult = await reportBuild({
+        stream: '//LE/exp', changelist: 701, result: 'maybe'
+    });
+
+    report.check('an unknown result is refused', badResult.status === 400,
+        `expected 400, got ${badResult.status}`);
+
+    const badDuration = await reportBuild({
+        stream: '//LE/exp', changelist: 702, duration_seconds: -5
+    });
+
+    report.check('a negative duration is refused', badDuration.status === 400,
+        `expected 400, got ${badDuration.status}`);
+
+    const longLog = await reportBuild({
+        stream: '//LE/exp', changelist: 703, log_excerpt: 'x'.repeat(2001)
+    });
+
+    report.check('an oversized log excerpt is refused', longLog.status === 400,
+        `expected 400, got ${longLog.status}`);
+
+    // A build that did not compile cannot be accepted; it can be rejected.
+    const acceptFailed = await server.post(
+        `/api/builds/${stats.json.build.id}/review`,
+        { status: 'accepted' },
+        prod
+    );
+
+    report.check('a failed build cannot be accepted', acceptFailed.status === 409,
+        `expected 409, got ${acceptFailed.status} — ${acceptFailed.text.slice(0, 160)}`);
+
+    const rejectFailed = await server.post(
+        `/api/builds/${stats.json.build.id}/review`,
+        { status: 'rejected', reason: 'The cook failed.' },
+        prod
+    );
+
+    report.check('but it can be rejected, with the reason', rejectFailed.status === 200
+        && rejectFailed.json?.build?.status === 'rejected',
+        `expected 200 rejected, got ${rejectFailed.status}`);
+
     const buildList = await server.get('/api/builds', dev);
 
     report.check('the builds page lists the reported build',

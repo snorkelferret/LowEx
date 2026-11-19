@@ -112,6 +112,28 @@ function formatDate(value) {
 
 const shortHash = hash => (hash ? `${hash.slice(0, 12)}…` : '—');
 
+// A duration a person can read. Seconds below a minute, then minutes, then
+// hours — a build is measured in minutes, not milliseconds.
+function formatDuration(seconds) {
+    if (seconds === null || seconds === undefined || seconds === '') return null;
+
+    const total = Number(seconds);
+
+    if (!Number.isFinite(total) || total < 0) return null;
+
+    if (total < 60) return `${total}s`;
+
+    const minutes = Math.floor(total / 60);
+    const rest = total % 60;
+
+    if (minutes < 60) return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+
+    const hours = Math.floor(minutes / 60);
+    const min = minutes % 60;
+
+    return min ? `${hours}h ${min}m` : `${hours}h`;
+}
+
 const isMine = row => Boolean(ME.username && row.uploaded_by === ME.username);
 
 const mineOnly = () => Boolean($('buildMineOnly')?.checked);
@@ -190,11 +212,13 @@ function renderBuilds(builds) {
             ? ` · <span class="text-info">${build.mine_count} of yours</span>`
             : '';
 
-        const verdict = build.status === 'rejected'
-            ? ' · <span class="text-danger">rejected</span>'
-            : build.status === 'accepted'
-                ? ' · <span class="text-success">accepted</span>'
-                : '';
+        const verdict =
+            (build.result === 'failed' ? ' · <span class="text-danger">build failed</span>' : '') +
+            (build.status === 'rejected'
+                ? ' · <span class="text-danger">rejected</span>'
+                : build.status === 'accepted'
+                    ? ' · <span class="text-success">accepted</span>'
+                    : '');
 
         button.innerHTML =
             `<span class="fw-semibold">${escapeHtml(build.name)}</span>` +
@@ -444,6 +468,7 @@ function renderDetail(detail) {
     if (title) title.textContent = build.name;
 
     renderReview(build);
+    renderStats(build);
 
     const meta = $('buildDetailMeta');
     if (meta) {
@@ -726,6 +751,68 @@ async function runDiff() {
         if (button) button.textContent = 'Hide diff';
     } catch (err) {
         showAlert(`Could not compare those builds: ${err.message}`);
+    }
+}
+
+// What the build machine measured: result, time, size, warnings and errors,
+// and the first errors when it failed. Absent fields are absent, not zero.
+function renderStats(build) {
+    const stats = $('buildStats');
+    const failure = $('buildFailureLine');
+    const logBox = $('buildLogBox');
+    const logText = $('buildLogExcerpt');
+
+    if (stats) {
+        const parts = [];
+
+        if (build.result === 'succeeded') parts.push('Build succeeded');
+        if (build.result === 'failed') parts.push('Build failed');
+
+        const duration = formatDuration(build.duration_seconds);
+        if (duration) parts.push(`took ${duration}`);
+
+        if (build.output_bytes !== null && build.output_bytes !== undefined) {
+            parts.push(formatBytes(build.output_bytes));
+        }
+
+        if (build.warnings !== null && build.warnings !== undefined) {
+            parts.push(`${build.warnings} warning${build.warnings === 1 ? '' : 's'}`);
+        }
+
+        if (build.errors !== null && build.errors !== undefined) {
+            parts.push(`${build.errors} error${build.errors === 1 ? '' : 's'}`);
+        }
+
+        stats.textContent = parts.length
+            ? parts.join(' · ')
+            : 'No build stats reported.';
+    }
+
+    if (failure) {
+        const failed = build.result === 'failed';
+
+        failure.classList.toggle('d-none', !failed);
+        failure.textContent = failed
+            ? `Failed${build.failed_stage ? ` at ${build.failed_stage}` : ''}.`
+            : '';
+    }
+
+    if (logBox && logText) {
+        const hasLog = Boolean(build.log_excerpt);
+
+        logBox.classList.toggle('d-none', !hasLog);
+        logText.textContent = hasLog ? build.log_excerpt : '';
+    }
+
+    // A BUILD THAT DID NOT COMPILE CANNOT BE ACCEPTED. The server refuses it;
+    // the page does not offer it.
+    const accept = $('buildAcceptBtn');
+
+    if (accept) {
+        accept.disabled = build.result === 'failed';
+        accept.title = build.result === 'failed'
+            ? 'A build that failed cannot be accepted.'
+            : 'Accept this build';
     }
 }
 

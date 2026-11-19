@@ -217,7 +217,8 @@ const latestReceiptForVersion = db.prepare(`
 // Display only: a receipt whose changelist matches no build is still evidence
 // (decided 2026-11-19).
 const buildOfReceipt = db.prepare(`
-    SELECT id, name, stream, changelist, built_at, status, review_note
+    SELECT id, name, stream, changelist, built_at, status, review_note,
+           result, failed_stage
     FROM builds
     WHERE changelist = ? AND (stream = ? OR base_stream = ?)
     ORDER BY id DESC
@@ -1848,7 +1849,7 @@ router.get(
             // refuses anything: the gate is the stream.
             const buildForReceipt = db.prepare(`
                 SELECT id, name, stream, changelist, base_stream, base_changelist,
-                       built_at, status, review_note
+                       built_at, status, review_note, result, failed_stage
                 FROM builds
                 WHERE changelist = ?
                   AND (stream = ? OR base_stream = ?)
@@ -1861,6 +1862,7 @@ router.get(
                 FROM builds
                 WHERE stream = ? AND changelist > ?
                   AND status != 'rejected'
+                  AND (result IS NULL OR result != 'failed')
                 ORDER BY changelist DESC
                 LIMIT 1
             `);

@@ -503,6 +503,17 @@
       <!-- THE BUILD'S OWN VERDICT. Production or an administrator may accept
            or reject the build itself, with a reason for a rejection; nobody
            else draws the controls. -->
+      <!-- WHAT THE BUILD MACHINE MEASURED. The same block on the admin, prod
+           and developer pages, because this panel is one component. -->
+      <div class="small text-secondary" id="buildStats"></div>
+      <div class="small text-danger mt-1 d-none" id="buildFailureLine"></div>
+
+      <details class="small mt-2 mb-3 d-none" id="buildLogBox">
+        <summary class="text-secondary">Build log excerpt</summary>
+        <pre class="text-secondary small mb-0" id="buildLogExcerpt"
+             style="white-space:pre-wrap;max-height:12rem;overflow:auto"></pre>
+      </details>
+
       <div class="d-flex align-items-center flex-wrap gap-2 mb-3 small">
         <span class="badge text-bg-secondary" id="buildStatusBadge">Unreviewed</span>
         <span class="text-secondary" id="buildReviewNote"></span>

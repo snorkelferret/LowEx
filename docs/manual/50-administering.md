@@ -186,6 +186,10 @@ Experimental, 12 Nov" — and where you can see what a build already contains.
 changelist. A **release** is a build that shipped: the date field below is when
 that happened. An asset has versions; the game has builds.
 
+**Each build shows what the machine measured** — result, duration, size,
+warning and error counts, and the first errors if it failed. A failed build
+cannot be accepted; rejecting it is the record.
+
 **A build can be reviewed.** Production or an administrator accepts it, or
 rejects it with a reason — a technical failure such as a size ceiling or a load
 time, or a judgement about how it looks. The reason and who gave it are shown

@@ -535,6 +535,13 @@ still a fact about the game, and the submission gate reads the stream. What it
 does is stop the build being offered as freshness advice; accepting a build is
 what makes it good for that purpose.
 
+**A build carries what the machine measured.** Result, the stage it failed at,
+wall-clock duration, output size, warning and error counts, and a short log
+excerpt — every field optional, because a failed build has no output size and
+an older reporter sends none. The numbers are shown on the build, they give the
+reviewer something concrete beside "too big" or "too slow", and a build whose
+result is failed is never offered as freshness advice and cannot be accepted.
+
 **A build can be reported by the machine that made it.** `POST
 /api/integration/builds` records a stream, a changelist, a name and the
 machine's own identifier, marked `source = 'reported'`; a build typed by an

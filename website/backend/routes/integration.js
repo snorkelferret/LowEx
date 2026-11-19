@@ -129,11 +129,18 @@ const insertBuild = db.prepare(`
         built_at,
         base_stream,
         base_changelist,
+        result,
+        failed_stage,
+        duration_seconds,
+        output_bytes,
+        warnings,
+        errors,
+        log_excerpt,
         notes,
         source,
         created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reported', NULL)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reported', NULL)
 `);
 
 const buildByIdRow = db.prepare('SELECT * FROM builds WHERE id = ?');
@@ -496,6 +503,64 @@ router.post(
             });
         }
 
+        // WHAT THE MACHINE MEASURED. All optional: a failed build has no
+        // output size, and an earlier reporter sends none of them.
+        const rawResult = String(body.result || '').trim();
+
+        if (rawResult && rawResult !== 'succeeded' && rawResult !== 'failed') {
+            return res.status(400).json({
+                error: "result must be 'succeeded' or 'failed'."
+            });
+        }
+
+        const result = rawResult || null;
+
+        const failedStage = String(body.failed_stage || '').trim();
+
+        if (failedStage.length > 120) {
+            return res.status(400).json({
+                error: 'failed_stage is too long — 120 characters at most.'
+            });
+        }
+
+        const logExcerpt = String(body.log_excerpt || '').trim();
+
+        if (logExcerpt.length > 2000) {
+            return res.status(400).json({
+                error: 'log_excerpt is too long — 2000 characters at most. Send the first errors, not the log.'
+            });
+        }
+
+        // NON-NEGATIVE INTEGERS OR ABSENT. A negative size or duration is not
+        // a measurement, and accepting one would put a nonsense number beside
+        // a review.
+        const statNumber = (value, field) => {
+            if (value === undefined || value === null || value === '') {
+                return { ok: true, value: null };
+            }
+
+            const number = Number(value);
+
+            if (!Number.isInteger(number) || number < 0) {
+                return { ok: false, field };
+            }
+
+            return { ok: true, value: number };
+        };
+
+        const duration = statNumber(body.duration_seconds, 'duration_seconds');
+        const output = statNumber(body.output_bytes, 'output_bytes');
+        const warningCount = statNumber(body.warnings, 'warnings');
+        const errorCount = statNumber(body.errors, 'errors');
+
+        for (const parsed of [duration, output, warningCount, errorCount]) {
+            if (!parsed.ok) {
+                return res.status(400).json({
+                    error: `${parsed.field} must be a non-negative integer.`
+                });
+            }
+        }
+
         try {
             const existing = buildByStreamAndChangelist.get(stream, changelist);
 
@@ -509,6 +574,13 @@ router.post(
                         built_at = COALESCE(built_at, ?),
                         base_stream = COALESCE(base_stream, ?),
                         base_changelist = COALESCE(base_changelist, ?),
+                        result = COALESCE(result, ?),
+                        failed_stage = COALESCE(failed_stage, ?),
+                        duration_seconds = COALESCE(duration_seconds, ?),
+                        output_bytes = COALESCE(output_bytes, ?),
+                        warnings = COALESCE(warnings, ?),
+                        errors = COALESCE(errors, ?),
+                        log_excerpt = COALESCE(log_excerpt, ?),
                         notes = COALESCE(notes, ?),
                         source = 'reported'
                     WHERE id = ?
@@ -517,6 +589,13 @@ router.post(
                     builtAt,
                     baseStream || null,
                     baseChangelist,
+                    result,
+                    failedStage || null,
+                    duration.value,
+                    output.value,
+                    warningCount.value,
+                    errorCount.value,
+                    logExcerpt || null,
                     rawNotes || null,
                     existing.id
                 );
@@ -528,7 +607,7 @@ router.post(
                 });
             }
 
-            const result = insertBuild.run(
+            const inserted = insertBuild.run(
                 name,
                 stream,
                 changelist,
@@ -536,12 +615,19 @@ router.post(
                 builtAt,
                 baseStream || null,
                 baseChangelist,
+                result,
+                failedStage || null,
+                duration.value,
+                output.value,
+                warningCount.value,
+                errorCount.value,
+                logExcerpt || null,
                 rawNotes || null
             );
 
             audit.record(null, 'build.reported', name, {
                 api_key: req.apiKey.name,
-                build_id: result.lastInsertRowid,
+                build_id: inserted.lastInsertRowid,
                 stream,
                 changelist,
                 machine_build_id: rawBuildId || null,
@@ -552,7 +638,7 @@ router.post(
             return res.status(201).json({
                 recorded: true,
                 duplicate: false,
-                build: buildByIdRow.get(result.lastInsertRowid)
+                build: buildByIdRow.get(inserted.lastInsertRowid)
             });
 
         } catch (err) {

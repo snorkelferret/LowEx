@@ -203,6 +203,13 @@ this; nothing connected it to a stream or to a receipt.
 | `built_at` | ISO 8601 | no | when the build ran; stored in UTC |
 | `base_stream` | string | no | for a candidate build: the game stream it was built over |
 | `base_changelist` | integer | no | for a candidate build: that stream's changelist |
+| `result` | `succeeded` \| `failed` | no | the build's own result |
+| `failed_stage` | string | no | where it stopped — cook, compile, package |
+| `duration_seconds` | integer ≥ 0 | no | wall-clock time of the build |
+| `output_bytes` | integer ≥ 0 | no | size of the packaged build |
+| `warnings` | integer ≥ 0 | no | the build's warning count |
+| `errors` | integer ≥ 0 | no | the build's error count |
+| `log_excerpt` | string ≤ 2000 | no | the first errors, not the whole log |
 | `notes` | string | no | free text |
 
 `base_stream` and `base_changelist` go together or not at all: a base stream
@@ -213,6 +220,9 @@ with no changelist does not identify a state of the game.
 - **Integration tooling is on** — otherwise `403`.
 - `stream` and `base_stream` are absolute Perforce paths; `changelist` is a
   positive integer; `built_at`, when given, is an ISO 8601 date or date-time.
+- `result` is `succeeded` or `failed`; every count and size is a non-negative
+  integer; `log_excerpt` is at most 2000 characters. A field that is absent is
+  absent, not zero — a failed build has no output size.
 - **The same build twice is harmless.** The key is `(stream, changelist)`; a
   retry fills in anything missing and returns `200` with `duplicate: true`.
   **A retry never overwrites a value already recorded.**
@@ -245,14 +255,19 @@ curl -sS -X POST "$PORTAL_URL/api/integration/builds" \
   }'
 ```
 
-A candidate build adds the stream and changelist it was built over:
+A candidate build adds the stream and changelist it was built over, and a
+failed build reports what the machine measured:
 
 ```json
 {
-  "stream": "//LowExpectations/task-val-1",
-  "changelist": 501,
-  "base_stream": "//LowExpectations/main",
-  "base_changelist": 500
+  "stream": "//LowExpectations/main",
+  "changelist": 8,
+  "result": "failed",
+  "failed_stage": "cook",
+  "duration_seconds": 2734,
+  "warnings": 41,
+  "errors": 3,
+  "log_excerpt": "LogCook: Error: could not cook /Game/Levels/LE_Forest_01"
 }
 ```
 
@@ -262,6 +277,23 @@ The build machine reports the build; **it does not judge it.** Production or an
 administrator accepts or rejects the build itself, with a reason for a
 rejection. That record is the portal's, not the machine's, and it is what makes
 "a good build" mean something for the advice shown on a submission.
+
+**A build whose `result` is `failed` cannot be accepted.** Rejecting it, with
+the reason, is the record. A fixed build is a new build at a new changelist.
+A failed build is also never offered as freshness advice.
+
+### The stats, and what is easy to produce
+
+The easy set, and the one the portal shows: **result** from the exit code,
+**duration** from two timestamps, **output size** from the packaged folder,
+**warning and error counts** from the build tool's summary, **the failing
+stage**, and **the first error lines**. Per-stage timings, peak memory and
+shader counts exist in the log but their format varies by engine version; they
+are not part of the contract.
+
+**Build duration is not runtime speed.** How long the machine took is a build
+stat; how slowly the level loads is a test result, and it belongs in the
+receipt's `checks`.
 
 ### Why it matters
 

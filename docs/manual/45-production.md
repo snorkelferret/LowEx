@@ -95,6 +95,11 @@ It answers the question the queue cannot: **where did the work you approved end
 up?** Approving puts a version in the store; an administrator puts it into a
 build, and this is where that shows.
 
+**You can see what the build machine measured**: whether it succeeded, how
+long it took, how large it is, how many warnings and errors it had, and the
+first errors when it failed. A build that failed cannot be accepted — reject
+it, with the reason, and a fixed build arrives as a new build.
+
 **You can accept or reject a build itself.** Accept it if it is good enough to
 put in front of people; reject it with a reason if it fails a technical limit —
 too large, too slow — or if you do not like the look of it. The reason is kept

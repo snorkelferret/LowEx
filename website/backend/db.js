@@ -535,6 +535,18 @@ const applyAssetRepositorySchema = () => {
       base_stream TEXT,
       base_changelist INTEGER,
 
+      -- WHAT THE BUILD MACHINE MEASURED. Every field is optional: a build
+      -- that failed has no output size, and an older reporter sends none.
+      -- result is succeeded or failed; the rest are the numbers production
+      -- needs to judge "too big" or "too slow" rather than guess.
+      result TEXT,
+      failed_stage TEXT,
+      duration_seconds INTEGER,
+      output_bytes INTEGER,
+      warnings INTEGER,
+      errors INTEGER,
+      log_excerpt TEXT,
+
       -- WHO WROTE THE ROW: an administrator typing it (typed) or the build
       -- machine reporting it (reported). No CHECK, because ALTER cannot add
       -- one to an existing table and this is not worth a rebuild; the two
@@ -600,6 +612,13 @@ const applyAssetRepositorySchema = () => {
     ['reviewed_by', 'reviewed_by INTEGER REFERENCES users(id)'],
     ['reviewed_at', 'reviewed_at DATETIME'],
     ['review_note', 'review_note TEXT'],
+    ['result', 'result TEXT'],
+    ['failed_stage', 'failed_stage TEXT'],
+    ['duration_seconds', 'duration_seconds INTEGER'],
+    ['output_bytes', 'output_bytes INTEGER'],
+    ['warnings', 'warnings INTEGER'],
+    ['errors', 'errors INTEGER'],
+    ['log_excerpt', 'log_excerpt TEXT'],
   ];
 
   for (const [column, definition] of buildAdditions) {
