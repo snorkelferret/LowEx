@@ -441,6 +441,78 @@ to consult them. That is the next rule, not a rewrite.
 
 ---
 
+## Requests to the game side
+
+*2026-11-19. The portal's side of the build record is built and proven with
+test payloads; nothing has reported a real build yet. These are the things
+needed next, in the order they become useful. Propose a change below or in a
+message; the portal records the decision in `website/TODO`.*
+
+### R1 — Report one real build
+
+`POST /api/integration/builds` is waiting. Send one report for the stream you
+actually build, with as many of the measured fields as the pipeline can honestly
+produce:
+
+```json
+{
+  "stream": "//LowExpectations/main",
+  "changelist": 7,
+  "name": "0.4 Experimental, 18 Nov",
+  "build_id": "LE-2026.11.18-01",
+  "built_at": "2026-11-18T17:30:00Z",
+  "released_on": "2026-11-18",
+  "result": "succeeded",
+  "duration_seconds": 2734,
+  "output_bytes": 19327352832,
+  "warnings": 41,
+  "errors": 3,
+  "log_excerpt": "LogCook: Display: done"
+}
+```
+
+The easy set, so nobody goes hunting: **exit code** for `result`; two
+timestamps for `duration_seconds`; `du` of the packaged folder, **excluding
+PDBs and symbols**, for `output_bytes`; the build tool's summary for the
+counts; the last stage that ran for `failed_stage`; the first error lines for
+`log_excerpt`. If one of these cannot be produced reliably from UAT, say so
+here rather than sending a guess.
+
+The first real report is also the test that the page reads it: the portal shows
+it under the stream, with its stats, and marks it over the size or time limit
+if it is.
+
+### R2 — Candidate builds name their base
+
+When you build from a task stream, send `base_stream` and `base_changelist` as
+well. That is what tells the portal which game stream the candidate was built
+over, and it is the pair that lets a change be tested in the game without
+changing the game.
+
+### R3 — Report failures too
+
+A build that failed is a fact, not a missing report. Send `result: "failed"`,
+the stage, and the excerpt. The portal refuses to accept a failed build and
+shows it with its reason; a fixed build is a new report at a new changelist.
+
+### R4 — The account, the client, the key
+
+`val` for now, in **your own client** named `val-agent`, authenticated by
+ticket. Receipts and build reports say `p4_user: "val"`, because that is the
+account that did the work. The key is issued on the portal machine with
+`node scripts/api-key.js --create "..."`, shown once, kept in a 0600 file, and
+never in a message or a repository. **Integration tooling** must be on, or both
+endpoints refuse the key.
+
+### R5 — What you need from the portal
+
+The **approved list** (`GET /api/integration/approved`) and the **inclusion
+receipt** are proposed, not built (sections 3 and 4). If the shape in the
+contract does not suit the tool, propose the shape you need — the portal owns
+the document because the portal validates against it.
+
+---
+
 ## What the portal does with a receipt
 
 - **A game destination needs one.** A submission for `//LE/main` with no

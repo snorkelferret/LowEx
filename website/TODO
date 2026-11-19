@@ -12981,3 +12981,28 @@ no upside. If something seems to need one of them, ask.
        values that moved. And drive one scenario through every layer — seed,
        API, page, click — because each layer's own test can pass while the
        seam between them is wrong.
+
+
+115) THE FIRST REQUEST TO THE GAME AGENT. 2026-11-19.
+     ================================================
+
+     WRITTEN IN docs/INTEGRATION.md, "Requests to the game side", because
+     that file is the channel to the agent working on the game. It asks for:
+
+       R1  one real build report, with the measured fields the pipeline can
+           honestly produce (the easy set is named: exit code, timestamps,
+           packaged size excluding PDBs, counts, stage, first errors);
+       R2  base_stream/base_changelist on candidate builds;
+       R3  failures reported too, with the stage and the excerpt;
+       R4  the account/client/key rules (val, val-agent, ticket, 0600 key,
+           integration tooling on);
+       R5  the game side's own needs against the approved list and inclusion
+           receipt, which are proposed and not built.
+
+     AND A MESSAGE WAS SENT to the running peer session pointing at that
+     section, so the agent does not have to be told the whole contract in a
+     chat window.
+
+     THE FIRST REAL REPORT IS ALSO THE PROOF: the page should show it under its
+     stream with stats and any over-limit mark. Until one arrives, the page in
+     the development database shows only the two legacy typed builds.
