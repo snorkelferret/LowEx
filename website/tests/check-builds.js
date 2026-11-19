@@ -233,6 +233,72 @@ async function main() {
     report.check('but production cannot put work into a build', prodWrite.status === 403,
         `expected 403, got ${prodWrite.status}`);
 
+    // -----------------------------------------------------------------
+    // REVIEWING THE BUILD ITSELF
+    // -----------------------------------------------------------------
+
+    const devReview = await server.post(`/${buildA}/review`, {
+        status: 'rejected', reason: 'too slow'
+    }, dev);
+
+    report.check('a developer cannot review a build', devReview.status === 403,
+        `expected 403, got ${devReview.status}`);
+
+    const noReason = await server.post(`/${buildA}/review`, {
+        status: 'rejected'
+    }, prod);
+
+    report.check('a rejection without a reason is refused', noReason.status === 400,
+        `expected 400, got ${noReason.status}`);
+
+    const rejectionReason = 'Exceeds the size ceiling and loads too slowly in the level.';
+
+    const rejectedBuild = await server.post(`/${buildA}/review`, {
+        status: 'rejected', reason: rejectionReason
+    }, prod);
+
+    report.check('production can reject a build', rejectedBuild.status === 200
+        && rejectedBuild.json?.build?.status === 'rejected',
+        `expected 200 rejected, got ${rejectedBuild.status} — ${rejectedBuild.text.slice(0, 160)}`);
+
+    report.check('and the reason and the reviewer are kept',
+        rejectedBuild.json?.build?.review_note === rejectionReason
+        && rejectedBuild.json?.build?.reviewed_by === 'prod-check',
+        `build: ${JSON.stringify(rejectedBuild.json?.build)}`);
+
+    const reviewAudit = db.prepare(`
+        SELECT * FROM audit_logs
+        WHERE action = 'build.review' AND actor_id = 3
+        ORDER BY id DESC LIMIT 1
+    `).get();
+
+    report.check('and the review is audited', Boolean(reviewAudit),
+        'no build.review row was written');
+
+    const silentReversal = await server.post(`/${buildA}/review`, {
+        status: 'accepted'
+    }, prod);
+
+    report.check('reversing a decision needs a reason', silentReversal.status === 400,
+        `expected 400, got ${silentReversal.status}`);
+
+    const acceptedBuild = await server.post(`/${buildA}/review`, {
+        status: 'accepted',
+        reason: 'Retested after the fix; within the size and time budget.'
+    }, prod);
+
+    report.check('production can accept it again, with the reason', acceptedBuild.status === 200
+        && acceptedBuild.json?.build?.status === 'accepted',
+        `expected 200 accepted, got ${acceptedBuild.status}`);
+
+    const adminAccept = await server.post(`/${buildA}/review`, {
+        status: 'accepted'
+    }, admin);
+
+    report.check('an administrator may review a build too', adminAccept.status === 200
+        && adminAccept.json?.build?.reviewed_by === 'admin-check',
+        `expected 200 by admin-check, got ${adminAccept.status} — ${adminAccept.text.slice(0, 160)}`);
+
     // v2 out, v1 in — so build A holds BigTree v1 and the diff has something
     // to compare against.
     const removed = await server.del(`/${buildA}/assets/2`, admin);

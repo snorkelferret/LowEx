@@ -527,6 +527,14 @@ are not the same kind of thing (§3).
 it, and when. Not a git tag: the game is versioned in Perforce, so the
 changelist is the tag.
 
+**A build can be rejected, with a reason.** Production or an administrator
+reviews the build itself — a technical limit such as size or load time, or a
+judgement about how it looks. The rejection is stored, shown on the builds
+page and audited. It removes nothing and gates nothing: a rejected build is
+still a fact about the game, and the submission gate reads the stream. What it
+does is stop the build being offered as freshness advice; accepting a build is
+what makes it good for that purpose.
+
 **A build can be reported by the machine that made it.** `POST
 /api/integration/builds` records a stream, a changelist, a name and the
 machine's own identifier, marked `source = 'reported'`; a build typed by an

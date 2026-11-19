@@ -61,6 +61,7 @@ const listBuilds = db.prepare(`
         r.id, r.name, r.released_on, r.changelist, r.notes,
         r.stream, r.build_id, r.built_at,
         r.base_stream, r.base_changelist, r.source,
+        r.status, r.review_note, r.reviewed_at,
         r.created_at,
         u.username AS created_by_username,
         (SELECT COUNT(*) FROM build_assets ra WHERE ra.build_id = r.id)
@@ -76,9 +77,13 @@ const listBuilds = db.prepare(`
 `);
 
 const buildById = db.prepare(`
-    SELECT r.*, u.username AS created_by_username
+    SELECT
+        r.*,
+        u.username AS created_by_username,
+        ru.username AS reviewed_by_username
     FROM builds r
-    LEFT JOIN users u ON u.id = r.created_by
+    LEFT JOIN users u  ON u.id  = r.created_by
+    LEFT JOIN users ru ON ru.id = r.reviewed_by
     WHERE r.id = ?
 `);
 
@@ -206,6 +211,10 @@ function detailOf(buildId) {
             base_stream: build.base_stream,
             base_changelist: build.base_changelist,
             source: build.source,
+            status: build.status,
+            review_note: build.review_note,
+            reviewed_by: build.reviewed_by_username,
+            reviewed_at: build.reviewed_at,
             notes: build.notes,
             created_by: build.created_by_username,
             created_at: build.created_at
@@ -442,6 +451,78 @@ router.delete('/:id/assets/:assetVersionId', authenticateToken, requireRole('adm
     });
 
     return res.json(detailOf(buildId));
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/builds/:id/review — production's or an administrator's verdict
+// ---------------------------------------------------------------------------
+//
+// A BUILD CAN BE REJECTED, with a reason: it fails a technical limit (a size
+// ceiling, a time budget), or it simply is not what the game should look like.
+// The reason is stored and audited, and the builds page shows it.
+//
+// THE REJECTION IS NOT A GATE. It does not remove the build, and the
+// submission gate still reads the STREAM (decided 2026-11-19). What it does is
+// stop the build being offered as freshness advice, and tell anyone looking at
+// the build why.
+//
+// A REASON IS REQUIRED to reject, and to change a decision already made —
+// accepting a build production rejected is an override and needs the same
+// record. The route is PRODUCTION AND ADMIN: the judgement is about the build,
+// which is production's craft, and an administrator may need to correct it.
+
+const REVIEW_STATUSES = ['accepted', 'rejected'];
+
+router.post('/:id/review', authenticateToken, requireRole('prod', 'admin'), (req, res) => {
+    const actor = req.user?.id;
+    const id = Number(req.params.id);
+    const status = String(req.body?.status || '').trim();
+    const reason = String(req.body?.reason || '').trim();
+
+    if (!actor) return res.status(401).json({ error: 'Authenticated user ID not found' });
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid build ID' });
+
+    if (!REVIEW_STATUSES.includes(status)) {
+        return res.status(400).json({
+            error: "status must be 'accepted' or 'rejected'."
+        });
+    }
+
+    const build = buildById.get(id);
+
+    if (!build) return res.status(404).json({ error: 'Build not found' });
+
+    if (status === 'rejected' && reason.length < 3) {
+        return res.status(400).json({
+            error: 'A rejection needs a reason — what failed, or what is wrong with it.'
+        });
+    }
+
+    if (build.status !== 'unreviewed' && build.status !== status && reason.length < 3) {
+        return res.status(400).json({
+            error: 'Changing a decision already made needs a reason.'
+        });
+    }
+
+    db.transaction(() => {
+        db.prepare(`
+            UPDATE builds
+            SET status = ?,
+                reviewed_by = ?,
+                reviewed_at = CURRENT_TIMESTAMP,
+                review_note = ?
+            WHERE id = ?
+        `).run(status, actor, reason || null, id);
+
+        audit.record(actor, 'build.review', build.name, {
+            build_id: id,
+            from: build.status,
+            to: status,
+            reason: reason || null
+        });
+    })();
+
+    return res.json(detailOf(id));
 });
 
 // ---------------------------------------------------------------------------

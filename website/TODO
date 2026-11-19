@@ -12804,3 +12804,56 @@ no upside. If something seems to need one of them, ask.
            shows the stream and says when a build was reported. 14 assertions
            added to check:integration.
        [ ] The build machine and distribution, still out of scope (item 53).
+
+
+112) REJECTING A BUILD — THE VERDICT ON THE BUILD ITSELF. 2026-11-19. BUILT.
+     =====================================================================
+
+     ASKED: "I think there should be a mechanism for production or admin to
+     reject a build - with a reason - could be technical fail - exceeds max
+     bytes, too slow or prod does not like the look of it."
+
+     --- WHAT WAS BUILT ---
+
+       `builds` gained `status` (unreviewed | accepted | rejected),
+       `reviewed_by`, `reviewed_at` and `review_note`.
+
+       POST /api/builds/:id/review, PROD and ADMIN. Body { status, reason }.
+       A rejection needs a reason (three characters at least); changing a
+       decision already made needs one too, so an override is never silent.
+       The act is audited as `build.review` with from, to and the reason.
+
+       THE PAGE shows a badge and the reason with who gave it. Prod and admin
+       get Accept and Reject in the build detail; a developer sees the status
+       and no controls. The build list carries accepted/rejected beside the
+       name.
+
+       ON THE SUBMISSION QUEUE, a build a receipt was tested in that was later
+       rejected is called out with its reason. The "newer build" advice
+       ignores rejected builds — production has already judged them — and an
+       accepted build is what "good" means for that advice.
+
+     --- AND WHAT IT IS NOT ---
+
+       NOT A GATE. It removes nothing and refuses nothing; the submission gate
+       still reads the STREAM (item 111's decision, 2026-11-19). A rejected
+       build stays in the record, because it happened, and a build that was
+       rejected is a fact about the game rather than a row to delete.
+
+     --- DECIDED: FREE TEXT, NOT A LIST ---
+
+       The reason is written, not chosen from a dropdown. "Exceeds the size
+       ceiling", "too slow to load the level" and "does not look right" are
+       different kinds of judgement, and a fixed list would either miss one or
+       invite the nearest wrong label. This is the opposite call from the
+       feedback KINDS, where the list is closed because triage needs a tag;
+       here the words are read by people deciding, and the words matter more.
+
+     --- NOT BUILT ---
+
+       [ ] Telling the build machine or the developer that a build was
+           rejected. It is visible on the page and in the audit log; nothing
+           is pushed out.
+       [ ] Build review from the admin dashboard without opening Builds — the
+           page is the place.
+       [ ] A notification when an accepted build is superseded by a newer one.

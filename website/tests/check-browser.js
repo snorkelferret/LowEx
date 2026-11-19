@@ -447,7 +447,7 @@ async function main() {
             queue.slice(0, 300));
 
         report.check('and the receipt, with where it was tested',
-            /Tested in \/\/LowExpectations\/main at CL 7/.test(queue),
+            /Tested in .*\/\/LowExpectations\/main at CL 7/.test(queue),
             queue.slice(0, 300));
 
         const retarget = async (stream) => {

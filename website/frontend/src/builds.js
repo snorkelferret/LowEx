@@ -51,6 +51,10 @@ const ME = (() => {
 
 const IS_ADMIN = ME.role === 'admin';
 
+// THE BUILD'S VERDICT IS PRODUCTION'S CRAFT, and an administrator may correct
+// it. A developer sees the status and does not draw the controls.
+const CAN_REVIEW = ME.role === 'prod' || ME.role === 'admin';
+
 let selectedId = null;
 let allBuilds = [];
 let currentDetail = null;
@@ -186,10 +190,16 @@ function renderBuilds(builds) {
             ? ` · <span class="text-info">${build.mine_count} of yours</span>`
             : '';
 
+        const verdict = build.status === 'rejected'
+            ? ' · <span class="text-danger">rejected</span>'
+            : build.status === 'accepted'
+                ? ' · <span class="text-success">accepted</span>'
+                : '';
+
         button.innerHTML =
             `<span class="fw-semibold">${escapeHtml(build.name)}</span>` +
             `<span class="d-block small text-secondary">${date}${changelist}${stream} · ` +
-            `${build.asset_count} version${build.asset_count === 1 ? '' : 's'}${mine}</span>`;
+            `${build.asset_count} version${build.asset_count === 1 ? '' : 's'}${mine}${verdict}</span>`;
 
         list.appendChild(button);
     }
@@ -432,6 +442,8 @@ function renderDetail(detail) {
 
     const title = $('buildDetailTitle');
     if (title) title.textContent = build.name;
+
+    renderReview(build);
 
     const meta = $('buildDetailMeta');
     if (meta) {
@@ -717,6 +729,77 @@ async function runDiff() {
     }
 }
 
+// Where the build itself stands, and who may change it.
+function renderReview(build) {
+    const badge = $('buildStatusBadge');
+    const note = $('buildReviewNote');
+    const controls = $('buildReviewControls');
+
+    if (badge) {
+        const status = build.status || 'unreviewed';
+        badge.textContent = status === 'accepted'
+            ? 'Accepted'
+            : status === 'rejected'
+                ? 'Rejected'
+                : 'Unreviewed';
+        badge.className = 'badge ' + (status === 'accepted'
+            ? 'text-bg-success'
+            : status === 'rejected'
+                ? 'text-bg-danger'
+                : 'text-bg-secondary');
+    }
+
+    if (note) {
+        const parts = [];
+        if (build.review_note) parts.push(build.review_note);
+        if (build.reviewed_by) parts.push(`by ${build.reviewed_by}`);
+        if (build.reviewed_at) parts.push(formatDate(build.reviewed_at));
+        note.textContent = parts.join(' · ');
+    }
+
+    if (controls) {
+        controls.classList.toggle('d-none', !CAN_REVIEW);
+    }
+}
+
+function reviewBuild(status, reason) {
+    if (selectedId === null) return;
+
+    fetchJson(`${API}/${selectedId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, reason: reason || null })
+    })
+        .then(detail => {
+            showAlert(status === 'accepted' ? 'Build accepted.' : 'Build rejected.', 'success');
+            renderDetail(detail);
+            loadBuilds();
+        })
+        .catch(err => showAlert(err.message));
+}
+
+function onClickAccept() {
+    if (!window.confirm('Accept this build?')) return;
+    reviewBuild('accepted', '');
+}
+
+function onClickReject() {
+    const reason = window.prompt(
+        'Why is this build being rejected?\n\n' +
+        'A technical failure — a size ceiling, a time budget — or a judgement ' +
+        'about how it looks. It is shown on the build and recorded.'
+    );
+
+    if (reason === null) return;
+
+    if (reason.trim().length < 3) {
+        showAlert('A rejection needs a reason.', 'warning');
+        return;
+    }
+
+    reviewBuild('rejected', reason.trim());
+}
+
 // ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------
@@ -904,6 +987,8 @@ document.addEventListener('DOMContentLoaded', () => {
     $('buildMembers')?.addEventListener('click', onClickMembers);
     $('buildCandidates')?.addEventListener('click', onClickCandidates);
     $('buildDeleteBtn')?.addEventListener('click', onClickDelete);
+    $('buildAcceptBtn')?.addEventListener('click', onClickAccept);
+    $('buildRejectBtn')?.addEventListener('click', onClickReject);
     $('buildDiffBtn')?.addEventListener('click', runDiff);
     $('buildDiffFrom')?.addEventListener('change', hideDiff);
     $('buildDiffTo')?.addEventListener('change', hideDiff);

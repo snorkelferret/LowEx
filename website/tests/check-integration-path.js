@@ -547,6 +547,66 @@ async function main() {
         && String(buildAudit.details).includes('check-tool'),
         `audit row: ${JSON.stringify(buildAudit)}`);
 
+    // THE BUILD IS ADVICE, NOT A GATE. A build matching the receipt's stream
+    // and changelist is named on the queue; a newer build on the destination
+    // stream is shown as a warning. Neither refuses anything — the submission
+    // above went through before any of these builds existed.
+    // The newest receipt for version 1 is the unconfirmed one at CL 999 on the
+    // task stream, so that is the one the queue shows.
+    await reportBuild({
+        stream: '//LE/task-val-1',
+        changelist: 999,
+        base_stream: '//LE/main',
+        base_changelist: 900
+    });
+
+    const newerBuildReport = await reportBuild({
+        stream: '//LE/main',
+        changelist: 1000
+    });
+
+    const queueWithBuilds = await server.get(
+        '/api/developer/workspace/creative-approvals?status=all', prod);
+
+    const reviewed = (queueWithBuilds.json?.approvals || [])
+        .find(item => item.workspace_version_id === 1);
+
+    report.check('the queue names the build the receipt was tested in',
+        reviewed?.receipt?.build?.changelist === 999
+        && reviewed?.receipt?.build?.name === '//LE/task-val-1 @ CL 999',
+        `receipt: ${JSON.stringify(reviewed?.receipt)}`);
+
+    report.check('and warns about a newer build on the destination stream',
+        reviewed?.receipt?.newer_build?.changelist === 1000,
+        `newer: ${JSON.stringify(reviewed?.receipt?.newer_build)}`);
+
+    report.check('a receipt that matched no build was still accepted earlier',
+        reviewed?.destination_stream === '//LE/main',
+        `destination: ${reviewed?.destination_stream}`);
+
+    // A REJECTED BUILD IS NOT ADVICE. Production rejects the newer build; the
+    // warning stops, while the earlier review stands and the gate is
+    // untouched.
+    const rejectedNewer = await server.post(
+        `/api/builds/${newerBuildReport.json.build.id}/review`,
+        { status: 'rejected', reason: 'Too slow to load the level.' },
+        prod
+    );
+
+    report.check('production can reject a build', rejectedNewer.status === 200
+        && rejectedNewer.json?.build?.status === 'rejected',
+        `expected 200 rejected, got ${rejectedNewer.status}`);
+
+    const afterRejection = await server.get(
+        '/api/developer/workspace/creative-approvals?status=all', prod);
+
+    const reviewedAgain = (afterRejection.json?.approvals || [])
+        .find(item => item.workspace_version_id === 1);
+
+    report.check('and a rejected build stops being offered as advice',
+        reviewedAgain?.receipt?.newer_build === null,
+        `newer: ${JSON.stringify(reviewedAgain?.receipt?.newer_build)}`);
+
     // -----------------------------------------------------------------
     // STREAMS
     // -----------------------------------------------------------------

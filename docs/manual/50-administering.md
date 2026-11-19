@@ -186,6 +186,12 @@ Experimental, 12 Nov" — and where you can see what a build already contains.
 changelist. A **release** is a build that shipped: the date field below is when
 that happened. An asset has versions; the game has builds.
 
+**A build can be reviewed.** Production or an administrator accepts it, or
+rejects it with a reason — a technical failure such as a size ceiling or a load
+time, or a judgement about how it looks. The reason and who gave it are shown
+on the build and written to the audit log. A rejected build is still listed: it
+happened. It stops being used as freshness advice for submissions.
+
 **A build can arrive from the build machine** instead of being typed here. It
 appears the same way, marked *reported by the build machine*, with its stream,
 changelist and the machine's own identifier. A build created on this page is

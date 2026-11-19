@@ -34,10 +34,10 @@ and exits 1.
 | upload | `check:upload` | route | the folder names the asset, bytes are stored once, an unchanged version is refused |
 | upload while pending | `check:upload-pending` | route | an asset under review refuses changes |
 | download | `check:round-trip` | route | an approved version downloads and imports back as references |
-| builds | `check:builds` | route | membership, the one-version rule, the manifest tree and the diff |
+| builds | `check:builds` | route | membership, the one-version rule, the manifest tree, the diff, and the build review |
 | library | `check:library` | route | content roles read it; the wrong roles do not write |
 | Perforce | `check:perforce` | route | the portal is told once, has a cursor, and reports a gap |
-| destination and builds | `check:integration` | route | the game destination gate, the tool's receipt, build reports, retargeting |
+| destination and builds | `check:integration` | route | the destination gate, receipts, build reports, review advice, retargeting |
 | sign-in | `check:auth` | route | login, session identity, deactivation, logout |
 | administration | `check:admin` | route | settings are bounded and audited; the account ladder holds |
 | reports | `check:feedback` | route | anyone may report; administrators read and resolve |

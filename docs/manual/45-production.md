@@ -95,6 +95,12 @@ It answers the question the queue cannot: **where did the work you approved end
 up?** Approving puts a version in the store; an administrator puts it into a
 build, and this is where that shows.
 
+**You can accept or reject a build itself.** Accept it if it is good enough to
+put in front of people; reject it with a reason if it fails a technical limit —
+too large, too slow — or if you do not like the look of it. The reason is kept
+and shown on the build. A rejected build is not offered to you as a newer build
+when you are deciding a submission; an accepted one is.
+
 **You cannot add work to a build.** That is the administrator's job — putting
 content into the game is engineering, not craft.
 

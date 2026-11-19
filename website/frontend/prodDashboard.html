@@ -500,6 +500,20 @@
         </div>
       </div>
 
+      <!-- THE BUILD'S OWN VERDICT. Production or an administrator may accept
+           or reject the build itself, with a reason for a rejection; nobody
+           else draws the controls. -->
+      <div class="d-flex align-items-center flex-wrap gap-2 mb-3 small">
+        <span class="badge text-bg-secondary" id="buildStatusBadge">Unreviewed</span>
+        <span class="text-secondary" id="buildReviewNote"></span>
+        <span class="ms-auto d-none" id="buildReviewControls">
+          <button id="buildAcceptBtn" type="button"
+                  class="btn btn-sm btn-outline-success py-0 px-2">Accept</button>
+          <button id="buildRejectBtn" type="button"
+                  class="btn btn-sm btn-outline-danger py-0 px-2">Reject</button>
+        </span>
+      </div>
+
       <div class="row g-4">
 
         <div class="col-lg-6">

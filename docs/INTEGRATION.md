@@ -256,6 +256,13 @@ A candidate build adds the stream and changelist it was built over:
 }
 ```
 
+### Who reviews it
+
+The build machine reports the build; **it does not judge it.** Production or an
+administrator accepts or rejects the build itself, with a reason for a
+rejection. That record is the portal's, not the machine's, and it is what makes
+"a good build" mean something for the advice shown on a submission.
+
 ### Why it matters
 
 Without it the portal can say "a receipt exists" but not **which version of

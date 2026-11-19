@@ -541,6 +541,15 @@ const applyAssetRepositorySchema = () => {
       -- values are written by one route and validated there.
       source TEXT NOT NULL DEFAULT 'typed',
 
+      -- THE BUILD'S OWN VERDICT: unreviewed until production or an
+      -- administrator looks. A rejected build carries the reason, is shown on
+      -- the builds page, and is not offered as freshness advice. It stays in
+      -- the record: a build that was rejected is a fact about the game.
+      status TEXT NOT NULL DEFAULT 'unreviewed',
+      reviewed_by INTEGER REFERENCES users(id),
+      reviewed_at DATETIME,
+      review_note TEXT,
+
       notes TEXT,
 
       created_by INTEGER,
@@ -587,6 +596,10 @@ const applyAssetRepositorySchema = () => {
     ['base_stream', 'base_stream TEXT'],
     ['base_changelist', 'base_changelist INTEGER'],
     ['source', "source TEXT NOT NULL DEFAULT 'typed'"],
+    ['status', "status TEXT NOT NULL DEFAULT 'unreviewed'"],
+    ['reviewed_by', 'reviewed_by INTEGER REFERENCES users(id)'],
+    ['reviewed_at', 'reviewed_at DATETIME'],
+    ['review_note', 'review_note TEXT'],
   ];
 
   for (const [column, definition] of buildAdditions) {

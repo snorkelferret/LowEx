@@ -106,12 +106,42 @@ function destinationCell(item) {
     if (item.receipt) {
         const tested = document.createElement('div');
         tested.className = 'text-secondary small';
+
+        // THE BUILD IS NAMED WHEN THE PORTAL KNOWS IT, and its absence is
+        // stated rather than left as a bare changelist. Neither reading
+        // refuses anything: the gate is the stream (decided 2026-11-19).
+        const where = item.receipt.build
+            ? `in ${item.receipt.build.name}`
+            : 'in a build the portal has no record of';
+
         tested.textContent =
-            `${item.receipt.result === 'passed' ? 'Tested' : 'Test failed'} in ` +
+            `${item.receipt.result === 'passed' ? 'Tested' : 'Test failed'} ${where} — ` +
             `${item.receipt.parent_stream || item.receipt.stream} at CL ` +
             `${item.receipt.changelist}` +
             `${item.receipt.levels?.length ? ` — ${item.receipt.levels.join(', ')}` : ''}`;
         td.appendChild(tested);
+
+        // A REJECTED BUILD IS STILL WHAT THE TEST RAN IN. Say so, with the
+        // reason, rather than silently presenting it as context.
+        if (item.receipt.build?.status === 'rejected') {
+            const rejected = document.createElement('div');
+            rejected.className = 'text-danger small';
+            rejected.textContent =
+                'That build was rejected' +
+                `${item.receipt.build.review_note ? `: ${item.receipt.build.review_note}` : '.'}`;
+            td.appendChild(rejected);
+        }
+
+        // ADVICE, NOT A REFUSAL. A newer build on the destination stream is
+        // worth knowing; whether it matters is production's judgement.
+        if (item.receipt.newer_build) {
+            const newer = document.createElement('div');
+            newer.className = 'text-warning small';
+            newer.textContent =
+                `A newer build is on this stream: ${item.receipt.newer_build.name} ` +
+                `(CL ${item.receipt.newer_build.changelist}). Ask for a re-test if it matters.`;
+            td.appendChild(newer);
+        }
     } else if (item.destination_kind === 'game') {
         const none = document.createElement('div');
         none.className = 'text-warning small';

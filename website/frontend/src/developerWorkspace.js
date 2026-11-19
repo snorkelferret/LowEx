@@ -1894,7 +1894,8 @@ async function openDestinationDialog(asset, version) {
         game.checked = true;
         select.value = testedStream || '';
         receiptNote.textContent =
-            `Tested in ${testedStream} at changelist ${receipt.changelist}` +
+            `Tested in ${receipt.build ? `${receipt.build.name} — ` : ''}` +
+            `${testedStream} at changelist ${receipt.changelist}` +
             `${receipt.levels?.length ? ` — ${receipt.levels.join(', ')}` : ''}` +
             `${receipt.trigger_confirmed ? '' : ' (not confirmed by the Perforce trigger)'}.`;
     } else {

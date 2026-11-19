@@ -213,6 +213,17 @@ const latestReceiptForVersion = db.prepare(`
     LIMIT 1
 `);
 
+// THE BUILD THAT RECEIPT WAS TESTED IN, when the portal was told about it.
+// Display only: a receipt whose changelist matches no build is still evidence
+// (decided 2026-11-19).
+const buildOfReceipt = db.prepare(`
+    SELECT id, name, stream, changelist, built_at, status, review_note
+    FROM builds
+    WHERE changelist = ? AND (stream = ? OR base_stream = ?)
+    ORDER BY id DESC
+    LIMIT 1
+`);
+
 // Whether the version holds anything a game could import. The submit route
 // enforces this for a game destination; the page shows it earlier, so a
 // developer is not surprised at the last step.
@@ -304,6 +315,11 @@ function withReviewState(version) {
 
     if (receipt) {
         receipt.levels = receipt.levels ? JSON.parse(receipt.levels) : [];
+        receipt.build = buildOfReceipt.get(
+            receipt.changelist,
+            receipt.stream,
+            receipt.stream
+        ) || null;
     }
 
     version.latest_receipt = receipt;
@@ -1825,6 +1841,30 @@ router.get(
                 LIMIT 1
             `);
 
+            // THE BUILD IS CONTEXT, NOT A GATE (decided 2026-11-19). The
+            // receipt's changelist is matched to a build so production can
+            // read "0.4 Experimental, 18 Nov" instead of "CL 7" — and a newer
+            // build on the destination stream is shown as advice. Neither
+            // refuses anything: the gate is the stream.
+            const buildForReceipt = db.prepare(`
+                SELECT id, name, stream, changelist, base_stream, base_changelist,
+                       built_at, status, review_note
+                FROM builds
+                WHERE changelist = ?
+                  AND (stream = ? OR base_stream = ?)
+                ORDER BY id DESC
+                LIMIT 1
+            `);
+
+            const newerBuildFor = db.prepare(`
+                SELECT id, name, changelist, built_at
+                FROM builds
+                WHERE stream = ? AND changelist > ?
+                  AND status != 'rejected'
+                ORDER BY changelist DESC
+                LIMIT 1
+            `);
+
             for (const row of rows) {
                 row.files = getFiles.all(row.workspace_version_id);
 
@@ -1837,6 +1877,19 @@ router.get(
                     receipt.levels = receipt.levels
                         ? JSON.parse(receipt.levels)
                         : [];
+
+                    receipt.build = buildForReceipt.get(
+                        receipt.changelist,
+                        receipt.stream,
+                        receipt.stream
+                    ) || null;
+
+                    receipt.newer_build = row.destination_stream
+                        ? (newerBuildFor.get(
+                            row.destination_stream,
+                            receipt.changelist
+                        ) || null)
+                        : null;
                 }
 
                 row.receipt = receipt;
