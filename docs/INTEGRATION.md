@@ -72,6 +72,15 @@ Revoke with `node scripts/api-key.js --revoke <id>`.
 **The game agent runs as `val`** — decided 2026-11-18, to stay inside the five
 standard users until more seats are bought.
 
+**The arithmetic, recorded so it is not re-derived.** The free tier is five
+standard users and twenty workspaces. Four developers (Val is one), a build
+machine, and the operator admin is five — the admin is an operator user, free
+and doing no file work. The agent therefore shares Val's seat rather than
+taking a sixth, and its submits read as `val` in the depot history, which is
+true of the account and not of the person. A dedicated seat is a later
+purchase: get the quote before it is needed, and know that work done before it
+exists stays attributed to `val` for ever. That is the cost of starting now.
+
 - **Use your own client**, named for what it is: `val-agent`. The change-commit
   notification records the client, so that is what tells the agent's submits
   apart from Val's. Nothing else will.
@@ -384,4 +393,7 @@ for the destination and receipt). The portal owns this document because the
 portal validates against it.
 
 **Do not edit `website/TODO` from the game side.** Two authors in one decision
-log is how a log stops being trustworthy.
+log is how a log stops being trustworthy. **Decisions about how the game side
+operates** — the account, the client, the ticket, the build machine — are
+recorded here; they are not portal decisions and do not need a TODO row. The
+portal copies a product decision into the TODO when there is one.
