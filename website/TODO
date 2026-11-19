@@ -13017,3 +13017,30 @@ no upside. If something seems to need one of them, ask.
      "what is in the game" with a record made by the process that did it.
      Until any arrives, the development database shows only the two legacy
      typed builds and receipts posted by hand for testing.
+
+
+116) THE AGENDA WITH THE GAME SIDE. 2026-11-19.
+     ============================================
+
+     docs/INTEGRATION.md gains "The agenda": seven items, each with its state
+     and who moves next.
+
+       A1  test receipt — the stream the developer worked in     game side
+       A2  one real build report with stats                     game side
+       A3  candidate builds name their base                     game side
+       A4  the approved list                                    built; game side
+                                                                 to confirm
+       A5  the inclusion receipt — the shape, and whether it
+           replaces the typed integration or coexists           both
+       A6  the account/client/key                               owner
+       A7  the submission gate                                  closed by
+                                                                 decision
+
+     A1 AND A2 ARE THE ONES THAT MAKE THE PAGES REAL. A receipt is the only
+     thing that can tell the portal which stream a developer used; a build
+     report is the only thing that puts a machine-made build on the Streams
+     page. Everything else can wait behind those two.
+
+     A MESSAGE WAS SENT asking the game agent to put the agenda on its side
+     and say what it can take first, and what shape the inclusion receipt
+     needs.

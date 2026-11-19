@@ -20,6 +20,28 @@ worse than one that says so.*
 
 ---
 
+## The agenda
+
+*2026-11-19. The open items between the two sides, in the order they unblock
+each other. The detail is in the sections below; this is the list to work
+from.*
+
+| # | item | state | who moves next |
+|---|---|---|---|
+| **A1** | A test receipt from inside the editor: the stream the developer worked in, its parent, the game changelist, the levels, the exchange file and hash | portal built; nothing reports | **game side** |
+| **A2** | One real build report, with the stats the pipeline can produce | portal built; nothing reports | **game side** |
+| **A3** | Candidate builds name `base_stream` and `base_changelist` | portal built | **game side** |
+| **A4** | The approved list — what the tool may import | **built**, and proven | game side: confirm the shape suits the tool |
+| **A5** | The inclusion receipt — what actually went into the game | proposed | **both**: the shape, and whether it replaces the typed integration or coexists |
+| **A6** | The account, client and key: `val`, `val-agent`, ticket, 0600 key, tooling on | decided | **you**: issue the key on the portal machine |
+| **A7** | The submission gate | **closed by decision**: the gate is the stream, the build is advice; a failed build cannot be accepted | — |
+
+**A1 and A2 are the two that make the portal's pages real.** Until a receipt
+arrives, the portal cannot say which stream a developer used; until a build
+report arrives, the Streams page has nothing from a machine to show.
+
+---
+
 ## The one rule
 
 **The portal never asks.** It does not query Perforce, it does not call the
