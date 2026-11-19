@@ -84,7 +84,7 @@ const CHECKS = [
     {
         // ONE PANEL, THREE PAGES: admin, developer and production. The client
         // is the same file in each, and must satisfy every page it runs on.
-        client: 'frontend/src/releases.js',
+        client: 'frontend/src/builds.js',
         pages: ['adminDashboard.html', 'devDashboard.html', 'prodDashboard.html'],
     },
 ];

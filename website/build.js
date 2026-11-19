@@ -12,7 +12,7 @@ const pageConfigurations = [
       './src/sharedInvites.js',   // Exact same single-instance file compiled here!
       './src/adminUsers.js',      // Accounts table
       './src/adminReports.js',    // Reports - shared the same way
-      './src/releases.js',        // Game releases: named builds and their contents
+      './src/builds.js',        // Game builds: named builds and their contents
       './src/adminAudit.js',      // Audit log - shared the same way
       './src/adminSettings.js',   // Settings - shared the same way
       './src/adminStorage.js',    // Storage - shared the same way
@@ -27,7 +27,7 @@ const pageConfigurations = [
       'frontend/src/components/adminPanel.html',
       'frontend/src/components/devInvites.html',
       'frontend/src/components/adminReports.html',
-      'frontend/src/components/releases.html',
+      'frontend/src/components/builds.html',
       'frontend/src/components/adminAudit.html',
       'frontend/src/components/adminSettings.html',
       'frontend/src/components/adminStorage.html',
@@ -43,7 +43,7 @@ const pageConfigurations = [
 	'./src/developerWorkspace.js',
 	'./src/developerLibrary.js', // The Library tab: shared source material
 	'./src/developerStore.js',   // The Game store tab: approved work, read
-	'./src/releases.js',         // The Releases tab: the SAME panel, read-only
+	'./src/builds.js',         // The Builds tab: the SAME panel, read-only
 	'./src/feedback.js',        // Report-a-problem button
 	'./src/utilityBar.js',     // The utility bar: manual, and whatever else a page adds
 	'./src/notBuilt.js'         // Menu stubs for features that are not built yet
@@ -65,7 +65,7 @@ const pageConfigurations = [
     //
     // No loginModal: that dialog belonged to the removed superuser page.
     //
-    // TWO PANELS: the queue of what is waiting, and the releases — where the
+    // TWO PANELS: the queue of what is waiting, and the builds — where the
     // approved work ended up. The second is READ-ONLY for prod: deciding what
     // is good is craft; putting it into a build is engineering (item 52), and
     // the server refuses the writes.
@@ -76,7 +76,7 @@ const pageConfigurations = [
       './src/prodPanel.js',       // The queue of what is waiting, and the decisions
       './src/developerStore.js',  // The Game store, read-only
       './src/developerLibrary.js',// The Library, read-only
-      './src/releases.js',        // The releases: what ships, read-only
+      './src/builds.js',        // The builds: what ships, read-only
       './src/feedback.js',        // Report-a-problem button
       './src/utilityBar.js',      // The utility bar
     ],
@@ -87,7 +87,7 @@ const pageConfigurations = [
       'frontend/src/components/store.html',
       'frontend/src/components/library.html',
       'frontend/src/components/libraryEditModal.html',
-      'frontend/src/components/releases.html',
+      'frontend/src/components/builds.html',
     ],
 },
 
@@ -161,7 +161,7 @@ function compilePage(config) {
   let headerContent = '';
   let bodyContent = '';
 
-  // A COMPONENT MAY INCLUDE ANOTHER, once. The release panel lives in ONE file
+  // A COMPONENT MAY INCLUDE ANOTHER, once. The builds panel lives in ONE file
   // and appears on two pages: top-level on the admin dashboard, and inside a
   // tab on the developer dashboard (RULES 5 — one panel, two placements). An
   // `<!-- Include: path -->` marker inside a component is replaced here.

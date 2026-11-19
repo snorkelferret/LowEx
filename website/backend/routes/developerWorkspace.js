@@ -4358,11 +4358,11 @@ router.post(
             // version I tested is the version I submitted" a fact rather than
             // an assumption.
             //
-            // `game` IS NULL AND THAT IS HONEST, NOT A PLACEHOLDER. The spec's
-            // receipt also identifies the game build — branch, build number,
-            // commit — and NO GAME BUILD EXISTS (TODO 87, E5; items 53, 60).
-            // A field that is absent says that; a field that is empty or
-            // fabricated would not.
+            // `game` IS NULL AND THAT IS HONEST, NOT A PLACEHOLDER. This
+            // check runs on the files, in the portal; it is not running in a
+            // game build and cannot name one. The build is recorded by the
+            // in-editor tool's receipt instead (TODO 110), and a submission
+            // for a game version is refused without it.
             // ----------------------------------------------------
 
             const receipt = {
@@ -4553,9 +4553,10 @@ router.post(
             // The manifest hash is evidence. It travels with the run and is
             // compared here.
             //
-            // THE GAME BUILD is the receipt's other half and is not checked,
-            // because no game build exists (E5). When it does, it belongs
-            // here, against the build required by the target release.
+            // THE GAME BUILD is the receipt's other half. This check cannot
+            // know it — the portal has no game content — and the in-editor
+            // tool's receipt is where it is recorded (TODO 110). A submission
+            // for a game version is refused without one.
             // ----------------------------------------------------
 
             if (technicalPass.manifest_hash !== version.manifest_hash) {

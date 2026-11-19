@@ -154,6 +154,9 @@ hold different trees of the same asset.
 bytes. A change to it changes the hash, so it is a content change and needs no
 mechanism of its own.
 
+**An asset has versions; the game has builds** — a different kind of
+thing, with its own words (§8).
+
 `asset_type` is **derived**, not typed: every file is classified by extension,
 and the type is recorded only when every file in the version agrees. A `.blend`
 plus forty textures has no single type, and "Image" would be a confident wrong
@@ -487,51 +490,79 @@ visible.
 
 ---
 
-## 8. Releases, and the game's versions
+## 8. The game: streams, builds and releases
 
-*State: PARTLY BUILT — releases and membership exist. Builds, automatic
-membership and the release diff do not (TODO 53, 104).*
+*State: BUILT — the build record, membership, the manifest tree and the diff.
+The build machine and membership derived from a delivered changelist are not
+(TODO 53, 104).*
 
-**Named releases, not channels.** "0.4 Experimental, 12 Nov" — a specific build
-with a date. Channels (production / development / experimental) are a small
-fixed set of tracks and cannot express a history; a game version has one.
+### The words
 
-**A release is identified by** a name, a Perforce changelist, who built it, and
-when. Not a git tag: the game is versioned in Perforce, so the changelist is the
-tag.
+**Three different things, and the portal now uses the game industry's words
+for them** (2026-11-19):
 
-**Membership is derived by query, not maintained as a field**, and is
-many-to-many **at the version level**: a release holds many asset versions, and
-one version can be in many releases.
+| word | what it is | example |
+|---|---|---|
+| **stream** | a Perforce branch: one line of the game | `//LowExpectations/main`, `//LowExpectations/release/0.4` |
+| **build** | a package made from one stream at one changelist | "0.4 Experimental, 12 Nov" |
+| **release** | a build that shipped | "0.4" |
+
+**A stream is not a build, and a build is not a release.** A studio can make
+twenty builds from one stream; they differ by changelist. A release is the
+build that went out.
+
+**"Production", "development" and "experimental" are streams**, not versions.
+Each is a branch the studio keeps: a production line, one or more development
+lines, an experimental line. Unreal's **Development** and **Shipping** are
+*build configurations*; an **Experimental** plugin is a feature flag. Neither is
+a version of the game, and using those words for one is how the confusion
+starts.
+
+**An asset has versions; the game has builds.** "BigTree v3" and "build 0.4"
+are not the same kind of thing (§3).
+
+### The build record
+
+**A build is identified by** a name, a stream, a Perforce changelist, who built
+it, and when. Not a git tag: the game is versioned in Perforce, so the
+changelist is the tag.
+
+**Builds are named, not channelled.** "0.4 Experimental, 12 Nov" — a specific
+build with a date. A channel holds one value and cannot express a history; a
+stream holds many builds, and each has a date.
+
+**Membership is a table, not a field**, and is many-to-many **at the version
+level**: a build holds many asset versions, and one version can be in many
+builds.
 
 **The game's current version is not the newest version.** An asset may have v5
-published while the game holds v3, because v4 and v5 are experimental or still
-under review. The game records which version it uses.
+published while the build holds v3, because v4 and v5 are experimental or still
+under review. The build records which version of each asset it holds.
 
 > **NOT BUILT:** `asset_recommended_versions` (one version per asset) exists and
-> is never written. It cannot express an asset being in production *and*
-> candidate-dev at once — that needs the release dimension.
+> is never written. It cannot express an asset being in development *and*
+> experimental at once — that needs the build dimension.
 
-**BUILT 2026-10-30 — the record and the admin's queue.** `releases` (a name, an
-optional date, an optional changelist, notes) and `release_assets` (which
-approved versions are in it). The admin page lists every release and, for one
-selected release, **the candidates**: approved store versions it does not hold.
+**BUILT 2026-10-30 — the record and the admin's queue.** `builds` (a name, an
+optional release date, an optional changelist, notes) and `build_assets` (which
+approved versions are in it). The admin page lists every build and, for one
+selected build, **the candidates**: approved store versions it does not hold.
 Adding a candidate writes the membership, and — when a changelist is given —
 also the `asset_integrations` row, so the import and the membership are one act.
 
-**One version per asset per release**, enforced by name in the routes: a build
-cannot ship two versions of BigTree, and the refusal says which one is in the
+**One version per asset per build**, enforced by name in the routes: a build
+cannot hold two versions of BigTree, and the refusal says which one is in the
 way.
 
 **The changelist is an assertion**, like every other link to Perforce: the
 portal records what a person says, with who said it and when.
 
-**Each version's files, as a tree.** Selecting a version in a release shows its
+**Each version's files, as a tree.** Selecting a version in a build shows its
 manifest — read from the same endpoint a downloader uses, so it is exactly what
 a download contains. Folders and files are native `<details>`; a file opens to
 its content hash, size and path.
 
-**The diff between two releases** compares by asset and by file. Assets are
+**The diff between two builds** compares by asset and by file. Assets are
 added, removed, changed (a different version) or unchanged. Within a changed
 asset, files are added, removed or modified **by content hash** — so a file
 whose bytes are the same under a new path shows as a removal and an addition,
@@ -539,16 +570,16 @@ which is the upload model's own rule: a path is part of a version's identity.
 
 **Developers and production see the same panel, read-only.** It is one
 component and one script on all three dashboards (RULES 5). Reads are
-developer+prod+admin; creating a release, adding or removing a version, and
+developer+prod+admin; creating a build, adding or removing a version, and
 deleting are admin-only, and the page does not draw controls the server would
 refuse. **For prod it is the answer to "where did the work I approved end up"** —
-the queue decides what is good; this shows what is shipping. A developer gets two aids for
-their own question — "which of my assets were accepted, and into what": each
-release in the list counts the viewer's own versions, and a **Only my work**
-filter narrows both lists. **Every column header sorts.**
+the queue decides what is good; this shows what is shipping. A developer gets
+two aids for their own question — "which of my assets were accepted, and into
+what": each build in the list counts the viewer's own versions, and a **Only my
+work** filter narrows both lists. **Every column header sorts.**
 
-**Not built:** a build (there is nothing to build yet), and membership derived
-from a delivered changelist rather than chosen by hand.
+**Not built:** a build machine (the game is compiled outside the portal), and
+membership derived from a delivered changelist rather than chosen by hand.
 
 ---
 
@@ -557,7 +588,7 @@ from a delivered changelist rather than chosen by hand.
 *State: BUILT (local disk); the eventual host is DEFERRED*
 
 **One copy of any SHA-256, ever.** `stored_files` has `UNIQUE(sha256)` and
-`storage_key === sha256`. Every reference — a workspace, the store, a release —
+`storage_key === sha256`. Every reference — a workspace, the store, a build —
 points at that row. None owns the bytes, and none gets a second copy.
 
 **Large content is not in any repository.** The website's source and schema are
@@ -745,7 +776,7 @@ reported as a **gap**, because a portal that cannot ask must be able to say what
 it last heard.
 
 **Not built:** matching delivered depot paths to an approved asset version, the
-real server and its protections, and anything that derives release membership
+real server and its protections, and anything that derives build membership
 from a delivered changelist.
 
 **The wire contract is `docs/INTEGRATION.md`** — the receipt as it is built,

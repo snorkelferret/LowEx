@@ -349,14 +349,14 @@ const applyAssetRepositorySchema = () => {
    *
    *     "A single 'recommended version' pointer cannot express the intended
    *      model -- an asset can hold several production versions at once, and
-   *      production status is derived from release membership, not from a
+   *      production status is derived from build membership, not from a
    *      pointer."
    *
    * THAT REASONING WAS WRONG, and docs/assettypes01 §3.1 says so in as many
-   * words. It is perfectly true that a pointer cannot express releases. IT DOES
+   * words. It is perfectly true that a pointer cannot express builds. IT DOES
    * NOT HAVE TO, BECAUSE THEY ANSWER DIFFERENT QUESTIONS:
    *
-   *     release membership      what went into which named build, and when
+   *     build membership        what went into which named build, and when
    *     a recommended version   which version to use by default, right now
    *
    * WITHOUT IT, "WHICH VERSION DO I USE?" HAS EXACTLY ONE POSSIBLE ANSWER --
@@ -443,35 +443,75 @@ const applyAssetRepositorySchema = () => {
 
   /*
    * ----------------------------------------------------------
-   * releases — WHICH APPROVED VERSIONS ARE IN WHICH NAMED BUILD
+   * builds — WHICH APPROVED VERSIONS ARE IN WHICH NAMED BUILD
    *
-   * A RELEASE IS A NAME AND A DATE, not a channel. "0.4 Experimental, 12 Nov"
+   * THE WORDS, 2026-11-19. What this holds was always a BUILD: a compiled
+   * package made from one STREAM at one CHANGELIST. "Release" is the one that
+   * shipped, and the earlier table used the word for every build — which is
+   * not what a game studio means and not what Unreal means either. The table
+   * and the page are named for what they hold.
+   *
+   *     STREAM    the branch — production line, development line, experimental.
+   *     BUILD     a package from one stream at one changelist. This table.
+   *     RELEASE   a build marked as shipped: `released_on` is set.
+   *
+   * A BUILD IS A NAME AND A DATE, not a channel. "0.4 Experimental, 12 Nov"
    * cannot be expressed by production/development/experimental, because a
-   * channel holds one value and a release has a history (item 53).
+   * channel holds one value and a build has a history (item 53).
    *
    * MEMBERSHIP IS A TABLE, NOT A FIELD ON THE ASSET. The same asset version is
-   * in several releases over time, and a release holds many versions — so
-   * "which version of BigTree ships in 0.4" is a query, and a stored flag
-   * answering the same question is a flag that can be wrong.
+   * in several builds over time, and a build holds many versions — so "which
+   * version of BigTree is in 0.4" is a query, and a stored flag answering the
+   * same question is a flag that can be wrong.
    *
-   * ONE VERSION PER ASSET PER RELEASE is enforced by the routes rather than a
+   * ONE VERSION PER ASSET PER BUILD is enforced by the routes rather than a
    * constraint: the rule is about the ASSET, and this table only knows
    * asset_version_id. Both cannot ship, so adding a second version of the same
-   * asset to one release is refused and named.
+   * asset to one build is refused and named.
    *
    * THE CHANGELIST IS AN ASSERTION, like asset_integrations: the portal does
    * not talk to Perforce and records what a person says the build came from.
    * ----------------------------------------------------------
    */
 
+  // RENAMED IN PLACE, 2026-11-19. An existing database is moved to the new
+  // names rather than left with the old ones; a fresh one is created with them
+  // below. The old index names survive a table rename, so they are dropped and
+  // the CREATE below makes the new ones.
+  const hasTable = name => Boolean(db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
+  ).get(name));
+
+  if (hasTable('releases') && !hasTable('builds')) {
+    db.exec('ALTER TABLE releases RENAME TO builds;');
+  }
+
+  if (hasTable('release_assets') && !hasTable('build_assets')) {
+    db.exec('ALTER TABLE release_assets RENAME TO build_assets;');
+  }
+
+  if (hasTable('build_assets')) {
+    const buildAssetColumns = db
+      .prepare('PRAGMA table_info(build_assets)')
+      .all()
+      .map(column => column.name);
+
+    if (buildAssetColumns.includes('release_id') && !buildAssetColumns.includes('build_id')) {
+      db.exec('ALTER TABLE build_assets RENAME COLUMN release_id TO build_id;');
+    }
+  }
+
+  db.exec('DROP INDEX IF EXISTS idx_release_assets_release;');
+  db.exec('DROP INDEX IF EXISTS idx_release_assets_version;');
+
   db.exec(`
-    CREATE TABLE IF NOT EXISTS releases (
+    CREATE TABLE IF NOT EXISTS builds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
       name TEXT NOT NULL UNIQUE,
 
-      -- When it was released, as YYYY-MM-DD. Optional: a release may be
-      -- planned before it has a date.
+      -- When the build was RELEASED, as YYYY-MM-DD. Optional: a build may be
+      -- planned, or tested, before it is a release.
       released_on TEXT,
 
       -- The Perforce changelist the build came from, when known.
@@ -485,27 +525,27 @@ const applyAssetRepositorySchema = () => {
       FOREIGN KEY (created_by) REFERENCES users(id)
     );
 
-    CREATE TABLE IF NOT EXISTS release_assets (
+    CREATE TABLE IF NOT EXISTS build_assets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-      release_id INTEGER NOT NULL,
+      build_id INTEGER NOT NULL,
       asset_version_id INTEGER NOT NULL,
 
       added_by INTEGER,
       added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
+      FOREIGN KEY (build_id) REFERENCES builds(id) ON DELETE CASCADE,
       FOREIGN KEY (asset_version_id) REFERENCES asset_versions(id),
       FOREIGN KEY (added_by) REFERENCES users(id),
 
-      UNIQUE (release_id, asset_version_id)
+      UNIQUE (build_id, asset_version_id)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_release_assets_release
-      ON release_assets(release_id);
+    CREATE INDEX IF NOT EXISTS idx_build_assets_build
+      ON build_assets(build_id);
 
-    CREATE INDEX IF NOT EXISTS idx_release_assets_version
-      ON release_assets(asset_version_id);
+    CREATE INDEX IF NOT EXISTS idx_build_assets_version
+      ON build_assets(asset_version_id);
   `);
 
   /*
@@ -564,7 +604,7 @@ const applyAssetRepositorySchema = () => {
    * ENTIRE PROJECT, and UNIQUE (sha256) below is what makes
    * that true rather than merely intended. Every reference
    * anywhere — a developer's workspace, the game store, a
-   * release — points at a row in this table. None of them
+   * build — points at a row in this table. None of them
    * owns the bytes, and none of them gets a second copy.
    *
    * So "uploading the same file again" is a no-op on disk. It

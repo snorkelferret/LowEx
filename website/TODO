@@ -12729,3 +12729,76 @@ no upside. If something seems to need one of them, ask.
          * merging the portal's own technical-check `game` field with the
            tool's receipt — they are two rows, and the tool's is the one the
            gate reads.
+
+
+111) THE WORDS: STREAM, BUILD, RELEASE. 2026-11-19. BUILT.
+     ============================================================
+
+     ASKED BY THE OWNER: "we need to get the terminology correct — lets use
+     that from the game industry, Unreal for preference. Our Unreal game has
+     what I would call various versions: the one currently released
+     (production version), the one in development (there may be more than one
+     of these), and possibly an experimental version — or another."
+
+     THE THING THAT WAS WRONG: the portal called every named build a
+     "release". A RELEASE IS THE ONE THAT SHIPPED; a build is a package from
+     one stream at one changelist, and a studio makes many of them.
+
+     AND TWO UNREAL WORDS COLLIDE WITH THE OWNER'S: **Development** and
+     **Shipping** are BUILD CONFIGURATIONS, not versions; **Experimental** is a
+     plugin/feature state. So "development version" and "experimental version"
+     send a technical reader to the wrong thing. The right word for what the
+     owner listed is STREAM.
+
+     --- THE THREE WORDS ---
+
+       STREAM    a Perforce branch — one line of the game.
+                 //LowExpectations/main, //LowExpectations/release/0.4.
+                 Production, development and experimental lines are streams.
+       BUILD     a package made from ONE stream at ONE changelist.
+                 "0.4 Experimental, 12 Nov". Identified by name, stream,
+                 changelist, who, when.
+       RELEASE   a build that shipped. `released_on` is the date.
+
+     AND: AN ASSET HAS VERSIONS; THE GAME HAS BUILDS. "BigTree v3" and
+     "build 0.4" are not the same kind of thing.
+
+     --- WHAT WAS RENAMED ---
+
+       releases            -> builds
+       release_assets      -> build_assets
+       release_id          -> build_id
+       /api/releases       -> /api/builds
+       routes/releases.js  -> routes/builds.js
+       frontend releases.js / releases.html / *release* ids -> builds
+       check:releases      -> check:builds
+       audit release.*     -> build.* (new rows only; old rows are history)
+
+     `released_on` KEEPS ITS NAME: it is the date a build was released, which
+     is exactly the distinction this item is about.
+
+     THE DATABASE IS RENAMED IN PLACE (db.js, before the CREATE): an existing
+     database is moved with ALTER TABLE ... RENAME, then the column; a fresh
+     one is created with the new names. The old index names are dropped. This
+     was done rather than leaving the tables and renaming only the UI, because
+     the code is where the wrong word would keep coming back.
+
+     --- DOCS ---
+
+       SPEC §8 is now "The game: streams, builds and releases", with the
+       vocabulary table and the Unreal collisions named. §3 points at it.
+       The manual's developer, production and administering pages carry the
+       three words where the panel is introduced.
+       docs/INTEGRATION.md calls the proposed record the BUILD RECORD and says
+       a build in the portal is currently typed by an administrator.
+       docs/TESTING.md's table follows the rename.
+
+     --- NOT DONE, AND NEXT ---
+
+       [ ] The build record's new fields: `stream`, `build_id`, and a source
+           (`typed` | `reported`). The contract proposes POST /api/builds from
+           the build machine; the table currently has name, released_on,
+           changelist, notes. Adding `stream` is what lets a build say which
+           STREAM it came from, which the receipt's changelist is then matched
+           against.
+       [ ] The build machine and distribution, still out of scope (item 53).

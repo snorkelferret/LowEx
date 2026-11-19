@@ -130,7 +130,7 @@ in the record below. Item numbers are in `website/TODO`.
 | **Impersonation** | **Not built.** There is no admin read path into a workspace at all. | Accept that support means asking the developer, or build it. Previews (TODO 89) are the only sight of a submission. |
 | **Multi-role** | **Not built.** An administrator cannot act as prod, so approvals need a real `prod` account. | Accept separate accounts, or build the role switch. (TODO 87) |
 | **Perforce notification** | **Built and proven** (SPEC §17, `deploy/perforce/`). The trigger and its cursor exist; the real server has not had them installed yet. | Install the trigger on the real server and prove one submit. (TODO 88, 107) |
-| **Releases, builds, distribution** | Nothing exists. | Out of scope until the game is being built. |
+| **Builds and distribution** | The build record, membership and diff are built; the build machine and distribution are not. | Out of scope until the game is being built. (TODO 53, 104) |
 | **Alerts** | Email only, and only if SMTP is configured. The portal cannot report its own failure. | Accept, and watch the box some other way. (TODO 41) |
 
 ---

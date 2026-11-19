@@ -1,5 +1,5 @@
 <!-- ============================================================
-     Game releases — named builds, and which approved versions are in them.
+     Game builds — named builds, and which approved versions are in them.
 
      ONE PANEL, TWO PAGES. It is a top-level section on the admin dashboard and
      a tab on the developer dashboard, from this single file. The script hides
@@ -8,26 +8,26 @@
 
      WHAT IT ANSWERS:
 
-       which of my assets were accepted, and into which release
+       which of my assets were accepted, and into which build
        what has gone into the game at all
        what each version is made of (the manifest, as a tree)
        what changed between two builds (the diff, by content hash)
 
      AND THE COLUMNS SORT, because "find your work" is the first thing anybody
-     does here — on a release's contents and on the candidates, and each
-     release in the list carries a count of your own work.
+     does here — on a build's contents and on the candidates, and each
+     build in the list carries a count of your own work.
 
      THE WRAPPING MATCHES adminPanel.html and adminReports.html: card
      panel-module, an h2 in the header, a card-body.
      ============================================================ -->
 
-<section class="card panel-module mb-4" id="releases-module">
+<section class="card panel-module mb-4" id="builds-module">
 
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <h2 class="h5 mb-0">🎮 Game releases</h2>
+    <h2 class="h5 mb-0">🎮 Game builds</h2>
 
-    <label class="small text-secondary mb-0 d-flex align-items-center gap-2" for="releaseMineOnly">
-      <input id="releaseMineOnly" class="form-check-input m-0" type="checkbox">
+    <label class="small text-secondary mb-0 d-flex align-items-center gap-2" for="buildMineOnly">
+      <input id="buildMineOnly" class="form-check-input m-0" type="checkbox">
       Only my work
     </label>
   </div>
@@ -36,72 +36,72 @@
 
     <p class="text-secondary">
       A <strong>named build</strong> — "0.4 Experimental, 12 Nov" — and the
-      approved versions it ships. Pick a release to see what is in it and what
+      approved versions it ships. Pick a build to see what is in it and what
       it is made of.
     </p>
 
-    <div id="releaseAlert" class="alert py-2 px-3 small d-none"></div>
+    <div id="buildAlert" class="alert py-2 px-3 small d-none"></div>
 
-    <!-- ── Create a release — administrators only, hidden by the script ── -->
-    <form id="releaseCreateForm" class="row g-2 align-items-end mb-4">
+    <!-- ── Create a build — administrators only, hidden by the script ── -->
+    <form id="buildCreateForm" class="row g-2 align-items-end mb-4">
 
       <div class="col-md-3">
-        <label class="form-label small mb-1" for="releaseName">Name</label>
-        <input id="releaseName" class="form-control form-control-sm"
+        <label class="form-label small mb-1" for="buildName">Name</label>
+        <input id="buildName" class="form-control form-control-sm"
                placeholder="0.4 Experimental, 12 Nov" autocomplete="off" required>
       </div>
 
       <div class="col-md-3">
-        <label class="form-label small mb-1" for="releaseDate">Released</label>
-        <input id="releaseDate" type="date" class="form-control form-control-sm">
+        <label class="form-label small mb-1" for="buildDate">Released</label>
+        <input id="buildDate" type="date" class="form-control form-control-sm">
       </div>
 
       <div class="col-md-2">
-        <label class="form-label small mb-1" for="releaseChangelist">Changelist</label>
-        <input id="releaseChangelist" class="form-control form-control-sm"
+        <label class="form-label small mb-1" for="buildChangelist">Changelist</label>
+        <input id="buildChangelist" class="form-control form-control-sm"
                inputmode="numeric" placeholder="15407" autocomplete="off">
       </div>
 
       <div class="col-md-2">
-        <label class="form-label small mb-1" for="releaseNotes">Notes</label>
-        <input id="releaseNotes" class="form-control form-control-sm" autocomplete="off">
+        <label class="form-label small mb-1" for="buildNotes">Notes</label>
+        <input id="buildNotes" class="form-control form-control-sm" autocomplete="off">
       </div>
 
       <div class="col-md-2">
-        <button id="releaseCreateBtn" class="btn btn-sm btn-primary w-100 text-nowrap" type="submit">
+        <button id="buildCreateBtn" class="btn btn-sm btn-primary w-100 text-nowrap" type="submit">
           Create
         </button>
       </div>
 
     </form>
 
-    <!-- ── Every release ────────────────────────────────────────── -->
-    <h3 class="h6">Releases</h3>
-    <div id="releaseList" class="list-group list-group-flush small mb-4">
+    <!-- ── Every build ────────────────────────────────────────── -->
+    <h3 class="h6">Builds</h3>
+    <div id="buildList" class="list-group list-group-flush small mb-4">
       <span class="text-secondary">Loading…</span>
     </div>
 
-    <!-- ── One release, selected ────────────────────────────────── -->
-    <div id="releaseDetail" class="d-none">
+    <!-- ── One build, selected ────────────────────────────────── -->
+    <div id="buildDetail" class="d-none">
 
       <!-- A LINE OF RESERVED HEIGHT: the note is one line whether it says
            "3 of these are yours" or "none are", and it lives INSIDE the detail,
-           so opening a release does not push the rest of the page around. -->
-      <div id="releaseMineNote" class="small text-secondary" style="min-height:1.25rem;line-height:1.25rem"></div>
+           so opening a build does not push the rest of the page around. -->
+      <div id="buildMineNote" class="small text-secondary" style="min-height:1.25rem;line-height:1.25rem"></div>
 
       <div class="d-flex justify-content-between align-items-baseline flex-wrap mb-2">
-        <h3 class="h6 mb-0" id="releaseDetailTitle"></h3>
+        <h3 class="h6 mb-0" id="buildDetailTitle"></h3>
         <div class="d-flex align-items-center gap-3">
-          <span class="small text-secondary" id="releaseDetailMeta"></span>
+          <span class="small text-secondary" id="buildDetailMeta"></span>
           <!-- CLICKING THE RELEASE AGAIN ALSO CLOSES IT (onClickList). This is
                the second way, for somebody whose eye is already in the panel. -->
-          <button id="releaseHideBtn" type="button"
+          <button id="buildHideBtn" type="button"
                   class="btn btn-sm btn-outline-secondary py-0 px-2 text-nowrap">
             Hide
           </button>
-          <button id="releaseDeleteBtn" type="button"
+          <button id="buildDeleteBtn" type="button"
                   class="btn btn-sm btn-outline-danger py-0 px-2 text-nowrap">
-            Delete release
+            Delete build
           </button>
         </div>
       </div>
@@ -110,49 +110,49 @@
 
         <div class="col-lg-6">
           <h4 class="h6">
-            In this release
-            <span id="releaseMemberCount" class="text-secondary fw-normal small ms-1"></span>
+            In this build
+            <span id="buildMemberCount" class="text-secondary fw-normal small ms-1"></span>
           </h4>
-          <div id="releaseMembers" class="small"></div>
+          <div id="buildMembers" class="small"></div>
 
           <!-- THE MANIFEST OF ONE VERSION, as a tree. Folders and files are
                native <details>, so every node is a button that opens; a file
                opens to its hash, size and path. Read from the same endpoint a
                downloader uses, so this is exactly what a download contains. -->
-          <div id="releaseManifest" class="d-none mt-3">
+          <div id="buildManifest" class="d-none mt-3">
             <div class="d-flex justify-content-between align-items-center">
-              <h4 class="h6 mb-0" id="releaseManifestTitle"></h4>
-              <button id="releaseManifestClose" type="button"
+              <h4 class="h6 mb-0" id="buildManifestTitle"></h4>
+              <button id="buildManifestClose" type="button"
                       class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2">
                 Hide
               </button>
             </div>
-            <div id="releaseManifestTree" class="small"></div>
+            <div id="buildManifestTree" class="small"></div>
           </div>
         </div>
 
         <div class="col-lg-6">
           <h4 class="h6">
             Candidates
-            <span id="releaseCandidateCount" class="text-secondary fw-normal small ms-1"></span>
+            <span id="buildCandidateCount" class="text-secondary fw-normal small ms-1"></span>
           </h4>
           <p class="small text-secondary mb-2">
-            Approved work this release does not hold yet. A version already in
-            another release is still a candidate here.
+            Approved work this build does not hold yet. A version already in
+            another build is still a candidate here.
           </p>
 
-          <div id="releaseCandidates" class="small"></div>
+          <div id="buildCandidates" class="small"></div>
 
-          <div id="releaseAddControls" class="row g-2 align-items-end mt-2">
+          <div id="buildAddControls" class="row g-2 align-items-end mt-2">
             <div class="col-6">
-              <label class="form-label small mb-1" for="releaseAddChangelist">Changelist</label>
-              <input id="releaseAddChangelist" class="form-control form-control-sm"
+              <label class="form-label small mb-1" for="buildAddChangelist">Changelist</label>
+              <input id="buildAddChangelist" class="form-control form-control-sm"
                      inputmode="numeric" placeholder="15407" autocomplete="off">
             </div>
 
             <div class="col-6">
-              <label class="form-label small mb-1" for="releaseAddNote">Note</label>
-              <input id="releaseAddNote" class="form-control form-control-sm"
+              <label class="form-label small mb-1" for="buildAddNote">Note</label>
+              <input id="buildAddNote" class="form-control form-control-sm"
                      placeholder="why, or what else went with it" autocomplete="off">
             </div>
           </div>
@@ -163,7 +163,7 @@
       <!-- ── Compare two builds ─────────────────────────────────── -->
       <hr class="my-4">
 
-      <h4 class="h6">Compare releases</h4>
+      <h4 class="h6">Compare builds</h4>
       <p class="small text-secondary mb-2">
         What changed going from one build to another — by asset, and inside a
         changed asset, by file content hash.
@@ -171,30 +171,30 @@
 
       <div class="row g-2 align-items-end">
         <div class="col-md-5">
-          <label class="form-label small mb-1" for="releaseDiffFrom">From</label>
-          <select id="releaseDiffFrom" class="form-select form-select-sm"></select>
+          <label class="form-label small mb-1" for="buildDiffFrom">From</label>
+          <select id="buildDiffFrom" class="form-select form-select-sm"></select>
         </div>
 
         <div class="col-md-5">
-          <label class="form-label small mb-1" for="releaseDiffTo">To</label>
-          <select id="releaseDiffTo" class="form-select form-select-sm"></select>
+          <label class="form-label small mb-1" for="buildDiffTo">To</label>
+          <select id="buildDiffTo" class="form-select form-select-sm"></select>
         </div>
 
         <div class="col-md-2">
-          <button id="releaseDiffBtn" type="button"
+          <button id="buildDiffBtn" type="button"
                   class="btn btn-sm btn-outline-info w-100 text-nowrap">
             Compare
           </button>
         </div>
       </div>
 
-      <div id="releaseDiffResult" class="small mt-3"></div>
+      <div id="buildDiffResult" class="small mt-3"></div>
 
     </div>
 
     <p class="form-text mt-3 mb-0">
       The changelist is recorded as an assertion, like the one on a store
-      version: the portal does not talk to Perforce. A release cannot ship two
+      version: the portal does not talk to Perforce. A build cannot ship two
       versions of the same asset — the one in the way is named when that
       happens.
     </p>

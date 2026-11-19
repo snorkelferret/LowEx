@@ -1,6 +1,6 @@
-// frontend/src/releases.js
+// frontend/src/builds.js
 //
-// The Game releases panel: named builds, what is in them, the queue of approved
+// The Game builds panel: named builds, what is in them, the queue of approved
 // work that could go into one, each version's FILES as a tree, and the DIFF
 // between two builds.
 //
@@ -21,7 +21,7 @@
 //   SORTING        every column header sorts, so finding your rows in a long
 //                  build does not mean reading it
 //
-// AND THE RELEASES LIST COUNTS YOUR OWN WORK in each build, before it is even
+// AND THE BUILDS LIST COUNTS YOUR OWN WORK in each build, before it is even
 // opened.
 //
 // ============================================================
@@ -36,7 +36,7 @@ import { $, escapeHtml } from './utils.js';
 import { apiFetch } from './api.js';
 import { formatBytes } from '../../shared/formatBytes.mjs';
 
-const API = '/api/releases';
+const API = '/api/builds';
 const GAME_API = '/api/game';
 
 // WHO IS LOOKING. From the profile the login stored — cosmetic only, because
@@ -52,7 +52,7 @@ const ME = (() => {
 const IS_ADMIN = ME.role === 'admin';
 
 let selectedId = null;
-let allReleases = [];
+let allBuilds = [];
 let currentDetail = null;
 
 // WHICH PANEL, IF ANY, IS OPEN. Both the file tree and the diff are revealed by
@@ -71,7 +71,7 @@ let candidateSort = { key: 'asset', dir: 1 };
 // ---------------------------------------------------------------------------
 
 function showAlert(message, variant = 'danger') {
-    const box = $('releaseAlert');
+    const box = $('buildAlert');
     if (!box) return;
 
     if (!message) {
@@ -110,7 +110,7 @@ const shortHash = hash => (hash ? `${hash.slice(0, 12)}…` : '—');
 
 const isMine = row => Boolean(ME.username && row.uploaded_by === ME.username);
 
-const mineOnly = () => Boolean($('releaseMineOnly')?.checked);
+const mineOnly = () => Boolean($('buildMineOnly')?.checked);
 
 // The sort keys, so the header buttons and the comparators cannot disagree.
 const SORT_KEYS = {
@@ -155,85 +155,85 @@ function sortHeader(label, table, key, current) {
 }
 
 // ---------------------------------------------------------------------------
-// The list of releases
+// The list of builds
 // ---------------------------------------------------------------------------
 
-function renderReleases(releases) {
-    const list = $('releaseList');
+function renderBuilds(builds) {
+    const list = $('buildList');
     if (!list) return;
 
     list.innerHTML = '';
 
-    if (releases.length === 0) {
-        list.innerHTML = '<span class="text-secondary">No releases yet.</span>';
+    if (builds.length === 0) {
+        list.innerHTML = '<span class="text-secondary">No builds yet.</span>';
         return;
     }
 
-    for (const release of releases) {
+    for (const build of builds) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'list-group-item list-group-item-action bg-transparent text-start'
-            + (release.id === selectedId ? ' active' : '');
-        button.dataset.releaseId = String(release.id);
+            + (build.id === selectedId ? ' active' : '');
+        button.dataset.buildId = String(build.id);
 
-        const date = release.released_on ? formatDate(release.released_on) : 'no date';
-        const changelist = release.changelist ? ` · CL ${release.changelist}` : '';
+        const date = build.released_on ? formatDate(build.released_on) : 'no date';
+        const changelist = build.changelist ? ` · CL ${build.changelist}` : '';
 
         // HOW MUCH OF THIS BUILD IS THE VIEWER'S OWN WORK. That is the question
         // a developer opens this page to answer.
-        const mine = release.mine_count > 0
-            ? ` · <span class="text-info">${release.mine_count} of yours</span>`
+        const mine = build.mine_count > 0
+            ? ` · <span class="text-info">${build.mine_count} of yours</span>`
             : '';
 
         button.innerHTML =
-            `<span class="fw-semibold">${escapeHtml(release.name)}</span>` +
+            `<span class="fw-semibold">${escapeHtml(build.name)}</span>` +
             `<span class="d-block small text-secondary">${date}${changelist} · ` +
-            `${release.asset_count} version${release.asset_count === 1 ? '' : 's'}${mine}</span>`;
+            `${build.asset_count} version${build.asset_count === 1 ? '' : 's'}${mine}</span>`;
 
         list.appendChild(button);
     }
 }
 
 function refreshDiffSelects() {
-    for (const id of ['releaseDiffFrom', 'releaseDiffTo']) {
+    for (const id of ['buildDiffFrom', 'buildDiffTo']) {
         const select = $(id);
         if (!select) continue;
 
         const previous = select.value;
 
-        select.innerHTML = allReleases
-            .map(release => `<option value="${release.id}">${escapeHtml(release.name)}</option>`)
+        select.innerHTML = allBuilds
+            .map(build => `<option value="${build.id}">${escapeHtml(build.name)}</option>`)
             .join('');
 
-        if (previous && allReleases.some(r => String(r.id) === previous)) {
+        if (previous && allBuilds.some(r => String(r.id) === previous)) {
             select.value = previous;
         }
     }
 
-    const to = $('releaseDiffTo');
-    const from = $('releaseDiffFrom');
+    const to = $('buildDiffTo');
+    const from = $('buildDiffFrom');
 
     if (to && selectedId !== null) to.value = String(selectedId);
 
     if (from && (!from.value || from.value === to?.value)) {
-        const other = allReleases.find(r => String(r.id) !== from.value);
+        const other = allBuilds.find(r => String(r.id) !== from.value);
         if (other) from.value = String(other.id);
     }
 }
 
-async function loadReleases() {
+async function loadBuilds() {
     try {
         const data = await fetchJson(API);
-        allReleases = data.releases || [];
-        renderReleases(allReleases);
+        allBuilds = data.builds || [];
+        renderBuilds(allBuilds);
         refreshDiffSelects();
     } catch (err) {
-        showAlert(`Could not load releases: ${err.message}`);
+        showAlert(`Could not load builds: ${err.message}`);
     }
 }
 
 // ---------------------------------------------------------------------------
-// What is in a release
+// What is in a build
 // ---------------------------------------------------------------------------
 
 function peopleCell(row) {
@@ -271,8 +271,8 @@ function emptyRow(table, message) {
 }
 
 function renderMembers(members) {
-    const box = $('releaseMembers');
-    const count = $('releaseMemberCount');
+    const box = $('buildMembers');
+    const count = $('buildMemberCount');
     if (!box) return;
 
     const shown = sortRows(mineOnly() ? members.filter(isMine) : members, memberSort);
@@ -302,8 +302,8 @@ function renderMembers(members) {
 
     if (shown.length === 0) {
         emptyRow(table, members.length === 0
-            ? 'Nothing in this release yet.'
-            : 'None of this release is yours.');
+            ? 'Nothing in this build yet.'
+            : 'None of this build is yours.');
     }
 
     for (const row of shown) {
@@ -347,8 +347,8 @@ function renderMembers(members) {
 }
 
 function renderCandidates(candidates) {
-    const box = $('releaseCandidates');
-    const count = $('releaseCandidateCount');
+    const box = $('buildCandidates');
+    const count = $('buildCandidateCount');
     if (!box) return;
 
     const shown = sortRows(mineOnly() ? candidates.filter(isMine) : candidates, candidateSort);
@@ -377,15 +377,15 @@ function renderCandidates(candidates) {
 
     if (shown.length === 0) {
         emptyRow(table, candidates.length === 0
-            ? 'Everything approved is already in this release.'
+            ? 'Everything approved is already in this build.'
             : 'None of the candidates are yours.');
     }
 
     for (const row of shown) {
         const tr = document.createElement('tr');
 
-        tr.appendChild(assetCell(row, row.in_other_release
-            ? ' <span class="badge text-bg-secondary ms-1">in another release</span>'
+        tr.appendChild(assetCell(row, row.in_other_build
+            ? ' <span class="badge text-bg-secondary ms-1">in another build</span>'
             : ''));
         tr.appendChild(peopleCell(row));
         tr.appendChild(cellDate(row.decided_at));
@@ -420,31 +420,31 @@ function cellDate(value) {
 }
 
 // ---------------------------------------------------------------------------
-// One release
+// One build
 // ---------------------------------------------------------------------------
 
 function renderDetail(detail) {
     currentDetail = detail;
-    const { release } = detail;
+    const { build } = detail;
 
-    $('releaseDetail')?.classList.remove('d-none');
+    $('buildDetail')?.classList.remove('d-none');
 
-    const title = $('releaseDetailTitle');
-    if (title) title.textContent = release.name;
+    const title = $('buildDetailTitle');
+    if (title) title.textContent = build.name;
 
-    const meta = $('releaseDetailMeta');
+    const meta = $('buildDetailMeta');
     if (meta) {
         const parts = [];
-        parts.push(release.released_on ? `Released ${formatDate(release.released_on)}` : 'No date');
-        if (release.changelist) parts.push(`CL ${release.changelist}`);
-        if (release.created_by) parts.push(`created by ${release.created_by}`);
-        if (release.notes) parts.push(release.notes);
+        parts.push(build.released_on ? `Released ${formatDate(build.released_on)}` : 'No date');
+        if (build.changelist) parts.push(`CL ${build.changelist}`);
+        if (build.created_by) parts.push(`created by ${build.created_by}`);
+        if (build.notes) parts.push(build.notes);
         meta.textContent = parts.join(' · ');
     }
 
-    // The tree belongs to one version and one release; changing release closes
+    // The tree belongs to one version and one build; changing build closes
     // it rather than leaving a tree labelled with the wrong build.
-    $('releaseManifest')?.classList.add('d-none');
+    $('buildManifest')?.classList.add('d-none');
     openManifest = null;
 
     renderMembers(detail.members || []);
@@ -452,29 +452,29 @@ function renderDetail(detail) {
 
     // HOW MUCH OF IT IS THE VIEWER'S. Said once, in the header, rather than
     // repeated on every row.
-    const note = $('releaseMineNote');
+    const note = $('buildMineNote');
     if (note) {
         const mine = (detail.members || []).filter(isMine).length;
         note.textContent = mine
-            ? `${mine} of the versions in this release are yours.`
-            : 'None of this release is your work.';
+            ? `${mine} of the versions in this build are yours.`
+            : 'None of this build is your work.';
     }
 
     refreshDiffSelects();
 }
 
-async function selectRelease(id) {
+async function selectBuild(id) {
     selectedId = id;
 
     try {
         const detail = await fetchJson(`${API}/${id}`);
         renderDetail(detail);
 
-        for (const button of document.querySelectorAll('#releaseList [data-release-id]')) {
-            button.classList.toggle('active', Number(button.dataset.releaseId) === id);
+        for (const button of document.querySelectorAll('#buildList [data-build-id]')) {
+            button.classList.toggle('active', Number(button.dataset.buildId) === id);
         }
     } catch (err) {
-        showAlert(`Could not load that release: ${err.message}`);
+        showAlert(`Could not load that build: ${err.message}`);
     }
 }
 
@@ -535,14 +535,14 @@ function renderNode(node, parent) {
 }
 
 function resetManifestButtons() {
-    for (const button of document.querySelectorAll('#releaseMembers button[data-manifest-version]')) {
+    for (const button of document.querySelectorAll('#buildMembers button[data-manifest-version]')) {
         button.textContent = 'Files';
         button.classList.remove('active');
     }
 }
 
 function hideManifest() {
-    $('releaseManifest')?.classList.add('d-none');
+    $('buildManifest')?.classList.add('d-none');
     resetManifestButtons();
     openManifest = null;
 }
@@ -566,9 +566,9 @@ async function toggleManifest(button) {
 }
 
 async function loadManifest(assetId, versionId, label) {
-    const panel = $('releaseManifest');
-    const title = $('releaseManifestTitle');
-    const tree = $('releaseManifestTree');
+    const panel = $('buildManifest');
+    const title = $('buildManifestTitle');
+    const tree = $('buildManifestTree');
 
     if (!panel || !title || !tree) return;
 
@@ -615,7 +615,7 @@ function renderFileLine(text) {
 }
 
 function renderDiff(diff) {
-    const box = $('releaseDiffResult');
+    const box = $('buildDiffResult');
     if (!box) return;
 
     box.innerHTML = '';
@@ -676,21 +676,21 @@ function renderDiff(diff) {
 }
 
 function hideDiff() {
-    const box = $('releaseDiffResult');
+    const box = $('buildDiffResult');
     if (box) box.innerHTML = '';
 
-    const button = $('releaseDiffBtn');
+    const button = $('buildDiffBtn');
     if (button) button.textContent = 'Compare';
 
     openDiff = null;
 }
 
 async function runDiff() {
-    const from = Number($('releaseDiffFrom')?.value);
-    const to = Number($('releaseDiffTo')?.value);
+    const from = Number($('buildDiffFrom')?.value);
+    const to = Number($('buildDiffTo')?.value);
 
     if (!Number.isInteger(from) || !Number.isInteger(to)) {
-        showAlert('Choose two releases to compare.', 'warning');
+        showAlert('Choose two builds to compare.', 'warning');
         return;
     }
 
@@ -706,10 +706,10 @@ async function runDiff() {
         renderDiff(diff);
 
         openDiff = key;
-        const button = $('releaseDiffBtn');
+        const button = $('buildDiffBtn');
         if (button) button.textContent = 'Hide diff';
     } catch (err) {
-        showAlert(`Could not compare those releases: ${err.message}`);
+        showAlert(`Could not compare those builds: ${err.message}`);
     }
 }
 
@@ -720,18 +720,18 @@ async function runDiff() {
 function onSubmitCreate(event) {
     event.preventDefault();
 
-    const name = $('releaseName')?.value.trim();
+    const name = $('buildName')?.value.trim();
 
     if (!name) {
-        showAlert('A release needs a name.', 'warning');
+        showAlert('A build needs a name.', 'warning');
         return;
     }
 
     const payload = {
         name,
-        released_on: $('releaseDate')?.value || null,
-        changelist: $('releaseChangelist')?.value || null,
-        notes: $('releaseNotes')?.value || null
+        released_on: $('buildDate')?.value || null,
+        changelist: $('buildChangelist')?.value || null,
+        notes: $('buildNotes')?.value || null
     };
 
     fetchJson(API, {
@@ -741,8 +741,8 @@ function onSubmitCreate(event) {
     })
         .then(detail => {
             showAlert('', 'success');
-            $('releaseCreateForm')?.reset();
-            return loadReleases().then(() => selectRelease(detail.release.id));
+            $('buildCreateForm')?.reset();
+            return loadBuilds().then(() => selectBuild(detail.build.id));
         })
         .catch(err => showAlert(err.message));
 }
@@ -752,8 +752,8 @@ function addVersion(versionId, name) {
 
     const payload = {
         asset_version_id: versionId,
-        changelist: $('releaseAddChangelist')?.value || null,
-        note: $('releaseAddNote')?.value || null
+        changelist: $('buildAddChangelist')?.value || null,
+        note: $('buildAddNote')?.value || null
     };
 
     fetchJson(`${API}/${selectedId}/assets`, {
@@ -764,7 +764,7 @@ function addVersion(versionId, name) {
         .then(detail => {
             showAlert(`${name} added.`, 'success');
             renderDetail(detail);
-            loadReleases();
+            loadBuilds();
         })
         .catch(err => showAlert(err.message));
 }
@@ -776,31 +776,31 @@ function hideDetail() {
     selectedId = null;
     currentDetail = null;
 
-    $('releaseDetail')?.classList.add('d-none');
+    $('buildDetail')?.classList.add('d-none');
 
     hideManifest();
     hideDiff();
 
-    for (const button of document.querySelectorAll('#releaseList [data-release-id]')) {
+    for (const button of document.querySelectorAll('#buildList [data-build-id]')) {
         button.classList.remove('active');
     }
 
-    const note = $('releaseMineNote');
+    const note = $('buildMineNote');
     if (note) note.textContent = '';
 }
 
 function onClickList(event) {
-    const button = event.target.closest('button[data-release-id]');
+    const button = event.target.closest('button[data-build-id]');
     if (!button) return;
 
-    const id = Number(button.dataset.releaseId);
+    const id = Number(button.dataset.buildId);
 
     if (id === selectedId) {
         hideDetail();
         return;
     }
 
-    selectRelease(id);
+    selectBuild(id);
 }
 
 // Sorting: any column header in either table.
@@ -842,7 +842,7 @@ function onClickMembers(event) {
         .then(detail => {
             showAlert('', 'success');
             renderDetail(detail);
-            loadReleases();
+            loadBuilds();
         })
         .catch(err => showAlert(err.message));
 }
@@ -869,18 +869,18 @@ function onMineChange() {
 function onClickDelete() {
     if (selectedId === null) return;
 
-    const name = $('releaseDetailTitle')?.textContent || 'this release';
+    const name = $('buildDetailTitle')?.textContent || 'this build';
 
-    if (!window.confirm(`Delete ${name}? The versions stay in the store; only the release is removed.`)) {
+    if (!window.confirm(`Delete ${name}? The versions stay in the store; only the build is removed.`)) {
         return;
     }
 
     fetchJson(`${API}/${selectedId}`, { method: 'DELETE' })
         .then(() => {
             selectedId = null;
-            $('releaseDetail')?.classList.add('d-none');
+            $('buildDetail')?.classList.add('d-none');
             hideDiff();
-            loadReleases();
+            loadBuilds();
         })
         .catch(err => showAlert(err.message));
 }
@@ -890,22 +890,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // case; a button that would be refused is a button that teaches the wrong
     // thing about the role.
     if (!IS_ADMIN) {
-        $('releaseCreateForm')?.classList.add('d-none');
-        $('releaseDeleteBtn')?.classList.add('d-none');
-        $('releaseAddControls')?.classList.add('d-none');
+        $('buildCreateForm')?.classList.add('d-none');
+        $('buildDeleteBtn')?.classList.add('d-none');
+        $('buildAddControls')?.classList.add('d-none');
     }
 
-    $('releaseCreateForm')?.addEventListener('submit', onSubmitCreate);
-    $('releaseList')?.addEventListener('click', onClickList);
-    $('releaseMembers')?.addEventListener('click', onClickMembers);
-    $('releaseCandidates')?.addEventListener('click', onClickCandidates);
-    $('releaseDeleteBtn')?.addEventListener('click', onClickDelete);
-    $('releaseDiffBtn')?.addEventListener('click', runDiff);
-    $('releaseDiffFrom')?.addEventListener('change', hideDiff);
-    $('releaseDiffTo')?.addEventListener('change', hideDiff);
-    $('releaseManifestClose')?.addEventListener('click', hideManifest);
-    $('releaseMineOnly')?.addEventListener('change', onMineChange);
-    $('releaseHideBtn')?.addEventListener('click', hideDetail);
+    $('buildCreateForm')?.addEventListener('submit', onSubmitCreate);
+    $('buildList')?.addEventListener('click', onClickList);
+    $('buildMembers')?.addEventListener('click', onClickMembers);
+    $('buildCandidates')?.addEventListener('click', onClickCandidates);
+    $('buildDeleteBtn')?.addEventListener('click', onClickDelete);
+    $('buildDiffBtn')?.addEventListener('click', runDiff);
+    $('buildDiffFrom')?.addEventListener('change', hideDiff);
+    $('buildDiffTo')?.addEventListener('change', hideDiff);
+    $('buildManifestClose')?.addEventListener('click', hideManifest);
+    $('buildMineOnly')?.addEventListener('change', onMineChange);
+    $('buildHideBtn')?.addEventListener('click', hideDetail);
 
-    loadReleases();
+    loadBuilds();
 });

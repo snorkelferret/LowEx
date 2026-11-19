@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Checks the RELEASES PATH — naming a build, putting approved work into it,
+ * Checks the BUILDS PATH — naming a build, putting approved work into it,
  * taking it out, the one-version-per-asset rule, and the DIFF between builds.
  *
- *   node tests/check-releases.js       # exit 0 = clean
+ *   node tests/check-builds.js       # exit 0 = clean
  *
  * ============================================================
  * WHAT IT PROVES
@@ -11,7 +11,7 @@
  *
  *   create     a name and a date are stored; the changelist is optional and
  *              validated when present; a duplicate name is refused
- *   candidates approved store versions this release does not hold — every
+ *   candidates approved store versions this build does not hold — every
  *              approved version is one until it is chosen
  *   add        the version becomes a member; the changelist recorded with it
  *              is written as an integration too; the UPLOADER is reported
@@ -30,7 +30,7 @@
  * ============================================================
  *
  * tests/lib/check-harness.js. Two assets are seeded with approved versions
- * and real file rows — the release path reads approvals and files rather than
+ * and real file rows — the build path reads approvals and files rather than
  * performing or uploading them, and those have their own checks.
  */
 
@@ -50,9 +50,9 @@ async function main() {
     const report = new Reporter();
 
     const server = await startCheckServer({
-        prefix: 'lowex-releases-',
-        route: 'backend/routes/releases',
-        mount: '/api/releases',
+        prefix: 'lowex-builds-',
+        route: 'backend/routes/builds',
+        mount: '/api/builds',
 
         seed(db) {
             db.exec(`
@@ -132,14 +132,14 @@ async function main() {
         notes: 'first'
     }, admin);
 
-    report.check('a release can be named', created.status === 201,
+    report.check('a build can be named', created.status === 201,
         `expected 201, got ${created.status} — ${created.text.slice(0, 140)}`);
 
-    const releaseA = created.json?.release?.id;
+    const buildA = created.json?.build?.id;
 
     report.check('with its date and changelist stored',
-        created.json?.release?.released_on === '2026-10-30'
-        && created.json?.release?.changelist === 15407);
+        created.json?.build?.released_on === '2026-10-30'
+        && created.json?.build?.changelist === 15407);
 
     const duplicate = await server.post('/', { name: '0.1 Sandbox, 30 Oct' }, admin);
 
@@ -172,7 +172,7 @@ async function main() {
     // ADD, AND THE ONE-VERSION RULE
     // -----------------------------------------------------------------
 
-    const added = await server.post(`/${releaseA}/assets`, {
+    const added = await server.post(`/${buildA}/assets`, {
         asset_version_id: 2,
         changelist: 15407,
         note: 'imported'
@@ -184,7 +184,7 @@ async function main() {
     report.check('and becomes a member', JSON.stringify(memberIds(added.json)) === JSON.stringify([2]));
     report.check('with the changelist recorded', added.json?.members?.[0]?.changelist === 15407);
 
-    const otherVersion = await server.post(`/${releaseA}/assets`, { asset_version_id: 1 }, admin);
+    const otherVersion = await server.post(`/${buildA}/assets`, { asset_version_id: 1 }, admin);
 
     report.check('a second version of the same asset is refused', otherVersion.status === 409,
         `expected 409, got ${otherVersion.status}`);
@@ -193,7 +193,7 @@ async function main() {
         /v2/.test(otherVersion.text) && /already in/.test(otherVersion.text),
         `message: ${otherVersion.text}`);
 
-    const differentAsset = await server.post(`/${releaseA}/assets`, { asset_version_id: 3 }, admin);
+    const differentAsset = await server.post(`/${buildA}/assets`, { asset_version_id: 3 }, admin);
 
     report.check('a different asset is accepted', differentAsset.status === 201,
         `expected 201, got ${differentAsset.status} — ${differentAsset.text.slice(0, 140)}`);
@@ -202,16 +202,16 @@ async function main() {
     // into what" is their question — and the mine_count comes back for them.
     const asDeveloper = await server.get('/', dev);
 
-    report.check('a developer can read the releases', asDeveloper.status === 200,
+    report.check('a developer can read the builds', asDeveloper.status === 200,
         `expected 200, got ${asDeveloper.status}`);
 
     report.check('and the list counts their own work',
-        (asDeveloper.json?.releases || []).every(r => typeof r.mine_count === 'number'),
-        `first release: ${JSON.stringify(asDeveloper.json?.releases?.[0])}`);
+        (asDeveloper.json?.builds || []).every(r => typeof r.mine_count === 'number'),
+        `first build: ${JSON.stringify(asDeveloper.json?.builds?.[0])}`);
 
-    const developerWrite = await server.post(`/${releaseA}/assets`, { asset_version_id: 2 }, dev);
+    const developerWrite = await server.post(`/${buildA}/assets`, { asset_version_id: 2 }, dev);
 
-    report.check('but a developer cannot put work into a release',
+    report.check('but a developer cannot put work into a build',
         developerWrite.status === 403,
         `expected 403, got ${developerWrite.status}`);
 
@@ -225,17 +225,17 @@ async function main() {
     const prod = server.tokenFor(3);
     const asProd = await server.get('/', prod);
 
-    report.check('production can read the releases', asProd.status === 200,
+    report.check('production can read the builds', asProd.status === 200,
         `expected 200, got ${asProd.status}`);
 
-    const prodWrite = await server.post(`/${releaseA}/assets`, { asset_version_id: 2 }, prod);
+    const prodWrite = await server.post(`/${buildA}/assets`, { asset_version_id: 2 }, prod);
 
-    report.check('but production cannot put work into a release', prodWrite.status === 403,
+    report.check('but production cannot put work into a build', prodWrite.status === 403,
         `expected 403, got ${prodWrite.status}`);
 
-    // v2 out, v1 in — so release A holds BigTree v1 and the diff has something
+    // v2 out, v1 in — so build A holds BigTree v1 and the diff has something
     // to compare against.
-    const removed = await server.del(`/${releaseA}/assets/2`, admin);
+    const removed = await server.del(`/${buildA}/assets/2`, admin);
 
     report.check('a version can be taken back out', removed.status === 200,
         `expected 200, got ${removed.status}`);
@@ -244,7 +244,7 @@ async function main() {
         JSON.stringify(candidateIds(removed.json)) === JSON.stringify([1, 2]),
         `candidates: ${JSON.stringify(candidateIds(removed.json))}`);
 
-    const addV1 = await server.post(`/${releaseA}/assets`, { asset_version_id: 1 }, admin);
+    const addV1 = await server.post(`/${buildA}/assets`, { asset_version_id: 1 }, admin);
 
     report.check('the other version can then be added', addV1.status === 201,
         `expected 201, got ${addV1.status}`);
@@ -255,15 +255,15 @@ async function main() {
 
     const second = await server.post('/', { name: '0.2 Sandbox, 30 Oct' }, admin);
 
-    report.check('a second release can be named', second.status === 201,
+    report.check('a second build can be named', second.status === 201,
         `expected 201, got ${second.status}`);
 
-    const releaseB = second.json?.release?.id;
+    const buildB = second.json?.build?.id;
 
-    await server.post(`/${releaseB}/assets`, { asset_version_id: 2 }, admin);
-    await server.post(`/${releaseB}/assets`, { asset_version_id: 3 }, admin);
+    await server.post(`/${buildB}/assets`, { asset_version_id: 2 }, admin);
+    await server.post(`/${buildB}/assets`, { asset_version_id: 3 }, admin);
 
-    const diff = await server.get(`/${releaseB}/diff?against=${releaseA}`, admin);
+    const diff = await server.get(`/${buildB}/diff?against=${buildA}`, admin);
 
     report.check('a diff is served', diff.status === 200,
         `expected 200, got ${diff.status} — ${diff.text.slice(0, 140)}`);
@@ -294,26 +294,26 @@ async function main() {
         bigTree?.files?.removed?.length === 0,
         `removed: ${JSON.stringify(bigTree?.files?.removed)}`);
 
-    const backwards = await server.get(`/${releaseA}/diff?against=${releaseB}`, admin);
+    const backwards = await server.get(`/${buildA}/diff?against=${buildB}`, admin);
 
     report.check('the reverse diff has the same change the other way',
         assetOf(backwards.json, 'BigTree')?.files?.removed?.[0]?.path === 'notes/extra.txt',
         `removed: ${JSON.stringify(assetOf(backwards.json, 'BigTree')?.files?.removed)}`);
 
-    const itself = await server.get(`/${releaseB}/diff?against=${releaseB}`, admin);
+    const itself = await server.get(`/${buildB}/diff?against=${buildB}`, admin);
 
-    report.check('a release diffed against itself is all unchanged',
+    report.check('a build diffed against itself is all unchanged',
         itself.json?.summary?.unchanged === 2 && itself.json?.summary?.changed === 0,
         `summary: ${JSON.stringify(itself.json?.summary)}`);
 
-    const noAgainst = await server.get(`/${releaseB}/diff`, admin);
+    const noAgainst = await server.get(`/${buildB}/diff`, admin);
 
-    report.check('a diff needs two releases', noAgainst.status === 400,
+    report.check('a diff needs two builds', noAgainst.status === 400,
         `expected 400, got ${noAgainst.status}`);
 
-    const missing = await server.get(`/${releaseB}/diff?against=999`, admin);
+    const missing = await server.get(`/${buildB}/diff?against=999`, admin);
 
-    report.check('a missing release is a 404', missing.status === 404,
+    report.check('a missing build is a 404', missing.status === 404,
         `expected 404, got ${missing.status}`);
 
     // -----------------------------------------------------------------
@@ -322,38 +322,38 @@ async function main() {
 
     const audits = action => db.prepare('SELECT * FROM audit_logs WHERE action = ?').all(action);
 
-    report.check('the release creation is recorded', audits('release.create').length === 2);
-    report.check('the additions are recorded', audits('release.asset_add').length === 5,
-        `found ${audits('release.asset_add').length}`);
-    report.check('the removal is recorded', audits('release.asset_remove').length === 1);
+    report.check('the build creation is recorded', audits('build.create').length === 2);
+    report.check('the additions are recorded', audits('build.asset_add').length === 5,
+        `found ${audits('build.asset_add').length}`);
+    report.check('the removal is recorded', audits('build.asset_remove').length === 1);
 
     // -----------------------------------------------------------------
     // DELETE
     // -----------------------------------------------------------------
 
-    const deleted = await server.del(`/${releaseA}`, admin);
+    const deleted = await server.del(`/${buildA}`, admin);
 
-    report.check('a release can be deleted', deleted.status === 200,
+    report.check('a build can be deleted', deleted.status === 200,
         `expected 200, got ${deleted.status}`);
 
-    const gone = await server.get(`/${releaseA}`, admin);
+    const gone = await server.get(`/${buildA}`, admin);
 
     report.check('and is gone afterwards', gone.status === 404,
         `expected 404, got ${gone.status}`);
 
-    report.check('the assets survive the release',
+    report.check('the assets survive the build',
         db.prepare('SELECT COUNT(*) AS n FROM asset_versions').get().n === 3,
-        'deleting a release removed store content');
+        'deleting a build removed store content');
 
     report.check('the deletion is recorded',
-        audits('release.delete').length === 1 && audits('release.delete')[0].actor_id === 1);
+        audits('build.delete').length === 1 && audits('build.delete')[0].actor_id === 1);
 
     // -----------------------------------------------------------------
 
     db.close();
     await server.close();
 
-    report.finish('releases hold what they say, one version per asset, and the diff is by content');
+    report.finish('builds hold what they say, one version per asset, and the diff is by content');
 }
 
 main().catch(err => {

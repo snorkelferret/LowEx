@@ -8,7 +8,7 @@ For administrators.
 |---|---|
 | **user** | A tester. No extra privileges; the tester features are available to anyone signed in. |
 | **developer** | Works in their own private workspace. Uploads, versions, submits for review. |
-| **prod** | Production — a craft role, not a seniority. **Decides creative approvals and comments**, and **reads the store, the library and the releases**. Managing categories and discussion boards is intended for this role and **is not built yet**. **No workspace, no admin powers, cannot deactivate or invite anybody.** |
+| **prod** | Production — a craft role, not a seniority. **Decides creative approvals and comments**, and **reads the store, the library and the builds**. Managing categories and discussion boards is intended for this role and **is not built yet**. **No workspace, no admin powers, cannot deactivate or invite anybody.** |
 | **admin** | Administers the system. Accounts, invitations, reports, settings, audit log, deactivation. **The top of the ladder — there is nothing above it.** |
 
 **The ladder is `user < developer < admin`.** `prod` sits between developer and
@@ -176,23 +176,28 @@ If the portal has been configured to send mail, the link is emailed. If not, you
 are given the link to pass on yourself — so invitations work either way, and a
 misconfigured mail server is never the reason nobody can get in.
 
-## Releases
+## Builds
 
-**Releases** is where an approved asset is put into a named build — "0.4
+**Builds** is where an approved asset is put into a named build — "0.4
 Experimental, 12 Nov" — and where you can see what a build already contains.
+
+**The words.** A **stream** is a branch of the game, such as
+`//LowExpectations/main`. A **build** is a package made from one stream at one
+changelist. A **release** is a build that shipped: the date field below is when
+that happened. An asset has versions; the game has builds.
 **Developers see the same panel read-only**; the controls that write are shown
 to administrators only, because the server refuses everybody else.
 
-**Selecting a release is a toggle.** Click one to open it; click it again, or
+**Selecting a build is a toggle.** Click one to open it; click it again, or
 press **Hide**, to close it — and opening another switches rather than stacking.
 
 Two lists, and the difference matters:
 
-- **In this release** — what this build ships. One version per asset: a build
+- **In this build** — what it holds. One version per asset: a build
   cannot hold two versions of the same thing, and the panel names the version in
   the way if you try.
-- **Candidates** — everything approved that this release does not hold yet. A
-  version already in *another* release still appears, marked, because the same
+- **Candidates** — everything approved that this build does not hold yet. A
+  version already in *another* build still appears, marked, because the same
   version can ship in several builds.
 
 **Adding a version** records it as part of this build. The **changelist** is
@@ -201,14 +206,14 @@ one, it is recorded against the version as well, which is what answers "what put
 this into Unreal" later.
 
 **Removing** takes the version out of this build. It stays approved in the
-store; a release is a statement about a build, not a second copy.
+store; a build is a statement about the game, not a second copy.
 
 **Files** opens the version's manifest as a tree: folders, then files, and each
 file opens to its content hash, its size and its path. This is the same list a
 download would produce, not a second reading of the database. **Press Files
 again — or Hide — to close it**; the button that opens a panel also closes it.
 
-**Compare releases** shows what changed between two builds; **Compare again
+**Compare builds** shows what changed between two builds; **Compare again
 closes it**, and changing either selection closes it too. Assets are added,
 removed, changed or unchanged; under a changed asset, the files are listed as
 added, removed or modified — **compared by content hash**, so the same bytes

@@ -189,7 +189,7 @@ easy path and leaves a record.
 build against.
 
 It records: **the game was built from this stream at this changelist.** A
-release in the portal today is an administrator typing a name and optionally a
+build in the portal today is an administrator typing a name and optionally a
 changelist; nothing connects it to a receipt or to a stream.
 
 ### Body
@@ -209,7 +209,7 @@ changelist; nothing connects it to a receipt or to a stream.
 
 - authenticated by the same key, and refused while integration tooling is off;
 - idempotent on `(stream, changelist)`;
-- creates or updates a `releases` row marked as **reported by the build**
+- creates or updates a `builds` row marked as **reported by the build**
   rather than typed, gaining a `stream` column and a source;
 - `base_stream` / `base_changelist` describe a **candidate build** — a task
   stream over a game stream — which is the build that lets a change be tested
@@ -312,7 +312,7 @@ by the thing that did it**.
 
 ### What it enables
 
-- **The release shows what is actually in it.** An asset appears in a build
+- **The build page shows what is actually in it.** An asset appears in a build
   because an inclusion names that build's changelist — not because somebody
   ticked a box.
 - **"Is this in the game?" stops being a dash.** The store's `In the game`

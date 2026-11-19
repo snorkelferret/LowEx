@@ -147,11 +147,15 @@ app.use('/api/library', require('./routes/library'));
 // resource rather than a personal one. See routes/game.js.
 app.use('/api/game', require('./routes/game'));
 
-// NAMED RELEASES, AND WHAT IS IN THEM. The admin's queue: which approved
+// NAMED BUILDS, AND WHAT IS IN THEM. The admin's queue: which approved
 // versions are candidates for a build, and which version of the game each one
 // goes into. Admin-only, because putting content into the game is engineering
-// rather than craft — see routes/releases.js.
-app.use('/api/releases', require('./routes/releases'));
+// rather than craft — see routes/builds.js.
+//
+// A BUILD IS NOT A RELEASE: a build is a package from one stream at one
+// changelist, and a release is a build that shipped. The table and the page
+// use the industry words since 2026-11-19.
+app.use('/api/builds', require('./routes/builds'));
 
 // THE RECEIPT FROM THE IN-EDITOR TOOL. A program's route, authenticated by a
 // key of its own rather than a session, and closed while `integration_tooling`

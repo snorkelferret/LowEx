@@ -106,7 +106,7 @@ when either is missing.
 | `check:upload` | the folder names the asset, bytes are stored once, an unchanged version is refused |
 | `check:upload-pending` | an asset under review refuses changes |
 | `check:round-trip` | a version downloads as approved and imports back as references |
-| `check:releases` | releases, membership, the one-version rule and the diff behave |
+| `check:builds` | builds, membership, the one-version rule and the diff behave |
 | `check:library` | the library is readable by content roles and writable by the right ones |
 | `check:perforce` | the portal is told once, can say what it last heard, and reports a gap |
 | `check:integration` | the destination gate and the tool's receipt behave |

@@ -34,7 +34,7 @@ and exits 1.
 | upload | `check:upload` | route | the folder names the asset, bytes are stored once, an unchanged version is refused |
 | upload while pending | `check:upload-pending` | route | an asset under review refuses changes |
 | download | `check:round-trip` | route | an approved version downloads and imports back as references |
-| releases | `check:releases` | route | membership, the one-version rule, the manifest tree and the diff |
+| builds | `check:builds` | route | membership, the one-version rule, the manifest tree and the diff |
 | library | `check:library` | route | content roles read it; the wrong roles do not write |
 | Perforce | `check:perforce` | route | the portal is told once, has a cursor, and reports a gap |
 | destination | `check:integration` | route | the game destination gate, the tool's receipt, retargeting |
@@ -88,7 +88,7 @@ Two failure modes this catches, in the record:
 - a rule written in a comment and never exercised — the collector's foreign key
   (TODO 90);
 - a permission change made by adding a role to one list after another — which
-  is why `check:library` and `check:releases` assert refusals as well as
+  is why `check:library` and `check:builds` assert refusals as well as
   grants.
 
 ## What is not covered
@@ -98,7 +98,7 @@ Said plainly, so nobody assumes the suite is more than it is.
 - **The browser, beyond the destination flow.** `check:browser` covers that
   flow end to end, and it is opt-in because it needs Chrome. No other click in
   the portal is exercised: the upload picker, the bin, the library and the
-  releases panel are checked structurally by `check:dom` and not driven.
+  builds panel are checked structurally by `check:dom` and not driven.
 - **Registration, invitations, 2FA and Google sign-in.** `check:auth` covers the
   username/password path only.
 - **The views and manual pages.** That they render, and that a link lands where

@@ -218,22 +218,29 @@ store keeps its own copy, so only yours goes.
 that might be wrong — it is what the storage does. Content in the game store is
 kept alive by the store's own reference, and deleting your copy cannot remove it.
 
-## Releases
+## Builds
 
-**The Releases tab** shows the named builds the studio has made — and it is the
-same page the administrator sees, read-only. **Click a release to open it, and
-click it again — or press Hide — to close it.**
+**The Builds tab** shows the named builds the studio has made — and it is the
+same page the administrator sees, read-only.
 
-- **Each release in the list says how much of it is yours** — "3 of yours".
+**The words, because three get used for the same thing.** A **stream** is a
+branch of the game, such as `//LowExpectations/main`. A **build** is a package
+made from one stream at one changelist — "0.4 Experimental, 12 Nov". A
+**release** is a build that shipped. An asset has versions; the game has
+builds.
+
+**Click a build to open it, and click it again — or press Hide — to close it.**
+
+- **Each build in the list says how much of it is yours** — "3 of yours".
 - **Only my work** narrows both lists to versions you uploaded.
 - **Every column sorts**, by asset, who uploaded it, who approved it, or the
   changelist — so finding your work in a long build does not mean reading it.
 - **Files** opens a version's manifest as a tree, with each file's hash, size
   and path behind it.
-- **Compare releases** shows what changed between two builds, by asset and by
+- **Compare builds** shows what changed between two builds, by asset and by
   file content hash.
 
-**You cannot add work to a release.** Putting content into the game is the
+**You cannot add work to a build.** Putting content into the game is the
 administrator's job; the page does not offer what the server would refuse.
 
 ## Getting your work back
@@ -276,7 +283,7 @@ the store records both.
 A dash means nobody has recorded an integration, which covers two different
 things the portal cannot tell apart: never put in the game, and put in but not
 noticed here. **An administrator records it** when adding the version to a
-release, after importing the asset into Unreal and committing it — it is a note
+build, after importing the asset into Unreal and committing it — it is a note
 about what happened, not something the portal can see for itself.
 
 ## Discussion
