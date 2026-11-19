@@ -132,8 +132,10 @@ async function main() {
                 -- STORE CONTENT FOR THE APPROVED LIST. Two Factory versions
                 -- approved for //LE/main, one Rock approved for //LE/exp, and
                 -- a main build that already holds Factory v1.
-                INSERT INTO assets (id, name, category)
-                VALUES (1, 'StoreFactory', 'Prop'), (2, 'StoreRock', 'Environment');
+                INSERT INTO assets (id, name, asset_type, category)
+                VALUES
+                    (1, 'StoreFactory', 'Model', 'Prop'),
+                    (2, 'StoreRock', 'Model', 'Environment');
 
                 INSERT INTO asset_versions
                     (id, asset_id, version_number, created_by, version_note, manifest_hash)
@@ -181,10 +183,12 @@ async function main() {
                     (12, 1, 3, 1, 'approved', 1, '2026-11-03 10:00:00', 2, 3, 'game', '//LE/exp');
 
                 INSERT INTO builds (id, name, changelist, stream, source)
-                VALUES (10, 'existing main build', 50, '//LE/main', 'reported');
+                VALUES
+                    (10, 'existing main build', 50, '//LE/main', 'reported'),
+                    (11, 'next main build', 60, '//LE/main', 'reported');
 
                 INSERT INTO build_assets (build_id, asset_version_id, added_by)
-                VALUES (10, 1, 1);
+                VALUES (10, 1, 1), (11, 2, 1);
 
                 INSERT INTO api_keys (name, key_prefix, key_hash)
                 VALUES ('check-tool', '${KEY.slice(0, 12)}', '${KEY_HASH}');
@@ -804,27 +808,46 @@ async function main() {
         `expected 200, got ${approvedMain.status} — ${approvedMain.text.slice(0, 200)}`);
 
     const mainVersions = approvedMain.json?.versions || [];
-    const storeFactory = mainVersions.find(version => version.asset_version_id === 2);
+    const factory = mainVersions.find(version => version.asset_name === 'Factory');
 
-    report.check('it holds what is approved for the stream and still to go in',
-        Boolean(storeFactory) && storeFactory.asset_name === 'StoreFactory',
-        `versions: ${JSON.stringify(mainVersions)}`);
-
-    report.check('including the version approved while this test ran',
-        mainVersions.some(version => version.asset_name === 'Factory'
-            && version.files.length === 2),
+    report.check('it holds what is approved and not already in a build',
+        Boolean(factory) && factory.files.length === 2,
         `versions: ${JSON.stringify(mainVersions.map(v => v.asset_name))}`);
 
-    report.check('and excludes a version a build of the stream already holds',
-        !mainVersions.some(version => version.asset_version_id === 1),
+    report.check('with the asset type the import needs',
+        factory?.asset_type === 'Model',
+        `asset: ${JSON.stringify(factory)}`);
+
+    report.check('and excludes both versions the builds of the stream hold',
+        !mainVersions.some(version => version.asset_version_id === 1
+            || version.asset_version_id === 2),
         `versions: ${JSON.stringify(mainVersions.map(v => v.asset_version_id))}`);
 
+    const forBuild = await server.call('GET',
+        '/api/integration/approved?stream=//LE/main&changelist=60', { headers: auth });
+
+    const forBuildVersions = forBuild.json?.versions || [];
+    const storeFactoryV1 = forBuildVersions.find(version => version.asset_version_id === 1);
+
+    report.check('a changelist asks about that build only',
+        forBuild.status === 200
+        && Boolean(storeFactoryV1)
+        && !forBuildVersions.some(version => version.asset_version_id === 2),
+        `versions: ${JSON.stringify(forBuildVersions.map(v => v.asset_version_id))}`);
+
     report.check('each version carries its files as addresses and hashes',
-        storeFactory?.files?.length === 1
-        && storeFactory.files[0].sha256 === F3
-        && storeFactory.files[0].size === 100
-        && storeFactory.files[0].filename === 'factory_v2.fbx',
-        `files: ${JSON.stringify(storeFactory?.files)}`);
+        storeFactoryV1?.files?.length === 1
+        && storeFactoryV1.files[0].sha256 === F1
+        && storeFactoryV1.files[0].size === 100
+        && storeFactoryV1.files[0].filename === 'factory.fbx',
+        `files: ${JSON.stringify(storeFactoryV1?.files)}`);
+
+    const badBuildFilter = await server.call('GET',
+        '/api/integration/approved?stream=//LE/main&changelist=abc', { headers: auth });
+
+    report.check('a malformed changelist filter is refused',
+        badBuildFilter.status === 400,
+        `expected 400, got ${badBuildFilter.status}`);
 
     const approvedExp = await server.call('GET',
         '/api/integration/approved?stream=//LE/exp', { headers: auth });

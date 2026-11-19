@@ -157,6 +157,7 @@ const approvedForStream = db.prepare(`
         av.version_number,
         av.manifest_hash,
         a.name           AS asset_name,
+        a.asset_type,
         a.category,
         ca.decided_at    AS approved_at
     FROM asset_versions av
@@ -175,6 +176,9 @@ const approvedForStream = db.prepare(`
         JOIN builds b ON b.id = ba.build_id
         WHERE ba.asset_version_id = av.id
           AND b.stream = ?
+          -- OPTIONAL: "not in build CL N". Without it, any build of the
+          -- stream excludes the version; with it, only that build does.
+          AND (? IS NULL OR b.changelist = ?)
     )
     ORDER BY a.name COLLATE NOCASE, av.version_number
 `);
@@ -753,13 +757,31 @@ router.get('/approved', requireApiKey, (req, res) => {
         });
     }
 
+        // OPTIONAL, AND NAMED IN THE CONTRACT: the tool asks "approved for
+        // this stream and not already in build CL N" when it is rebuilding or
+        // filling a specific build.
+        const rawChangelist = req.query?.changelist;
+
+        let changelist = null;
+
+        if (rawChangelist !== undefined && rawChangelist !== null && rawChangelist !== '') {
+            changelist = Number(rawChangelist);
+
+            if (!Number.isInteger(changelist) || changelist < 1) {
+                return res.status(400).json({
+                    error: 'changelist, when given, must be a positive integer.'
+                });
+            }
+        }
+
     try {
-        const versions = approvedForStream.all(stream, stream).map(row => ({
+        const versions = approvedForStream.all(stream, stream, changelist, changelist).map(row => ({
             asset_id: row.asset_id,
             asset_name: row.asset_name,
             asset_version_id: row.asset_version_id,
             version_number: row.version_number,
             manifest_hash: row.manifest_hash,
+            asset_type: row.asset_type,
             category: row.category,
             approved_at: row.approved_at,
             files: filesOfApprovedVersion.all(row.asset_version_id)

@@ -28,13 +28,22 @@ from.*
 
 | # | item | state | who moves next |
 |---|---|---|---|
-| **A1** | A test receipt from inside the editor: the stream the developer worked in, its parent, the game changelist, the levels, the exchange file and hash | portal built; nothing reports | **game side** |
-| **A2** | One real build report, with the stats the pipeline can produce | portal built; nothing reports | **game side** |
-| **A3** | Candidate builds name `base_stream` and `base_changelist` | portal built | **game side** |
-| **A4** | The approved list — what the tool may import | **built**, and proven | game side: confirm the shape suits the tool |
-| **A5** | The inclusion receipt — what actually went into the game | proposed | **both**: the shape, and whether it replaces the typed integration or coexists |
-| **A6** | The account, client and key: `val`, `val-agent`, ticket, 0600 key, tooling on | decided | **you**: issue the key on the portal machine |
+| **A1** | A test receipt from inside the editor: the stream the developer worked in, its parent, the game changelist, the levels, the exchange file and hash | portal built; **deferred 2026-11-19** | — |
+| **A2** | One real build report, with the stats the pipeline can produce | portal built; **deferred 2026-11-19** | — |
+| **A3** | Candidate builds name `base_stream` and `base_changelist` | portal built; **deferred 2026-11-19** | — |
+| **A4** | The approved list — what the tool may import | **built**, with `asset_type` and the changelist filter | — |
+| **A5** | The inclusion receipt — what actually went into the game | proposed; **deferred 2026-11-19** | — |
+| **A6** | The account, client and key: `val`, `val-agent`, ticket, 0600 key, tooling on | decided; **deferred 2026-11-19** — nothing created | — |
 | **A7** | The submission gate | **closed by decision**: the gate is the stream, the build is advice; a failed build cannot be accepted | — |
+
+> **DEFERRED BY THE USER'S DECISION, 2026-11-19.** The game side has no build
+> pipeline yet — no stream, no client, no UAT wrapper — so A1, A2, A3, A5 and
+> A6 wait until one exists. **The game side is blocked on setup, not on
+> willingness.** No synthetic or test payloads will be sent to populate the
+> pages: the portal showing only the two typed builds is the correct current
+> state, and a fabricated row is worse than an empty page.
+
+
 
 **A1 and A2 are the two that make the portal's pages real.** Until a receipt
 arrives, the portal cannot say which stream a developer used; until a build
@@ -311,11 +320,27 @@ A failed build is also never offered as freshness advice.
 ### The stats, and what is easy to produce
 
 The easy set, and the one the portal shows: **result** from the exit code,
-**duration** from two timestamps, **output size** from the packaged folder,
-**warning and error counts** from the build tool's summary, **the failing
-stage**, and **the first error lines**. Per-stage timings, peak memory and
-shader counts exist in the log but their format varies by engine version; they
-are not part of the contract.
+**duration** from two timestamps, **output size** from the packaged output,
+**warning and error counts**, **the failing stage**, and **the first error
+lines**.
+
+Named precisely, because these are measurements and a guess is worse than an
+absent field:
+
+- **`output_bytes`** is the packaged output the wrapper produced — the
+  `-archivedirectory` output, or `Saved/StagedBuilds/<Platform>` when staging —
+  **excluding `*.pdb`, `*.debug`, `*.sym`, `*.map`**. If the measured root is
+  something else, name it in `notes`.
+- **`warnings` / `errors`** are a **parse rule**, not a summary: `Error:` and
+  `Warning:` lines, deduplicated. If reported, the rule goes in `notes`. If the
+  wrapper cannot apply it consistently, **omit the counts**.
+- **`failed_stage`** is the last stage banner before the exit; if the wrapper's
+  stage names are not Cook/Compile/Package, name them in `notes`.
+- **`log_excerpt`** is the first `Error:` lines in log order, at most 2000
+  characters.
+
+Per-stage timings, peak memory and shader counts exist in the log but their
+format varies by engine version; they are not part of the contract.
 
 **Build duration is not runtime speed.** How long the machine took is a build
 stat; how slowly the level loads is a test result, and it belongs in the
@@ -352,8 +377,14 @@ inclusion receipt exists; then it becomes exact.
 
 ```
 GET /api/integration/approved?stream=//LowExpectations/main
+GET /api/integration/approved?stream=//LowExpectations/main&changelist=1200
 Authorization: Bearer <key>
 ```
+
+`changelist` is optional. Without it, a version held by **any** build of the
+stream is excluded. With it, only a version held by **that build** is — the
+tool asking "what should go into CL 1200" rather than "what is left for this
+stream".
 
 | status | meaning |
 |---|---|
@@ -374,6 +405,7 @@ Authorization: Bearer <key>
       "asset_version_id": 4,
       "version_number": 1,
       "manifest_hash": "77dc…",
+      "asset_type": "Model",
       "category": "Prop",
       "approved_at": "2026-11-18 17:55:36",
       "files": [
@@ -393,6 +425,13 @@ Authorization: Bearer <key>
 the store on the same machine (`uploads/files/<sha>`, TODO 109). The tool
 verifies each file against its SHA as it reads it; no bytes travel through the
 portal.
+
+**`relative_path` is the author's path, not an address.** The portal
+normalises it at upload: backslashes become slashes, leading slashes are
+removed, `.` and `..` segments are resolved, and any leading `../` is
+stripped. The tool may use it to lay files out on disk, but must re-apply the
+same rejection of `..` itself — the SHA is the only address it can trust for
+content.
 
 **Scope of the key.** Approved versions only. Never a workspace version, never
 a private asset, never a session. The key that posts receipts may hold this
@@ -422,7 +461,7 @@ by the thing that did it**.
 | `changelist` | integer ≥ 1 | yes | the Perforce changelist that contains it |
 | `stream` | string | yes | the stream written to |
 | `depot_paths` | string[] | yes | the depot files the integration wrote, 1–2000 |
-| `levels` | string[] | no | levels the asset was placed in |
+| `levels` | string[] | no | only when **the tool itself placed the asset** in a level; not derivable from a submit |
 | `result` | `included` \| `failed` | yes | a failed integration is recorded too |
 | `notes` | string | no | |
 
@@ -449,9 +488,14 @@ by the thing that did it**.
   and two independent statements of the same changelist are worth more than
   one.
 
-**Not decided:** whether an inclusion replaces the administrator's assertion
-entirely, or coexists while both paths exist. The direction of the record
-suggests replacement; the transition needs to be stated before it is built.
+**Coexist at first, decided 2026-11-19.** The typed assertion is the fallback
+for work done out of band; removing it before a real inclusion has proved the
+path would be a control true by absence (RULES 9). Replacement is decided
+**after the first real inclusion**, not before it.
+
+**`levels` is not derivable from a submit.** Importing bytes into the depot and
+placing an asset in a level are separate acts, often by different people, so
+the field is sent only when the tool itself performed the placement.
 
 ---
 

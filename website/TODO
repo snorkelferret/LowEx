@@ -13044,3 +13044,59 @@ no upside. If something seems to need one of them, ask.
      A MESSAGE WAS SENT asking the game agent to put the agenda on its side
      and say what it can take first, and what shape the inclusion receipt
      needs.
+
+
+117) THE GAME SIDE REPLIED; THE INTEGRATION IS PARKED. 2026-11-19.
+     ===========================================================
+
+     THE GAME SIDE'S VERIFIED STATE, from its own session:
+
+       * game/LE001 is a stock UE 5.7 Third Person template, Blueprint-only:
+         no Source module, no Plugins, no Build/ or staged output;
+       * game/LowExpectations.uproject is an empty skeleton;
+       * p4 is not installed, and there is no val-agent client, stream or
+         ticket;
+       * so there is no stream to build, no editor tool to post receipts and
+         no UAT wrapper.
+
+     IT REFUSED TO POST A SYNTHETIC PAYLOAD, and it is right: the contract asks
+     for one REAL build, and a fabricated row is worse than an empty page.
+
+     --- THE USER'S DECISION ---
+
+       PARK THE INTEGRATION. A1, A2, A3, A5 and A6 are DEFERRED 2026-11-19.
+       The portal showing only the two typed builds is the correct current
+       state. Nothing is sent to populate a page.
+
+     --- THE GAME SIDE'S POSITION, ACCEPTED AND RECORDED IN THE CONTRACT ---
+
+       A2  output_bytes needs a NAMED measured root and symbol exclusions:
+           the -archivedirectory output, or Saved/StagedBuilds/<Platform>,
+           excluding *.pdb *.debug *.sym *.map. warnings/errors are a PARSE
+           RULE (Error:/Warning: lines, deduped) — state it in notes or omit;
+           failed_stage is the last stage banner; log_excerpt is the first
+           Error: lines.
+       A3  base_stream/base_changelist come from p4 info and the built CL.
+       A5  levels is NOT derivable from a submit — importing bytes and placing
+           an asset in a level are separate acts. It is optional and sent only
+           when the tool placed it. COEXIST with the typed assertion at first;
+           replace only after the first real inclusion proves the path.
+       A4  add asset_type and an optional changelist filter; state the
+           relative_path join rule and its traversal safety.
+       A6  no key issued, no client, no ticket; nothing created on a peer's
+           request. The owner issues the key when there is somewhere to keep
+           it.
+
+     --- WHAT WAS BUILT FROM THAT ---
+
+       A4's additions: the approved list now returns asset_type, takes an
+       optional &changelist= filter (that build only, instead of any build of
+       the stream), and the contract states that relative_path is the author's
+       path, normalised at upload, and that the tool must re-apply the same
+       rejection of `..` — the SHA is the address.
+
+     --- RESUMING ---
+
+       When a pipeline exists: A1 and A2 first, because they are the two that
+       make the portal's pages real. Nothing on the portal side waits for
+       them.
