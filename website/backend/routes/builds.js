@@ -59,6 +59,8 @@ const router = express.Router();
 const listBuilds = db.prepare(`
     SELECT
         r.id, r.name, r.released_on, r.changelist, r.notes,
+        r.stream, r.build_id, r.built_at,
+        r.base_stream, r.base_changelist, r.source,
         r.created_at,
         u.username AS created_by_username,
         (SELECT COUNT(*) FROM build_assets ra WHERE ra.build_id = r.id)
@@ -198,6 +200,12 @@ function detailOf(buildId) {
             name: build.name,
             released_on: build.released_on,
             changelist: build.changelist,
+            stream: build.stream,
+            build_id: build.build_id,
+            built_at: build.built_at,
+            base_stream: build.base_stream,
+            base_changelist: build.base_changelist,
+            source: build.source,
             notes: build.notes,
             created_by: build.created_by_username,
             created_at: build.created_at

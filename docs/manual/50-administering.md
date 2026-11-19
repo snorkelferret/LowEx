@@ -185,6 +185,11 @@ Experimental, 12 Nov" — and where you can see what a build already contains.
 `//LowExpectations/main`. A **build** is a package made from one stream at one
 changelist. A **release** is a build that shipped: the date field below is when
 that happened. An asset has versions; the game has builds.
+
+**A build can arrive from the build machine** instead of being typed here. It
+appears the same way, marked *reported by the build machine*, with its stream,
+changelist and the machine's own identifier. A build created on this page is
+marked *typed*.
 **Developers see the same panel read-only**; the controls that write are shown
 to administrators only, because the server refuses everybody else.
 

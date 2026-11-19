@@ -517,6 +517,30 @@ const applyAssetRepositorySchema = () => {
       -- The Perforce changelist the build came from, when known.
       changelist INTEGER,
 
+      -- WHICH STREAM THE BUILD CAME FROM (2026-11-19). Null for a build
+      -- typed by hand before streams were recorded; a reported build names
+      -- it, and that is what lets a receipt's changelist be matched against
+      -- the build it was tested in (docs/INTEGRATION.md).
+      stream TEXT,
+
+      -- The build machine's own identifier, when it has one.
+      build_id TEXT,
+
+      -- WHEN THE BUILD RAN, as the machine reported it. created_at is when
+      -- the portal heard, which is a different fact if a report was queued.
+      built_at DATETIME,
+
+      -- A CANDIDATE BUILD: a task stream over a game stream, which is the
+      -- build that tests a change in the game without changing the game.
+      base_stream TEXT,
+      base_changelist INTEGER,
+
+      -- WHO WROTE THE ROW: an administrator typing it (typed) or the build
+      -- machine reporting it (reported). No CHECK, because ALTER cannot add
+      -- one to an existing table and this is not worth a rebuild; the two
+      -- values are written by one route and validated there.
+      source TEXT NOT NULL DEFAULT 'typed',
+
       notes TEXT,
 
       created_by INTEGER,
@@ -546,6 +570,39 @@ const applyAssetRepositorySchema = () => {
 
     CREATE INDEX IF NOT EXISTS idx_build_assets_version
       ON build_assets(asset_version_id);
+  `);
+
+  // THE REPORTED-BUILD COLUMNS, for a database created before them. Same
+  // reasoning as the destination columns: ALTER ADD COLUMN is enough here
+  // because none of them carries a constraint.
+  const buildColumns = db
+    .prepare('PRAGMA table_info(builds)')
+    .all()
+    .map(column => column.name);
+
+  const buildAdditions = [
+    ['stream', 'stream TEXT'],
+    ['build_id', 'build_id TEXT'],
+    ['built_at', 'built_at DATETIME'],
+    ['base_stream', 'base_stream TEXT'],
+    ['base_changelist', 'base_changelist INTEGER'],
+    ['source', "source TEXT NOT NULL DEFAULT 'typed'"],
+  ];
+
+  for (const [column, definition] of buildAdditions) {
+    if (!buildColumns.includes(column)) {
+      db.exec(`ALTER TABLE builds ADD COLUMN ${definition};`);
+    }
+  }
+
+  // AFTER THE COLUMNS, not inside the CREATE above: on an existing database
+  // the CREATE is a no-op and `stream` does not exist until the ALTERs have
+  // run, so the index would fail. On a fresh one the columns are already
+  // there and this is the same statement.
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_builds_stream_changelist
+      ON builds(stream, changelist)
+      WHERE stream IS NOT NULL AND changelist IS NOT NULL;
   `);
 
   /*

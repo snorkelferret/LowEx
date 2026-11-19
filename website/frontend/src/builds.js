@@ -178,6 +178,7 @@ function renderBuilds(builds) {
 
         const date = build.released_on ? formatDate(build.released_on) : 'no date';
         const changelist = build.changelist ? ` · CL ${build.changelist}` : '';
+        const stream = build.stream ? ` · ${escapeHtml(build.stream)}` : '';
 
         // HOW MUCH OF THIS BUILD IS THE VIEWER'S OWN WORK. That is the question
         // a developer opens this page to answer.
@@ -187,7 +188,7 @@ function renderBuilds(builds) {
 
         button.innerHTML =
             `<span class="fw-semibold">${escapeHtml(build.name)}</span>` +
-            `<span class="d-block small text-secondary">${date}${changelist} · ` +
+            `<span class="d-block small text-secondary">${date}${changelist}${stream} · ` +
             `${build.asset_count} version${build.asset_count === 1 ? '' : 's'}${mine}</span>`;
 
         list.appendChild(button);
@@ -436,7 +437,10 @@ function renderDetail(detail) {
     if (meta) {
         const parts = [];
         parts.push(build.released_on ? `Released ${formatDate(build.released_on)}` : 'No date');
+        if (build.stream) parts.push(build.stream);
+        if (build.build_id) parts.push(`build ${build.build_id}`);
         if (build.changelist) parts.push(`CL ${build.changelist}`);
+        if (build.source === 'reported') parts.push('reported by the build machine');
         if (build.created_by) parts.push(`created by ${build.created_by}`);
         if (build.notes) parts.push(build.notes);
         meta.textContent = parts.join(' · ');

@@ -8,13 +8,14 @@ It covers three questions, and they are separate:
 | question | record | state |
 |---|---|---|
 | was this asset tested, and where? | **test receipt** | **built and proven** |
-| what version of the game exists? | **build record** | proposed |
+| what version of the game exists? | **build record** | **built** |
 | which approved assets are in the game? | **approved list** (portal → tool) and **inclusion receipt** (tool → portal) | proposed |
 
-*State: only the test receipt answers today. Everything marked **proposed** is
-a contract to build against, not a description of something that answers now.
-That distinction is kept throughout, because a contract that describes an
-endpoint returning 404 is worse than one that says so.*
+*State: the test receipt and the build record answer today. The approved list
+and the inclusion receipt are marked **proposed** — a contract to build
+against, not a description of something that answers now. That distinction is
+kept throughout, because a contract that describes an endpoint returning 404 is
+worse than one that says so.*
 
 ---
 
@@ -183,14 +184,13 @@ easy path and leaves a record.
 
 ---
 
-## 2. The build record — PROPOSED, NOT BUILT
+## 2. The build record — BUILT
 
-**`POST /api/integration/builds`** does not exist yet. This is the contract to
-build against.
+**`POST /api/integration/builds`**
 
 It records: **the game was built from this stream at this changelist.** A
-build in the portal today is an administrator typing a name and optionally a
-changelist; nothing connects it to a receipt or to a stream.
+build typed into the admin page by hand was the only kind available before
+this; nothing connected it to a stream or to a receipt.
 
 ### Body
 
@@ -200,20 +200,61 @@ changelist; nothing connects it to a receipt or to a stream.
 | `changelist` | integer ≥ 1 | yes | the changelist built |
 | `name` | string | no | the build's name; defaults to `<stream> @ CL <changelist>` |
 | `build_id` | string | no | the build machine's own identifier |
-| `built_at` | ISO 8601 | no | when the build ran; the server clock otherwise |
+| `built_at` | ISO 8601 | no | when the build ran; stored in UTC |
 | `base_stream` | string | no | for a candidate build: the game stream it was built over |
 | `base_changelist` | integer | no | for a candidate build: that stream's changelist |
 | `notes` | string | no | free text |
 
-**Proposed behaviour**, following the receipt's rules:
+`base_stream` and `base_changelist` go together or not at all: a base stream
+with no changelist does not identify a state of the game.
 
-- authenticated by the same key, and refused while integration tooling is off;
-- idempotent on `(stream, changelist)`;
-- creates or updates a `builds` row marked as **reported by the build**
-  rather than typed, gaining a `stream` column and a source;
-- `base_stream` / `base_changelist` describe a **candidate build** — a task
-  stream over a game stream — which is the build that lets a change be tested
-  in the game without changing the game (TODO 110, option b).
+### What the server checks
+
+- **Integration tooling is on** — otherwise `403`.
+- `stream` and `base_stream` are absolute Perforce paths; `changelist` is a
+  positive integer; `built_at`, when given, is an ISO 8601 date or date-time.
+- **The same build twice is harmless.** The key is `(stream, changelist)`; a
+  retry fills in anything missing and returns `200` with `duplicate: true`.
+  **A retry never overwrites a value already recorded.**
+- The row is written with `source = 'reported'` and `created_by` null. A build
+  typed by an administrator has `source = 'typed'`.
+
+### Responses
+
+| status | meaning |
+|---|---|
+| `201` | recorded |
+| `200` | duplicate — already recorded; missing fields filled, nothing overwritten |
+| `400` | a malformed field; the message names it |
+| `401` | no key, or the wrong one |
+| `403` | integration tooling is off |
+| `409` | that name, or that stream and changelist, is already recorded |
+
+### Example
+
+```bash
+curl -sS -X POST "$PORTAL_URL/api/integration/builds" \
+  -H "Authorization: Bearer $LOWEX_TOOL_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "stream": "//LowExpectations/main",
+    "changelist": 7,
+    "name": "0.4 Experimental, 18 Nov",
+    "build_id": "LE-2026.11.18-01",
+    "built_at": "2026-11-18T17:30:00Z"
+  }'
+```
+
+A candidate build adds the stream and changelist it was built over:
+
+```json
+{
+  "stream": "//LowExpectations/task-val-1",
+  "changelist": 501,
+  "base_stream": "//LowExpectations/main",
+  "base_changelist": 500
+}
+```
 
 ### Why it matters
 
@@ -223,7 +264,8 @@ version 35 was tested at CL 7, which is build 0.4 Experimental of `//LE/main`
 on 18 November*.
 
 It also lets the submission gate tighten later: a receipt whose changelist
-matches no known build is a test in something the portal cannot name.
+matches no known build is a test in something the portal cannot name. **That
+rule is not built yet** — the gate still checks the stream, not the build.
 
 ---
 
@@ -352,8 +394,8 @@ And for what is in the game:
 
 The submission gate (built) requires a passing receipt whose stream **or
 parent stream** is the destination. It does not yet require the changelist to
-be a known build, because no build records exist. That is the next rule, not a
-rewrite.
+be a known build: build records exist now, but the gate has not been tightened
+to consult them. That is the next rule, not a rewrite.
 
 ---
 

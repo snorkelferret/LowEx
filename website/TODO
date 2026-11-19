@@ -12795,10 +12795,12 @@ no upside. If something seems to need one of them, ask.
 
      --- NOT DONE, AND NEXT ---
 
-       [ ] The build record's new fields: `stream`, `build_id`, and a source
-           (`typed` | `reported`). The contract proposes POST /api/builds from
-           the build machine; the table currently has name, released_on,
-           changelist, notes. Adding `stream` is what lets a build say which
-           STREAM it came from, which the receipt's changelist is then matched
-           against.
+       [x] BUILT 2026-11-19: `builds` gained `stream`, `build_id`, `built_at`,
+           `base_stream`, `base_changelist` and `source` (typed | reported),
+           with a partial unique index on (stream, changelist). POST
+           /api/integration/builds records a reported build on the tool's key,
+           idempotent on that pair, filling gaps but never overwriting; a
+           candidate build names the stream it was built over. The builds page
+           shows the stream and says when a build was reported. 14 assertions
+           added to check:integration.
        [ ] The build machine and distribution, still out of scope (item 53).

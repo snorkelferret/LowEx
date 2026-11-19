@@ -1,6 +1,6 @@
 // backend/routes/integration.js
 //
-// THE RECEIPT. WHAT RAN INSIDE THE GAME, AND WHERE.
+// THE RECEIPT AND THE BUILD. WHAT RAN INSIDE THE GAME, AND WHAT WAS BUILT.
 //
 // ============================================================
 // WHY THIS ROUTE EXISTS
@@ -113,6 +113,31 @@ const receiptRow = db.prepare(`
     FROM integration_receipts
     WHERE workspace_version_id = ? AND changelist = ?
 `);
+
+const buildByStreamAndChangelist = db.prepare(`
+    SELECT *
+    FROM builds
+    WHERE stream = ? AND changelist = ?
+`);
+
+const insertBuild = db.prepare(`
+    INSERT INTO builds (
+        name,
+        stream,
+        changelist,
+        build_id,
+        built_at,
+        base_stream,
+        base_changelist,
+        notes,
+        source,
+        created_by
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reported', NULL)
+`);
+
+const buildByIdRow = db.prepare('SELECT * FROM builds WHERE id = ?');
+
 
 function text(value, max) {
     const trimmed = String(value ?? '').trim();
@@ -330,6 +355,217 @@ router.post(
             return res.status(500).json({
                 error: 'Could not record that receipt'
             });
+        }
+    }
+);
+
+
+// ---------------------------------------------------------------------------
+// POST /api/integration/builds — the build machine reports a build
+// ---------------------------------------------------------------------------
+//
+// THE SECOND PUSH. A receipt says an asset was tested in a build; this says
+// the build exists: which STREAM it came from, at which CHANGELIST, and what
+// the machine calls it. With both, "built against" is answerable — a receipt's
+// changelist matches a build whose stream is the destination.
+//
+// A CANDIDATE BUILD names the stream it was built OVER (base_stream and
+// base_changelist), which is the build that tests a change in the game without
+// changing the game (TODO 110, option b).
+//
+// IDEMPOTENT ON (stream, changelist): the same two facts say "this is the same
+// build" to a machine that retries. A retry fills in anything missing and
+// returns 200; it never overwrites a value already recorded.
+//
+// THE NAME DEFAULTS TO "<stream> @ CL <changelist>" so a caller that has no
+// naming scheme still produces a row a person can read.
+
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+router.post(
+    '/builds',
+    requireApiKey,
+
+    (req, res) => {
+        if (!getSetting('integration_tooling')) {
+            return res.status(403).json({
+                error:
+                    'Integration tooling is off. An administrator must enable it ' +
+                    'before the portal accepts build reports.'
+            });
+        }
+
+        const body = req.body || {};
+
+        const stream = String(body.stream || '').trim();
+
+        if (!stream || stream.length > 200 || !STREAM.test(stream)) {
+            return res.status(400).json({
+                error: 'stream must be a Perforce stream path, such as //LowExpectations/main.'
+            });
+        }
+
+        const changelist = Number(body.changelist);
+
+        if (!Number.isInteger(changelist) || changelist < 1) {
+            return res.status(400).json({
+                error: 'changelist must be a positive integer — the changelist built.'
+            });
+        }
+
+        const rawName = String(body.name || '').trim();
+
+        if (rawName.length > 120) {
+            return res.status(400).json({
+                error: 'name is too long — 120 characters at most.'
+            });
+        }
+
+        const name = rawName || `${stream} @ CL ${changelist}`;
+
+        const rawBuildId = String(body.build_id || '').trim();
+
+        if (rawBuildId.length > 120) {
+            return res.status(400).json({
+                error: 'build_id is too long — 120 characters at most.'
+            });
+        }
+
+        const rawNotes = String(body.notes || '').trim();
+
+        if (rawNotes.length > 2000) {
+            return res.status(400).json({
+                error: 'notes is too long — 2000 characters at most.'
+            });
+        }
+
+        // WHEN THE MACHINE SAYS IT RAN, stored in UTC. created_at is when the
+        // portal heard, which is a different fact if a report was queued.
+        let builtAt = null;
+
+        const rawBuiltAt = String(body.built_at || '').trim();
+
+        if (rawBuiltAt) {
+            if (!ISO_8601.test(rawBuiltAt)) {
+                return res.status(400).json({
+                    error: 'built_at must be an ISO 8601 date or date-time, such as 2026-11-18T17:30:00Z.'
+                });
+            }
+
+            const parsed = new Date(rawBuiltAt);
+
+            if (Number.isNaN(parsed.getTime())) {
+                return res.status(400).json({
+                    error: 'built_at is not a date this server can read.'
+                });
+            }
+
+            builtAt = parsed.toISOString().slice(0, 19).replace('T', ' ');
+        }
+
+        // A CANDIDATE BUILD NAMES BOTH HALVES OR NEITHER: a base stream with
+        // no changelist does not identify a state of the game, and a
+        // changelist with no stream does not say which game.
+        const baseStream = String(body.base_stream || '').trim();
+
+        if (baseStream && (!STREAM.test(baseStream) || baseStream.length > 200)) {
+            return res.status(400).json({
+                error: 'base_stream, when given, must be a Perforce stream path.'
+            });
+        }
+
+        const rawBaseChangelist = body.base_changelist;
+
+        let baseChangelist = null;
+
+        if (rawBaseChangelist !== undefined && rawBaseChangelist !== null && rawBaseChangelist !== '') {
+            baseChangelist = Number(rawBaseChangelist);
+
+            if (!Number.isInteger(baseChangelist) || baseChangelist < 1) {
+                return res.status(400).json({
+                    error: 'base_changelist must be a positive integer.'
+                });
+            }
+        }
+
+        if (Boolean(baseStream) !== Boolean(baseChangelist)) {
+            return res.status(400).json({
+                error:
+                    'A candidate build needs both base_stream and base_changelist, ' +
+                    'or neither.'
+            });
+        }
+
+        try {
+            const existing = buildByStreamAndChangelist.get(stream, changelist);
+
+            if (existing) {
+                // FILL ONLY WHAT IS MISSING. A retry, or a report queued while
+                // the portal was down, must not overwrite a value somebody
+                // else recorded.
+                db.prepare(`
+                    UPDATE builds
+                    SET build_id = COALESCE(build_id, ?),
+                        built_at = COALESCE(built_at, ?),
+                        base_stream = COALESCE(base_stream, ?),
+                        base_changelist = COALESCE(base_changelist, ?),
+                        notes = COALESCE(notes, ?),
+                        source = 'reported'
+                    WHERE id = ?
+                `).run(
+                    rawBuildId || null,
+                    builtAt,
+                    baseStream || null,
+                    baseChangelist,
+                    rawNotes || null,
+                    existing.id
+                );
+
+                return res.status(200).json({
+                    recorded: false,
+                    duplicate: true,
+                    build: buildByIdRow.get(existing.id)
+                });
+            }
+
+            const result = insertBuild.run(
+                name,
+                stream,
+                changelist,
+                rawBuildId || null,
+                builtAt,
+                baseStream || null,
+                baseChangelist,
+                rawNotes || null
+            );
+
+            audit.record(null, 'build.reported', name, {
+                api_key: req.apiKey.name,
+                build_id: result.lastInsertRowid,
+                stream,
+                changelist,
+                machine_build_id: rawBuildId || null,
+                base_stream: baseStream || null,
+                base_changelist: baseChangelist
+            });
+
+            return res.status(201).json({
+                recorded: true,
+                duplicate: false,
+                build: buildByIdRow.get(result.lastInsertRowid)
+            });
+
+        } catch (err) {
+            if (/UNIQUE/i.test(err.message)) {
+                return res.status(409).json({
+                    error:
+                        `A build called "${name}" already exists, or this stream and ` +
+                        'changelist are already recorded under another name.'
+                });
+            }
+
+            console.error('Could not record a build report:', err);
+            return res.status(500).json({ error: 'Could not record that build' });
         }
     }
 );

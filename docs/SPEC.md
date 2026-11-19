@@ -527,6 +527,13 @@ are not the same kind of thing (§3).
 it, and when. Not a git tag: the game is versioned in Perforce, so the
 changelist is the tag.
 
+**A build can be reported by the machine that made it.** `POST
+/api/integration/builds` records a stream, a changelist, a name and the
+machine's own identifier, marked `source = 'reported'`; a build typed by an
+administrator stays `typed`. A candidate build also names the stream it was
+built over. The idempotency key is `(stream, changelist)`. See
+`docs/INTEGRATION.md`.
+
 **Builds are named, not channelled.** "0.4 Experimental, 12 Nov" — a specific
 build with a date. A channel holds one value and cannot express a history; a
 stream holds many builds, and each has a date.

@@ -103,7 +103,8 @@ async function main() {
         routes: [
             { route: 'backend/routes/developerWorkspace', mount: '/api/developer/workspace' },
             { route: 'backend/routes/integration', mount: '/api/integration' },
-            { route: 'backend/routes/perforce', mount: '/api/perforce' }
+            { route: 'backend/routes/perforce', mount: '/api/perforce' },
+            { route: 'backend/routes/builds', mount: '/api/builds' }
         ],
 
         seed(db) {
@@ -176,6 +177,11 @@ async function main() {
     const auth = { Authorization: `Bearer ${KEY}` };
 
     const receipt = (body) => server.call('POST', '/api/integration/receipts', {
+        headers: auth,
+        body
+    });
+
+    const reportBuild = (body) => server.call('POST', '/api/integration/builds', {
         headers: auth,
         body
     });
@@ -429,6 +435,117 @@ async function main() {
 
     report.check('a decided submission is not retargeted', decidedRetarget.status === 409,
         `expected 409, got ${decidedRetarget.status}`);
+
+    // -----------------------------------------------------------------
+    // BUILD RECORD
+    // -----------------------------------------------------------------
+
+    const buildNoKey = await server.post('/api/integration/builds', {
+        stream: '//LowExpectations/main', changelist: 500
+    });
+
+    report.check('a build report needs a key', buildNoKey.status === 401,
+        `expected 401, got ${buildNoKey.status}`);
+
+    const badStream = await reportBuild({ stream: 'not-a-stream', changelist: 500 });
+
+    report.check('a build report with a bad stream is refused', badStream.status === 400,
+        `expected 400, got ${badStream.status}`);
+
+    const badChangelist = await reportBuild({
+        stream: '//LowExpectations/main', changelist: 'abc'
+    });
+
+    report.check('a build report with a bad changelist is refused', badChangelist.status === 400,
+        `expected 400, got ${badChangelist.status}`);
+
+    const badDate = await reportBuild({
+        stream: '//LowExpectations/main', changelist: 500, built_at: 'yesterday'
+    });
+
+    report.check('a build report with a bad date is refused', badDate.status === 400,
+        `expected 400, got ${badDate.status}`);
+
+    const halfCandidate = await reportBuild({
+        stream: '//LowExpectations/task-val-1', changelist: 500,
+        base_stream: '//LowExpectations/main'
+    });
+
+    report.check('a candidate build needs both halves of its base',
+        halfCandidate.status === 400,
+        `expected 400, got ${halfCandidate.status}`);
+
+    const built = await reportBuild({
+        stream: '//LowExpectations/main',
+        changelist: 500,
+        build_id: 'LE-2026.11.18-01',
+        built_at: '2026-11-18T17:30:00Z',
+        notes: 'nightly'
+    });
+
+    report.check('a build report is recorded', built.status === 201
+        && built.json?.recorded === true,
+        `expected 201, got ${built.status} — ${built.text.slice(0, 200)}`);
+
+    report.check('with a readable default name',
+        built.json?.build?.name === '//LowExpectations/main @ CL 500',
+        `name: ${built.json?.build?.name}`);
+
+    report.check('marked as reported by the machine, not typed',
+        built.json?.build?.source === 'reported'
+        && built.json?.build?.created_by === null,
+        `build: ${JSON.stringify(built.json?.build)}`);
+
+    report.check('and the machine time is stored',
+        built.json?.build?.built_at === '2026-11-18 17:30:00',
+        `built_at: ${built.json?.build?.built_at}`);
+
+    const builtAgain = await reportBuild({
+        stream: '//LowExpectations/main',
+        changelist: 500,
+        build_id: 'LE-2026.11.18-01'
+    });
+
+    report.check('reporting the same build twice is harmless',
+        builtAgain.status === 200 && builtAgain.json?.duplicate === true,
+        `expected 200 duplicate, got ${builtAgain.status}`);
+
+    const buildCount = new Database(server.dbPath, { readonly: true })
+        .prepare(`SELECT COUNT(*) AS n FROM builds WHERE stream = '//LowExpectations/main' AND changelist = 500`)
+        .get();
+
+    report.check('and leaves exactly one row', buildCount.n === 1,
+        `found ${buildCount.n} rows`);
+
+    const candidate = await reportBuild({
+        stream: '//LowExpectations/task-val-1',
+        changelist: 501,
+        base_stream: '//LowExpectations/main',
+        base_changelist: 500
+    });
+
+    report.check('a candidate build records the stream it was built over',
+        candidate.status === 201
+        && candidate.json?.build?.base_stream === '//LowExpectations/main'
+        && candidate.json?.build?.base_changelist === 500,
+        `build: ${JSON.stringify(candidate.json?.build)}`);
+
+    const buildList = await server.get('/api/builds', dev);
+
+    report.check('the builds page lists the reported build',
+        buildList.status === 200
+        && (buildList.json?.builds || []).some(b => b.stream === '//LowExpectations/main'
+            && b.changelist === 500),
+        `list: ${buildList.text.slice(0, 240)}`);
+
+    const buildAudit = new Database(server.dbPath, { readonly: true })
+        .prepare(`SELECT * FROM audit_logs WHERE action = 'build.reported' ORDER BY id DESC LIMIT 1`)
+        .get();
+
+    report.check('and the report is audited with the key that sent it',
+        Boolean(buildAudit) && buildAudit.actor_id === null
+        && String(buildAudit.details).includes('check-tool'),
+        `audit row: ${JSON.stringify(buildAudit)}`);
 
     // -----------------------------------------------------------------
     // STREAMS
