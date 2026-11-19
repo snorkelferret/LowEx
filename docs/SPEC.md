@@ -535,6 +535,10 @@ still a fact about the game, and the submission gate reads the stream. What it
 does is stop the build being offered as freshness advice; accepting a build is
 what makes it good for that purpose.
 
+**Two settings say when a build is too big or too slow** — a maximum size in
+gigabytes and a maximum duration in minutes, each 0 for no limit. A build over
+either is marked on the builds page for the reviewer. Advice, not a gate.
+
 **A build carries what the machine measured.** Result, the stage it failed at,
 wall-clock duration, output size, warning and error counts, and a short log
 excerpt — every field optional, because a failed build has no output size and

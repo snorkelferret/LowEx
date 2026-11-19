@@ -117,6 +117,34 @@ async function main() {
     report.check('an unknown key is refused', unknown.status === 400 || unknown.status === 404,
         `expected a refusal, got ${unknown.status}`);
 
+    // THE BUILD LIMITS ARE TWO MORE BOUNDED INTEGERS, AND 0 IS A VALUE.
+    // 0 means no limit, so the minimum has to allow it while a negative is
+    // still refused.
+    const buildSize = await server.post('/settings/build_max_gb', { value: 50 }, admin);
+
+    report.check('the build size limit is settable', buildSize.status === 200,
+        `expected 200, got ${buildSize.status} — ${buildSize.text.slice(0, 160)}`);
+
+    const buildSizeStored = db.prepare(`SELECT value FROM app_settings WHERE key = 'build_max_gb'`).get();
+
+    report.check('and stored', buildSizeStored?.value === '50',
+        `stored: ${JSON.stringify(buildSizeStored)}`);
+
+    const noLimit = await server.post('/settings/build_max_gb', { value: 0 }, admin);
+
+    report.check('zero is a valid limit — it means none', noLimit.status === 200,
+        `expected 200, got ${noLimit.status}`);
+
+    const negativeLimit = await server.post('/settings/build_max_gb', { value: -1 }, admin);
+
+    report.check('a negative limit is refused', negativeLimit.status === 400,
+        `expected 400, got ${negativeLimit.status}`);
+
+    const buildTime = await server.post('/settings/build_max_minutes', { value: 45 }, admin);
+
+    report.check('the build time limit is settable', buildTime.status === 200,
+        `expected 200, got ${buildTime.status}`);
+
     const reset = await server.post('/settings/session_hours/reset', {}, admin);
 
     report.check('reset restores the default', reset.status === 200,

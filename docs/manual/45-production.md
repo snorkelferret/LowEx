@@ -98,7 +98,9 @@ build, and this is where that shows.
 **You can see what the build machine measured**: whether it succeeded, how
 long it took, how large it is, how many warnings and errors it had, and the
 first errors when it failed. A build that failed cannot be accepted — reject
-it, with the reason, and a fixed build arrives as a new build.
+it, with the reason, and a fixed build arrives as a new build. A build over the
+size or time limit an administrator set is marked **over limit**, with the
+figure it exceeded.
 
 **You can accept or reject a build itself.** Accept it if it is good enough to
 put in front of people; reject it with a reason if it fails a technical limit —

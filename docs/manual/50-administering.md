@@ -250,6 +250,8 @@ audit log with who changed it and what it was before.
 | **Invitation validity** | How long a newly issued invitation lasts |
 | **Wastebin retention** | How long a deleted asset can be restored |
 | **Developer storage allowance** | How much each developer's workspace may hold |
+| **Maximum build size** | A build larger than this is marked for the reviewer. **50 GB by default**; 0 means no limit |
+| **Maximum build time** | A build that takes longer than this is marked. **90 minutes by default**; 0 means no limit. It is build duration, not how fast the game runs |
 | **Warning level** | When a disk, file table or quota is called "filling up" |
 | **Critical level** | When it is called "nearly full" |
 | **Session lifetime** | How long a sign-in lasts before it is refused — **2 hours by default**, between 1 and 24 |

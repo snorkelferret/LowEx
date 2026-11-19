@@ -37,7 +37,7 @@ and exits 1.
 | builds | `check:builds` | route | membership, the one-version rule, the manifest tree, the diff, and the build review |
 | library | `check:library` | route | content roles read it; the wrong roles do not write |
 | Perforce | `check:perforce` | route | the portal is told once, has a cursor, and reports a gap |
-| destination and builds | `check:integration` | route | the destination gate, receipts, build reports and stats, review advice, retargeting |
+| destination and builds | `check:integration` | route | the destination gate, receipts, build reports and stats, the limits, review advice, retargeting |
 | sign-in | `check:auth` | route | login, session identity, deactivation, logout |
 | administration | `check:admin` | route | settings are bounded and audited; the account ladder holds |
 | reports | `check:feedback` | route | anyone may report; administrators read and resolve |

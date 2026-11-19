@@ -107,6 +107,44 @@ const DEFINITIONS = {
               'from anyone.',
     },
 
+    // WHEN A BUILD IS TOO BIG OR TOO SLOW, FOR THE REVIEWER. 0 means no
+    // limit. These are advice, not gates: a build over either is marked on the
+    // builds page, and production decides what to do about it (TODO 113).
+    //
+    // GB AND MINUTES, BYTES AND SECONDS UNDERNEATH, for the same reason as
+    // the workspace allowance: the person types the unit they think in, and
+    // the conversion happens in one place (backend/routes/builds.js).
+    build_max_gb: {
+        type: 'integer',
+        // 50 GB IS A CEILING FOR A MID-SIZE OPEN WORLD, not the target. A
+        // healthy packaged build of that shape is 20–35 GB; 50 gives headroom
+        // for growth while still catching the accidental double or triple —
+        // uncooked content, a duplicated pak, symbols left in the package.
+        // Adjust it after the first few real builds; those say more than a
+        // guessed figure.
+        default: 50,
+        min: 0,
+        max: 10000,
+        label: 'Maximum build size',
+        unit: 'GB',
+        note: 'A build larger than this is marked for the reviewer on the builds ' +
+              'page. 0 means no limit. It is a warning, not a refusal.',
+    },
+
+    build_max_minutes: {
+        type: 'integer',
+        // A full cook and package of a mid-size open world is commonly 30–90
+        // minutes; 90 flags a runaway cook without flagging a slow machine.
+        default: 90,
+        min: 0,
+        max: 1440,
+        label: 'Maximum build time',
+        unit: 'minutes',
+        note: 'A build that takes longer than this is marked for the reviewer. ' +
+              '0 means no limit. Build duration is not runtime speed — how long ' +
+              'the level takes to load is a test result, not this.',
+    },
+
     // WHICH PERFORCE ACCOUNT THE TOOL RUNS AS. Val's own account to begin
     // with; a dedicated process account when a seat is bought, and neither the
     // tool nor the portal changes — this value does.

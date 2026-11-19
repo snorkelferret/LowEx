@@ -46,6 +46,7 @@ const express = require('express');
 const db = require('../db');
 const audit = require('../lib/audit');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const { getSetting } = require('../lib/settings');
 
 const router = express.Router();
 
@@ -201,7 +202,10 @@ function detailOf(buildId) {
 
     if (!build) return null;
 
+    const limits = buildLimits();
+
     return {
+        limits,
         build: {
             id: build.id,
             name: build.name,
@@ -226,7 +230,8 @@ function detailOf(buildId) {
             log_excerpt: build.log_excerpt,
             notes: build.notes,
             created_by: build.created_by_username,
-            created_at: build.created_at
+            created_at: build.created_at,
+            ...limited(build, limits)
         },
         members: membersOf.all(buildId).map(row => ({
             asset_version_id: row.asset_version_id,
@@ -253,6 +258,35 @@ function detailOf(buildId) {
 
 const isPositiveInteger = value => Number.isInteger(value) && value >= 1;
 
+// WHEN IS A BUILD TOO BIG OR TOO SLOW? Two settings, both 0 for no limit,
+// both read per request — a cached copy would keep an old limit in force until
+// a restart (backend/lib/settings.js says why). These are ADVICE: the flags
+// are shown to the reviewer and refuse nothing (TODO 113).
+function buildLimits() {
+    const gigabytes = Number(getSetting('build_max_gb')) || 0;
+    const minutes = Number(getSetting('build_max_minutes')) || 0;
+
+    return {
+        max_bytes: gigabytes > 0 ? gigabytes * 1024 * 1024 * 1024 : null,
+        max_seconds: minutes > 0 ? minutes * 60 : null
+    };
+}
+
+function limited(build, limits) {
+    const size = build.output_bytes;
+    const duration = build.duration_seconds;
+
+    return {
+        over_size: limits.max_bytes !== null
+            && size !== null && size !== undefined
+            && size > limits.max_bytes,
+
+        over_time: limits.max_seconds !== null
+            && duration !== null && duration !== undefined
+            && duration > limits.max_seconds
+    };
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/builds — every named build, newest first
 // ---------------------------------------------------------------------------
@@ -263,7 +297,15 @@ const isPositiveInteger = value => Number.isInteger(value) && value >= 1;
 // where the good work ended up. WRITES BELOW STAY ADMIN: putting content into
 // the game is engineering.
 router.get('/', authenticateToken, requireRole('developer', 'prod', 'admin'), (req, res) => {
-    return res.json({ builds: listBuilds.all(req.user.id) });
+    const limits = buildLimits();
+
+    return res.json({
+        limits,
+        builds: listBuilds.all(req.user.id).map(build => ({
+            ...build,
+            ...limited(build, limits)
+        }))
+    });
 });
 
 // ---------------------------------------------------------------------------

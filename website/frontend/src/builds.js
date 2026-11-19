@@ -213,6 +213,9 @@ function renderBuilds(builds) {
             : '';
 
         const verdict =
+            (build.over_size || build.over_time
+                ? ' · <span class="text-warning">over limit</span>'
+                : '') +
             (build.result === 'failed' ? ' · <span class="text-danger">build failed</span>' : '') +
             (build.status === 'rejected'
                 ? ' · <span class="text-danger">rejected</span>'
@@ -468,7 +471,7 @@ function renderDetail(detail) {
     if (title) title.textContent = build.name;
 
     renderReview(build);
-    renderStats(build);
+    renderStats(build, detail.limits || {});
 
     const meta = $('buildDetailMeta');
     if (meta) {
@@ -756,9 +759,10 @@ async function runDiff() {
 
 // What the build machine measured: result, time, size, warnings and errors,
 // and the first errors when it failed. Absent fields are absent, not zero.
-function renderStats(build) {
+function renderStats(build, limits = {}) {
     const stats = $('buildStats');
     const failure = $('buildFailureLine');
+    const limitLine = $('buildLimitLine');
     const logBox = $('buildLogBox');
     const logText = $('buildLogExcerpt');
 
@@ -795,6 +799,21 @@ function renderStats(build) {
         failure.textContent = failed
             ? `Failed${build.failed_stage ? ` at ${build.failed_stage}` : ''}.`
             : '';
+    }
+
+    if (limitLine) {
+        const over = [];
+
+        if (build.over_size) {
+            over.push(`Over the size limit — ${formatBytes(limits.max_bytes)}`);
+        }
+
+        if (build.over_time) {
+            over.push(`Over the time limit — ${formatDuration(limits.max_seconds)}`);
+        }
+
+        limitLine.classList.toggle('d-none', over.length === 0);
+        limitLine.textContent = over.join(' · ');
     }
 
     if (logBox && logText) {

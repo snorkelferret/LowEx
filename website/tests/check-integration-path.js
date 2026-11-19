@@ -163,7 +163,10 @@ async function main() {
                      '2026-11-18 10:05:00', '[]');
 
                 INSERT INTO app_settings (key, value)
-                VALUES ('integration_tooling', '1');
+                VALUES
+                    ('integration_tooling', '1'),
+                    ('build_max_gb', '1'),
+                    ('build_max_minutes', '10');
             `);
         }
     });
@@ -555,6 +558,35 @@ async function main() {
     report.check('and the log excerpt is kept',
         /could not cook/.test(stats.json?.build?.log_excerpt || ''),
         `excerpt: ${stats.json?.build?.log_excerpt}`);
+
+    // THE LIMITS ARE SETTINGS, AND THEY ARE ADVICE. A 19 GB, 45-minute build
+    // against a 1 GB, 10-minute limit is marked; the settings are read per
+    // request, so changing them takes effect without a restart.
+    const limitedBuild = await server.get(`/api/builds/${stats.json.build.id}`, dev);
+
+    report.check('a build over the size limit is marked',
+        limitedBuild.status === 200
+        && limitedBuild.json?.build?.over_size === true
+        && limitedBuild.json?.limits?.max_bytes === 1024 * 1024 * 1024,
+        `detail: ${limitedBuild.text.slice(0, 240)}`);
+
+    report.check('and over the time limit', limitedBuild.json?.build?.over_time === true,
+        `build: ${JSON.stringify(limitedBuild.json?.build)}`);
+
+    const smallBuild = await server.get('/api/builds/1', dev);
+
+    report.check('a build with no measurement is not marked',
+        smallBuild.json?.build?.over_size === false
+        && smallBuild.json?.build?.over_time === false,
+        `build: ${JSON.stringify(smallBuild.json?.build)}`);
+
+    const listWithLimits = await server.get('/api/builds', dev);
+
+    report.check('the list carries the same flags and the limits',
+        (listWithLimits.json?.builds || [])
+            .some(build => build.id === stats.json.build.id && build.over_size === true)
+        && listWithLimits.json?.limits?.max_seconds === 600,
+        `list: ${listWithLimits.text.slice(0, 240)}`);
 
     const badResult = await reportBuild({
         stream: '//LE/exp', changelist: 701, result: 'maybe'

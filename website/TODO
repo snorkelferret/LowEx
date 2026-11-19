@@ -12905,7 +12905,14 @@ no upside. If something seems to need one of them, ask.
 
      --- NOT BUILT ---
 
-       [ ] Thresholds (maximum size, maximum time) that would mark a build as
-           over the line. The numbers are now there to compare; the comparison
-           and the two settings are not.
+       [x] BUILT 2026-11-19: two settings on the admin page, `build_max_gb`
+           and `build_max_minutes` (0 = no limit, bounded integers). The builds
+           route reads them per request and marks a build `over_size` /
+           `over_time`; the shared panel shows "over limit" with the figure.
+           Advice, not a gate — the reviewer decides. DEFAULTS 50 GB and 90
+           minutes, a ceiling for a mid-size open world rather than a target:
+           a healthy build of that shape is 20–35 GB, so 50 catches the
+           accidental double or triple without flagging normal growth. Change
+           them after the first few real builds. check:admin proves the bounds
+           and that 0 is valid; check:integration proves the flags.
        [ ] Pushing the rejection or the stats to the build machine.
