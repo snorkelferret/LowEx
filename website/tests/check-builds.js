@@ -83,13 +83,25 @@ async function main() {
                     (2, 1, 2, 3, 'second'),
                     (3, 2, 1, 3, 'rock');
 
+                -- BigTree is approved FOR //LE/main; Rock is approved FOR
+                -- //LE/exp, so the candidate list of a main build must not
+                -- contain it.
                 INSERT INTO creative_approvals
                     (id, workspace_asset_id, workspace_version_id, requested_by,
-                     status, decided_by, decided_at, repository_asset_id, repository_version_id)
+                     status, decided_by, decided_at, repository_asset_id, repository_version_id,
+                     destination_kind, destination_stream)
                 VALUES
-                    (1, 1, 1, 2, 'approved', 3, '2026-10-01 10:00:00', 1, 1),
-                    (2, 1, 2, 2, 'approved', 3, '2026-10-02 10:00:00', 1, 2),
-                    (3, 2, 3, 2, 'approved', 3, '2026-10-03 10:00:00', 2, 3);
+                    (1, 1, 1, 2, 'approved', 3, '2026-10-01 10:00:00', 1, 1, 'game', '//LE/main'),
+                    (2, 1, 2, 2, 'approved', 3, '2026-10-02 10:00:00', 1, 2, 'game', '//LE/main'),
+                    (3, 2, 3, 2, 'approved', 3, '2026-10-03 10:00:00', 2, 3, 'game', '//LE/exp');
+
+                -- BUILDS COME FROM THE BUILD MACHINE NOW; the check seeds them
+                -- the way the report endpoint would leave them.
+                INSERT INTO builds (id, name, released_on, changelist, stream, notes, created_by)
+                VALUES
+                    (1, '0.1 Sandbox, 30 Oct', '2026-10-30', 15407, '//LE/main', 'first', 1),
+                    (2, '0.2 Sandbox, 30 Oct', NULL, 15408, '//LE/main', NULL, 1),
+                    (3, '0.1 Experimental, 30 Oct', NULL, 15409, '//LE/exp', NULL, 1);
 
                 INSERT INTO stored_files (id, sha256, storage_key, file_size)
                 VALUES
@@ -122,51 +134,43 @@ async function main() {
     const assetOf = (diff, name) => (diff.assets || []).find(a => a.asset_name === name);
 
     // -----------------------------------------------------------------
-    // CREATE
+    // THE RECORD
     // -----------------------------------------------------------------
 
-    const created = await server.post('/', {
-        name: '0.1 Sandbox, 30 Oct',
-        released_on: '2026-10-30',
-        changelist: 15407,
-        notes: 'first'
-    }, admin);
+    // CREATION IS GONE. A build is reported by the machine that made it, not
+    // typed here; check:integration owns the report. This check reads the
+    // seeded builds, the way the report would have left them.
+    const buildA = 1;
+    const buildB = 2;
 
-    report.check('a build can be named', created.status === 201,
-        `expected 201, got ${created.status} — ${created.text.slice(0, 140)}`);
+    const detailA = await server.get(`/${buildA}`, admin);
 
-    const buildA = created.json?.build?.id;
+    report.check('a build can be read', detailA.status === 200,
+        `expected 200, got ${detailA.status}`);
 
-    report.check('with its date and changelist stored',
-        created.json?.build?.released_on === '2026-10-30'
-        && created.json?.build?.changelist === 15407);
-
-    const duplicate = await server.post('/', { name: '0.1 Sandbox, 30 Oct' }, admin);
-
-    report.check('a duplicate name is refused', duplicate.status === 409,
-        `expected 409, got ${duplicate.status}`);
-
-    const badDate = await server.post('/', { name: 'bad date', released_on: '30/10/2026' }, admin);
-
-    report.check('a malformed date is a 400', badDate.status === 400,
-        `expected 400, got ${badDate.status}`);
-
-    const badCl = await server.post('/', { name: 'bad cl', changelist: 'abcd' }, admin);
-
-    report.check('a malformed changelist is a 400', badCl.status === 400,
-        `expected 400, got ${badCl.status}`);
+    report.check('with its date, changelist and stream',
+        detailA.json?.build?.released_on === '2026-10-30'
+        && detailA.json?.build?.changelist === 15407
+        && detailA.json?.build?.stream === '//LE/main',
+        `build: ${JSON.stringify(detailA.json?.build)}`);
 
     // -----------------------------------------------------------------
     // CANDIDATES
     // -----------------------------------------------------------------
 
-    report.check('every approved version is a candidate',
-        JSON.stringify(candidateIds(created.json)) === JSON.stringify([1, 2, 3]),
-        `candidates: ${JSON.stringify(candidateIds(created.json))}`);
+    report.check('the candidates are versions approved for this build\'s stream',
+        JSON.stringify(candidateIds(detailA.json)) === JSON.stringify([1, 2]),
+        `candidates: ${JSON.stringify(candidateIds(detailA.json))}`);
+
+    const expDetail = await server.get('/3', admin);
+
+    report.check('a build of another stream sees its own candidates',
+        JSON.stringify(candidateIds(expDetail.json)) === JSON.stringify([3]),
+        `exp candidates: ${JSON.stringify(candidateIds(expDetail.json))}`);
 
     report.check('and the candidate reports who UPLOADED it, not only who approved',
-        created.json?.candidates?.every(c => c.uploaded_by === 'dev-check' && c.approved_by === 'prod-check'),
-        `first candidate: ${JSON.stringify(created.json?.candidates?.[0])}`);
+        detailA.json?.candidates?.every(c => c.uploaded_by === 'dev-check' && c.approved_by === 'prod-check'),
+        `first candidate: ${JSON.stringify(detailA.json?.candidates?.[0])}`);
 
     // -----------------------------------------------------------------
     // ADD, AND THE ONE-VERSION RULE
@@ -214,11 +218,6 @@ async function main() {
     report.check('but a developer cannot put work into a build',
         developerWrite.status === 403,
         `expected 403, got ${developerWrite.status}`);
-
-    const developerCreate = await server.post('/', { name: 'by a developer' }, dev);
-
-    report.check('and cannot create one', developerCreate.status === 403,
-        `expected 403, got ${developerCreate.status}`);
 
     // PRODUCTION READS TOO: deciding what is good includes seeing where the
     // good work ended up. It does not write — putting content in is engineering.
@@ -319,13 +318,6 @@ async function main() {
     // THE DIFF
     // -----------------------------------------------------------------
 
-    const second = await server.post('/', { name: '0.2 Sandbox, 30 Oct' }, admin);
-
-    report.check('a second build can be named', second.status === 201,
-        `expected 201, got ${second.status}`);
-
-    const buildB = second.json?.build?.id;
-
     await server.post(`/${buildB}/assets`, { asset_version_id: 2 }, admin);
     await server.post(`/${buildB}/assets`, { asset_version_id: 3 }, admin);
 
@@ -388,7 +380,6 @@ async function main() {
 
     const audits = action => db.prepare('SELECT * FROM audit_logs WHERE action = ?').all(action);
 
-    report.check('the build creation is recorded', audits('build.create').length === 2);
     report.check('the additions are recorded', audits('build.asset_add').length === 5,
         `found ${audits('build.asset_add').length}`);
     report.check('the removal is recorded', audits('build.asset_remove').length === 1);

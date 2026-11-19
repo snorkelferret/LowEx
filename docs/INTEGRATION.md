@@ -198,6 +198,7 @@ this; nothing connected it to a stream or to a receipt.
 |---|---|---|---|
 | `stream` | string | yes | the game stream the build came from |
 | `changelist` | integer ≥ 1 | yes | the changelist built |
+| `released_on` | `YYYY-MM-DD` | no | when the build was released, if it was |
 | `name` | string | no | the build's name; defaults to `<stream> @ CL <changelist>` |
 | `build_id` | string | no | the build machine's own identifier |
 | `built_at` | ISO 8601 | no | when the build ran; stored in UTC |
@@ -227,7 +228,8 @@ with no changelist does not identify a state of the game.
   retry fills in anything missing and returns `200` with `duplicate: true`.
   **A retry never overwrites a value already recorded.**
 - The row is written with `source = 'reported'` and `created_by` null. A build
-  typed by an administrator has `source = 'typed'`.
+  typed by hand before the machine reported builds has `source = 'typed'` and
+  no stream; the page no longer creates them.
 
 ### Responses
 
@@ -251,7 +253,8 @@ curl -sS -X POST "$PORTAL_URL/api/integration/builds" \
     "changelist": 7,
     "name": "0.4 Experimental, 18 Nov",
     "build_id": "LE-2026.11.18-01",
-    "built_at": "2026-11-18T17:30:00Z"
+    "built_at": "2026-11-18T17:30:00Z",
+    "released_on": "2026-11-18"
   }'
 ```
 

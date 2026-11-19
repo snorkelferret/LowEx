@@ -34,7 +34,7 @@ and exits 1.
 | upload | `check:upload` | route | the folder names the asset, bytes are stored once, an unchanged version is refused |
 | upload while pending | `check:upload-pending` | route | an asset under review refuses changes |
 | download | `check:round-trip` | route | an approved version downloads and imports back as references |
-| builds | `check:builds` | route | membership, the one-version rule, the manifest tree, the diff, and the build review |
+| builds | `check:builds` | route | streams and their builds, candidates by stream, membership, the one-version rule, the manifest tree, the diff and the review |
 | library | `check:library` | route | content roles read it; the wrong roles do not write |
 | Perforce | `check:perforce` | route | the portal is told once, has a cursor, and reports a gap |
 | destination and builds | `check:integration` | route | the destination gate, receipts, build reports and stats, the limits, review advice, retargeting |
@@ -55,8 +55,10 @@ npm run check:browser
 starts the real backend, serves `frontend/dist`, launches headless Chrome and
 drives the destination flow: the dialog opens, the game option is enabled, a
 submit without a receipt is refused in the dialog, a receipt preselects its
-version, the submit closes the dialog, production retargets and approves, and
-the store row names both people.
+version, the submit closes the dialog, production retargets and approves, the
+store row names both people, and the streams page renders a seeded build from
+the database, opens its stream, opens the build and shows its stats and
+limits.
 
 It needs Chrome or Chromium on `PATH` and the built pages. Missing either, it
 says so and **fails** rather than skipping: a check that reports PASS without

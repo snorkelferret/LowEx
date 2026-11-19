@@ -12916,3 +12916,68 @@ no upside. If something seems to need one of them, ask.
            them after the first few real builds. check:admin proves the bounds
            and that 0 is valid; check:integration proves the flags.
        [ ] Pushing the rejection or the stats to the build machine.
+
+
+114) STREAMS ON TOP, BUILDS UNDER THEM — AND WHAT THE TESTS MISSED. 2026-11-19.
+     ========================================================================
+
+     ASKED, looking at the admin page: "shouldn't this be streams? I am not
+     sure that admin should be able to create a build - from here - maybe -
+     surely this should be streams and under that the builds?"
+
+     HE WAS RIGHT ON BOTH.
+
+     --- THE PAGE ---
+
+       The panel is now the hierarchy: STREAMS first (the branches the portal
+       knows from builds and from Perforce notifications, including a stream
+       with no builds yet), then the builds made from the selected one, then a
+       build's detail. Builds typed before streams were recorded appear under
+       "No stream recorded". The tab and section are renamed Streams on the
+       admin, developer and prod pages; it is still ONE component and ONE
+       script (builds.html + builds.js).
+
+     --- CREATION REMOVED ---
+
+       POST /api/builds and the Create form are gone. A build is reported by
+       the machine that made it; a typed build had no stream, no stats and no
+       result, and made an accepted mark mean nothing. The release date moved
+       onto the report: `released_on` there, because the build process knows
+       when it made a release. check:builds now seeds builds the way the
+       report leaves them.
+
+     --- CANDIDATES FILTERED BY STREAM ---
+
+       The candidates for a build are versions approved FOR THAT BUILD'S
+       STREAM (creative_approvals.destination_stream), not all approved
+       content. A build with no stream keeps the old all-approved behaviour.
+       This is the import list the integration tool will need, arriving on the
+       page first.
+
+     --- THE TEST LESSON, WHICH IS THE IMPORTANT PART ---
+
+       THE BUG: adding released_on to the build report shifted the duplicate
+       path's parameters by one. The update ran, returned 200, and wrote the
+       fields to the wrong columns — and check:integration PASSED, because its
+       retry assertion checked only the status and the duplicate flag. The
+       owner caught it by asking why the tests did not.
+
+       WHAT CHANGED:
+         * the retry test now supplies every field the first report omitted
+           and asserts EVERY ONE of them after the retry — released_on,
+           result, duration, output, warnings, errors, excerpt. A status-only
+           assertion on an update is not a test of the update;
+         * check:browser grew a VERTICAL SLICE: a build seeded in the
+           database, served by the API, rendered by the shared panel, opened
+           by a click — stream list, stream's builds, build detail, stats,
+           over-limit mark, review controls. check:dom would have proven the
+           ids existed while the page read nothing;
+         * check:builds now seeds builds directly and asserts candidates by
+           stream in both directions (a main build does not see an exp
+           approval, and vice versa).
+
+       THE RULE, FOR THE NEXT CHANGE: an assertion that only checks the status
+       of a write checks that the route answered, not that it wrote. Assert the
+       values that moved. And drive one scenario through every layer — seed,
+       API, page, click — because each layer's own test can pass while the
+       seam between them is wrong.

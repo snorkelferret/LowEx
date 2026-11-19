@@ -57,6 +57,15 @@ const CAN_REVIEW = ME.role === 'prod' || ME.role === 'admin';
 
 let selectedId = null;
 let allBuilds = [];
+
+// WHICH STREAM GROUP IS OPEN. `null` is a real group — builds from before
+// streams were recorded — so a boolean says whether one is open at all.
+let selectedStream = null;
+let streamOpen = false;
+
+// The streams Perforce has told the portal about, so a stream with no builds
+// yet is visible rather than waiting for its first build to exist.
+let knownStreams = [];
 let currentDetail = null;
 
 // WHICH PANEL, IF ANY, IS OPEN. Both the file tree and the diff are revealed by
@@ -181,17 +190,102 @@ function sortHeader(label, table, key, current) {
 }
 
 // ---------------------------------------------------------------------------
-// The list of builds
+// Streams, and the builds in one
 // ---------------------------------------------------------------------------
 
-function renderBuilds(builds) {
+const NONE = '__none__';
+
+const streamKeyOf = build => build.stream || NONE;
+
+const streamLabel = key => key === NONE ? 'No stream recorded' : key;
+
+// The badges a build carries wherever it is listed.
+function buildVerdict(build) {
+    return (build.over_size || build.over_time
+        ? ' · <span class="text-warning">over limit</span>'
+        : '') +
+        (build.result === 'failed' ? ' · <span class="text-danger">build failed</span>' : '') +
+        (build.status === 'rejected'
+            ? ' · <span class="text-danger">rejected</span>'
+            : build.status === 'accepted'
+                ? ' · <span class="text-success">accepted</span>'
+                : '');
+}
+
+function renderStreams() {
+    const list = $('streamList');
+    if (!list) return;
+
+    const groups = new Map();
+
+    for (const build of allBuilds) {
+        const key = streamKeyOf(build);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(build);
+    }
+
+    // A stream Perforce named but which has no build yet is still a stream.
+    for (const stream of knownStreams) {
+        if (!groups.has(stream)) groups.set(stream, []);
+    }
+
+    const keys = [...groups.keys()].filter(key => key !== NONE).sort();
+
+    // The legacy group goes last: it is a gap in the record, not a stream.
+    if (groups.has(NONE)) keys.push(NONE);
+
+    list.innerHTML = '';
+
+    if (keys.length === 0) {
+        list.innerHTML = '<span class="text-secondary">No streams or builds recorded yet.</span>';
+        return;
+    }
+
+    for (const key of keys) {
+        const builds = groups.get(key);
+
+        // NEWEST BY CHANGELIST, not by the order the rows were written: a
+        // report queued while the portal was down can arrive out of order.
+        const latest = [...builds].sort(
+            (a, b) => (b.changelist || 0) - (a.changelist || 0)
+        )[0];
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-group-item list-group-item-action bg-transparent text-start'
+            + (streamOpen && selectedStream === key ? ' active' : '');
+        button.dataset.stream = key;
+
+        const count = `${builds.length} build${builds.length === 1 ? '' : 's'}`;
+
+        const latestText = latest
+            ? ` · latest ${escapeHtml(latest.name)}` +
+              `${latest.changelist ? ` (CL ${latest.changelist})` : ''}${buildVerdict(latest)}`
+            : ' · no builds yet';
+
+        button.innerHTML =
+            `<span class="fw-semibold">${key === NONE ? 'No stream recorded' : escapeHtml(key)}</span>` +
+            `<span class="d-block small text-secondary">${count}${latestText}</span>`;
+
+        list.appendChild(button);
+    }
+}
+
+function renderStreamBuilds(key) {
     const list = $('buildList');
     if (!list) return;
+
+    $('streamBuildsSection')?.classList.remove('d-none');
+
+    const title = $('streamTitle');
+    if (title) title.textContent = streamLabel(key);
+
+    const builds = allBuilds.filter(build => streamKeyOf(build) === key);
 
     list.innerHTML = '';
 
     if (builds.length === 0) {
-        list.innerHTML = '<span class="text-secondary">No builds yet.</span>';
+        list.innerHTML = '<span class="text-secondary">No builds recorded for this stream yet.</span>';
         return;
     }
 
@@ -204,32 +298,47 @@ function renderBuilds(builds) {
 
         const date = build.released_on ? formatDate(build.released_on) : 'no date';
         const changelist = build.changelist ? ` · CL ${build.changelist}` : '';
-        const stream = build.stream ? ` · ${escapeHtml(build.stream)}` : '';
 
-        // HOW MUCH OF THIS BUILD IS THE VIEWER'S OWN WORK. That is the question
-        // a developer opens this page to answer.
         const mine = build.mine_count > 0
             ? ` · <span class="text-info">${build.mine_count} of yours</span>`
             : '';
 
-        const verdict =
-            (build.over_size || build.over_time
-                ? ' · <span class="text-warning">over limit</span>'
-                : '') +
-            (build.result === 'failed' ? ' · <span class="text-danger">build failed</span>' : '') +
-            (build.status === 'rejected'
-                ? ' · <span class="text-danger">rejected</span>'
-                : build.status === 'accepted'
-                    ? ' · <span class="text-success">accepted</span>'
-                    : '');
-
         button.innerHTML =
             `<span class="fw-semibold">${escapeHtml(build.name)}</span>` +
-            `<span class="d-block small text-secondary">${date}${changelist}${stream} · ` +
-            `${build.asset_count} version${build.asset_count === 1 ? '' : 's'}${mine}${verdict}</span>`;
+            `<span class="d-block small text-secondary">${date}${changelist} · ` +
+            `${build.asset_count} version${build.asset_count === 1 ? '' : 's'}${mine}${buildVerdict(build)}</span>`;
 
         list.appendChild(button);
     }
+}
+
+function hideStream() {
+    streamOpen = false;
+    selectedStream = null;
+
+    $('streamBuildsSection')?.classList.add('d-none');
+    hideDetail();
+    renderStreams();
+}
+
+function onClickStream(event) {
+    const button = event.target.closest('button[data-stream]');
+    if (!button) return;
+
+    const key = button.dataset.stream;
+
+    if (streamOpen && selectedStream === key) {
+        hideStream();
+        return;
+    }
+
+    hideDetail();
+
+    streamOpen = true;
+    selectedStream = key;
+
+    renderStreams();
+    renderStreamBuilds(key);
 }
 
 function refreshDiffSelects() {
@@ -263,7 +372,20 @@ async function loadBuilds() {
     try {
         const data = await fetchJson(API);
         allBuilds = data.builds || [];
-        renderBuilds(allBuilds);
+
+        try {
+            const streams = await fetchJson('/api/perforce/streams');
+            knownStreams = (streams.streams || []).map(row => row.stream);
+        } catch {
+            // The builds are the important half; a streams fetch that fails
+            // only means a stream with no builds is not listed.
+            knownStreams = [];
+        }
+
+        renderStreams();
+
+        if (streamOpen) renderStreamBuilds(selectedStream);
+
         refreshDiffSelects();
     } catch (err) {
         showAlert(`Could not load builds: ${err.message}`);
@@ -910,36 +1032,6 @@ function onClickReject() {
 // Wiring
 // ---------------------------------------------------------------------------
 
-function onSubmitCreate(event) {
-    event.preventDefault();
-
-    const name = $('buildName')?.value.trim();
-
-    if (!name) {
-        showAlert('A build needs a name.', 'warning');
-        return;
-    }
-
-    const payload = {
-        name,
-        released_on: $('buildDate')?.value || null,
-        changelist: $('buildChangelist')?.value || null,
-        notes: $('buildNotes')?.value || null
-    };
-
-    fetchJson(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    })
-        .then(detail => {
-            showAlert('', 'success');
-            $('buildCreateForm')?.reset();
-            return loadBuilds().then(() => selectBuild(detail.build.id));
-        })
-        .catch(err => showAlert(err.message));
-}
-
 function addVersion(versionId, name) {
     if (selectedId === null) return;
 
@@ -1083,13 +1175,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // case; a button that would be refused is a button that teaches the wrong
     // thing about the role.
     if (!IS_ADMIN) {
-        $('buildCreateForm')?.classList.add('d-none');
         $('buildDeleteBtn')?.classList.add('d-none');
         $('buildAddControls')?.classList.add('d-none');
     }
 
-    $('buildCreateForm')?.addEventListener('submit', onSubmitCreate);
+    $('streamList')?.addEventListener('click', onClickStream);
     $('buildList')?.addEventListener('click', onClickList);
+    $('streamHideBtn')?.addEventListener('click', hideStream);
     $('buildMembers')?.addEventListener('click', onClickMembers);
     $('buildCandidates')?.addEventListener('click', onClickCandidates);
     $('buildDeleteBtn')?.addEventListener('click', onClickDelete);

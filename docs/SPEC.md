@@ -546,12 +546,13 @@ an older reporter sends none. The numbers are shown on the build, they give the
 reviewer something concrete beside "too big" or "too slow", and a build whose
 result is failed is never offered as freshness advice and cannot be accepted.
 
-**A build can be reported by the machine that made it.** `POST
-/api/integration/builds` records a stream, a changelist, a name and the
-machine's own identifier, marked `source = 'reported'`; a build typed by an
-administrator stays `typed`. A candidate build also names the stream it was
-built over. The idempotency key is `(stream, changelist)`. See
-`docs/INTEGRATION.md`.
+**A build is reported by the machine that made it.** `POST
+/api/integration/builds` records a stream, a changelist, a name, the machine's
+own identifier, its release date and its stats, marked `source = 'reported'`.
+A candidate build also names the stream it was built over. The idempotency key
+is `(stream, changelist)`. **The page does not create builds**; one typed
+before the machine reported them has no stream and appears under *No stream
+recorded*. See `docs/INTEGRATION.md`.
 
 **Builds are named, not channelled.** "0.4 Experimental, 12 Nov" — a specific
 build with a date. A channel holds one value and cannot express a history; a
@@ -571,8 +572,10 @@ under review. The build records which version of each asset it holds.
 
 **BUILT 2026-10-30 — the record and the admin's queue.** `builds` (a name, an
 optional release date, an optional changelist, notes) and `build_assets` (which
-approved versions are in it). The admin page lists every build and, for one
-selected build, **the candidates**: approved store versions it does not hold.
+approved versions are in it). **The page is the hierarchy**: streams first,
+then the builds made from one, then a build's contents. For one selected
+build, **the candidates** are the versions approved **for that build's
+stream** that it does not hold.
 Adding a candidate writes the membership, and — when a changelist is given —
 also the `asset_integrations` row, so the import and the membership are one act.
 

@@ -185,6 +185,15 @@ async function main() {
 
         INSERT INTO app_settings (key, value)
         VALUES ('integration_tooling', '1');
+
+        -- A BUILD THE MACHINE REPORTED, with a duration over the default
+        -- 90-minute limit. The streams page must render it from the database
+        -- through the API, which is the vertical slice below.
+        INSERT INTO builds
+            (id, name, changelist, stream, result, duration_seconds, output_bytes, status, notes)
+        VALUES
+            (1, '0.4 Experimental, 18 Nov', 7, '//LowExpectations/main',
+             'succeeded', 6000, 2147483648, 'unreviewed', 'reported by the build machine');
     `);
 
     db.close();
@@ -492,6 +501,67 @@ async function main() {
         );
 
         report.check('approving works from the queue', true);
+
+        // -----------------------------------------------------------------
+        // THE STREAMS PAGE — a vertical slice
+        // -----------------------------------------------------------------
+        //
+        // SEEDED IN THE DATABASE, SERVED BY THE API, RENDERED BY THE SHARED
+        // PANEL AND OPENED BY A CLICK. A DOM check alone would only prove the
+        // ids exist; this proves the page reads the record and the hierarchy
+        // works: streams, then the builds made from one, then the build.
+
+        await cdp.waitFor(`!!document.getElementById('streamList')`, 10000, 'the streams panel');
+
+        const streams = await cdp.evaluate(
+            `document.getElementById('streamList').innerText.replace(/\\s+/g, ' ')`);
+
+        report.check('the page lists the streams the portal knows',
+            /\/\/LowExpectations\/main/.test(streams)
+            && /\/\/LowExpectations\/exp/.test(streams),
+            streams.slice(0, 300));
+
+        await cdp.evaluate(`(() => {
+            const button = [...document.querySelectorAll('#streamList button[data-stream]')]
+                .find(b => b.textContent.includes('//LowExpectations/main'));
+            if (button) button.click();
+        })()`);
+
+        await cdp.waitFor(
+            `!document.getElementById('streamBuildsSection').classList.contains('d-none')`,
+            10000, 'the builds of the stream');
+
+        const streamBuilds = await cdp.evaluate(
+            `document.getElementById('buildList').innerText.replace(/\\s+/g, ' ')`);
+
+        report.check('opening a stream lists its builds',
+            /0\.4 Experimental, 18 Nov/.test(streamBuilds),
+            streamBuilds.slice(0, 300));
+
+        await cdp.evaluate(`(() => {
+            const button = document.querySelector('#buildList button[data-build-id]');
+            if (button) button.click();
+        })()`);
+
+        await cdp.waitFor(
+            `!document.getElementById('buildDetail').classList.contains('d-none')`,
+            10000, 'the build detail');
+
+        const buildDetail = await cdp.evaluate(
+            `document.getElementById('buildDetail').innerText.replace(/\\s+/g, ' ')`);
+
+        report.check('opening the build shows what the machine measured',
+            /Build succeeded/.test(buildDetail)
+            && /took 1h 40m/.test(buildDetail),
+            buildDetail.slice(0, 300));
+
+        report.check('and marks it over the default time limit',
+            /Over the time limit/.test(buildDetail),
+            buildDetail.slice(0, 300));
+
+        report.check('and production is offered the review controls',
+            await cdp.evaluate(
+                `!document.getElementById('buildReviewControls').classList.contains('d-none')`));
 
         // -----------------------------------------------------------------
         // What the server holds afterwards

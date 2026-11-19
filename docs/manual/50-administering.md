@@ -176,15 +176,17 @@ If the portal has been configured to send mail, the link is emailed. If not, you
 are given the link to pass on yourself — so invitations work either way, and a
 misconfigured mail server is never the reason nobody can get in.
 
-## Builds
+## Streams and builds
 
-**Builds** is where an approved asset is put into a named build — "0.4
-Experimental, 12 Nov" — and where you can see what a build already contains.
+**Streams and builds** is where an approved asset is put into a named build —
+"0.4 Experimental, 12 Nov" — and where you can see what a build already
+contains. **Open a stream, then a build in it.**
 
 **The words.** A **stream** is a branch of the game, such as
-`//LowExpectations/main`. A **build** is a package made from one stream at one
-changelist. A **release** is a build that shipped: the date field below is when
-that happened. An asset has versions; the game has builds.
+`//LowExpectations/main` — the production line, a development line, an
+experimental line. A **build** is a package made from one stream at one
+changelist. A **release** is a build that shipped, and its release date is
+reported by the build machine. An asset has versions; the game has builds.
 
 **Each build shows what the machine measured** — result, duration, size,
 warning and error counts, and the first errors if it failed. A failed build
@@ -196,23 +198,27 @@ time, or a judgement about how it looks. The reason and who gave it are shown
 on the build and written to the audit log. A rejected build is still listed: it
 happened. It stops being used as freshness advice for submissions.
 
-**A build can arrive from the build machine** instead of being typed here. It
-appears the same way, marked *reported by the build machine*, with its stream,
-changelist and the machine's own identifier. A build created on this page is
-marked *typed*.
-**Developers see the same panel read-only**; the controls that write are shown
-to administrators only, because the server refuses everybody else.
+**Builds are reported by the build machine, not created here.** Each one
+carries its stream, changelist, the machine's own identifier and its stats.
+Builds from before the machine reported them were typed by hand: they have no
+stream, and they appear under **No stream recorded** rather than being hidden.
 
-**Selecting a build is a toggle.** Click one to open it; click it again, or
-press **Hide**, to close it — and opening another switches rather than stacking.
+**Developers see the same panel read-only.** The controls that change what a
+build holds are administrators only; **production reviews the build itself**
+(Accept and Reject), and the server refuses everybody else.
+
+**Opening is a toggle at each level.** Click a stream to see its builds; click
+it again, or press **Hide**, to close the list. Click a build to open it; click
+it again, or press **Hide**, to close it.
 
 Two lists, and the difference matters:
 
 - **In this build** — what it holds. One version per asset: a build
   cannot hold two versions of the same thing, and the panel names the version in
   the way if you try.
-- **Candidates** — everything approved that this build does not hold yet. A
-  version already in *another* build still appears, marked, because the same
+- **Candidates** — everything approved **for this stream** that this build does
+  not hold yet. A version already in *another* build still appears, marked,
+  because the same
   version can ship in several builds.
 
 **Adding a version** records it as part of this build. The **changelist** is

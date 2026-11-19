@@ -469,6 +469,14 @@ async function main() {
     report.check('a build report with a bad date is refused', badDate.status === 400,
         `expected 400, got ${badDate.status}`);
 
+    const badReleaseDate = await reportBuild({
+        stream: '//LowExpectations/main', changelist: 500, released_on: '18/11/2026'
+    });
+
+    report.check('a build report with a bad release date is refused',
+        badReleaseDate.status === 400,
+        `expected 400, got ${badReleaseDate.status}`);
+
     const halfCandidate = await reportBuild({
         stream: '//LowExpectations/task-val-1', changelist: 500,
         base_stream: '//LowExpectations/main'
@@ -503,15 +511,35 @@ async function main() {
         built.json?.build?.built_at === '2026-11-18 17:30:00',
         `built_at: ${built.json?.build?.built_at}`);
 
+    // THE SECOND REPORT SUPPLIES THE FIELDS THE FIRST ONE OMITTED. A retry
+    // fills gaps; it must not shift them into the wrong columns, which a
+    // check that only asserted the status would not notice.
     const builtAgain = await reportBuild({
         stream: '//LowExpectations/main',
         changelist: 500,
-        build_id: 'LE-2026.11.18-01'
+        build_id: 'LE-2026.11.18-01',
+        released_on: '2026-11-18',
+        result: 'succeeded',
+        duration_seconds: 1800,
+        output_bytes: 2048,
+        warnings: 2,
+        errors: 1,
+        log_excerpt: 'LogInit: Display: done'
     });
 
     report.check('reporting the same build twice is harmless',
         builtAgain.status === 200 && builtAgain.json?.duplicate === true,
         `expected 200 duplicate, got ${builtAgain.status}`);
+
+    report.check('and the retry fills the fields the first report omitted',
+        builtAgain.json?.build?.released_on === '2026-11-18'
+        && builtAgain.json?.build?.result === 'succeeded'
+        && builtAgain.json?.build?.duration_seconds === 1800
+        && builtAgain.json?.build?.output_bytes === 2048
+        && builtAgain.json?.build?.warnings === 2
+        && builtAgain.json?.build?.errors === 1
+        && builtAgain.json?.build?.log_excerpt === 'LogInit: Display: done',
+        `build: ${JSON.stringify(builtAgain.json?.build)}`);
 
     const buildCount = new Database(server.dbPath, { readonly: true })
         .prepare(`SELECT COUNT(*) AS n FROM builds WHERE stream = '//LowExpectations/main' AND changelist = 500`)
@@ -573,7 +601,7 @@ async function main() {
     report.check('and over the time limit', limitedBuild.json?.build?.over_time === true,
         `build: ${JSON.stringify(limitedBuild.json?.build)}`);
 
-    const smallBuild = await server.get('/api/builds/1', dev);
+    const smallBuild = await server.get(`/api/builds/${candidate.json.build.id}`, dev);
 
     report.check('a build with no measurement is not marked',
         smallBuild.json?.build?.over_size === false

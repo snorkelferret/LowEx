@@ -143,6 +143,20 @@ const candidatesFor = db.prepare(`
         SELECT 1 FROM build_assets r2
         WHERE r2.build_id = ? AND r2.asset_version_id = av.id
     )
+      -- APPROVED FOR THIS STREAM, when the build names one. The first ? is the
+      -- stream: NULL means a build from before streams were recorded, and it
+      -- keeps the old all-approved behaviour. The second is the same value for
+      -- the approval it matches.
+      AND (
+        ? IS NULL
+        OR EXISTS (
+            SELECT 1 FROM creative_approvals d
+            WHERE d.repository_version_id = av.id
+              AND d.status = 'approved'
+              AND d.destination_kind = 'game'
+              AND d.destination_stream = ?
+        )
+      )
     ORDER BY a.name COLLATE NOCASE, av.version_number
 `);
 
@@ -167,11 +181,6 @@ const filesOfVersion = db.prepare(`
     JOIN stored_files sf ON sf.id = avf.stored_file_id
     WHERE avf.asset_version_id = ?
     ORDER BY avf.relative_path, avf.filename
-`);
-
-const insertBuild = db.prepare(`
-    INSERT INTO builds (name, released_on, changelist, notes, created_by)
-    VALUES (?, ?, ?, ?, ?)
 `);
 
 const insertMembership = db.prepare(`
@@ -243,7 +252,7 @@ function detailOf(buildId) {
             decided_at: row.decided_at,
             changelist: row.changelist
         })),
-        candidates: candidatesFor.all(buildId).map(row => ({
+        candidates: candidatesFor.all(buildId, build.stream, build.stream).map(row => ({
             asset_version_id: row.asset_version_id,
             version_number: row.version_number,
             asset_id: row.asset_id,
@@ -306,73 +315,6 @@ router.get('/', authenticateToken, requireRole('developer', 'prod', 'admin'), (r
             ...limited(build, limits)
         }))
     });
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/builds — name it
-// ---------------------------------------------------------------------------
-
-router.post('/', authenticateToken, requireRole('admin'), (req, res) => {
-    const actor = req.user?.id;
-
-    if (!actor) return res.status(401).json({ error: 'Authenticated user ID not found' });
-
-    const name = String(req.body?.name || '').trim();
-
-    if (!name) {
-        return res.status(400).json({ error: 'A build needs a name — "0.4 Experimental, 12 Nov".' });
-    }
-
-    if (name.length > 120) {
-        return res.status(400).json({ error: 'That name is too long — 120 characters at most.' });
-    }
-
-    // OPTIONAL, AND VALIDATED WHEN PRESENT. A build may be planned before it
-    // has a date; a date that is present must be one.
-    const releasedOn = String(req.body?.released_on || '').trim() || null;
-
-    if (releasedOn && !/^\d{4}-\d{2}-\d{2}$/.test(releasedOn)) {
-        return res.status(400).json({ error: 'released_on must be YYYY-MM-DD.' });
-    }
-
-    // THE BUILD'S CHANGELIST, WHEN KNOWN. An assertion, like asset_integrations.
-    const rawChangelist = req.body?.changelist;
-
-    let changelist = null;
-
-    if (rawChangelist !== undefined && rawChangelist !== null && rawChangelist !== '') {
-        changelist = Number(rawChangelist);
-
-        if (!isPositiveInteger(changelist)) {
-            return res.status(400).json({
-                error: 'changelist must be a positive integer — the Perforce changelist number.'
-            });
-        }
-    }
-
-    const notes = String(req.body?.notes || '').trim() || null;
-
-    try {
-        const result = insertBuild.run(name, releasedOn, changelist, notes, actor);
-
-        audit.record(actor, 'build.create', name, {
-            build_id: result.lastInsertRowid,
-            released_on: releasedOn,
-            changelist
-        });
-
-        return res.status(201).json(detailOf(result.lastInsertRowid));
-
-    } catch (err) {
-        if (/UNIQUE/i.test(err.message)) {
-            return res.status(409).json({
-                error: `A build called "${name}" already exists.`
-            });
-        }
-
-        console.error('Could not create that build:', err);
-        return res.status(500).json({ error: 'Could not create that build' });
-    }
 });
 
 // ---------------------------------------------------------------------------

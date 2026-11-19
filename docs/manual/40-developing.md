@@ -218,10 +218,10 @@ store keeps its own copy, so only yours goes.
 that might be wrong — it is what the storage does. Content in the game store is
 kept alive by the store's own reference, and deleting your copy cannot remove it.
 
-## Builds
+## Streams and builds
 
-**The Builds tab** shows the named builds the studio has made — and it is the
-same page the administrator sees, read-only.
+**The Streams tab** shows the branches of the game, and under each one the
+builds made from it — the same page the administrator sees, read-only.
 
 **The words, because three get used for the same thing.** A **stream** is a
 branch of the game, such as `//LowExpectations/main`. A **build** is a package
@@ -235,7 +235,8 @@ the reason when it was rejected.
 Each build also shows what the build machine measured: whether it succeeded,
 how long it took, its size, and its warning and error counts.
 
-**Click a build to open it, and click it again — or press Hide — to close it.**
+**Open a stream to see its builds, then a build to open it.** Clicking again,
+or pressing **Hide**, closes it.
 
 - **Each build in the list says how much of it is yours** — "3 of yours".
 - **Only my work** narrows both lists to versions you uploaded.

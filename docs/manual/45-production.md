@@ -79,15 +79,16 @@ decision can be looked up later rather than remembered.
 
 ## Builds
 
-**Game builds** is below the queue. It shows the named builds the studio has
-made, and what is in each one — the same page developers and administrators
-use, read-only for you.
+**Game streams** is below the queue. It shows the branches of the game, and
+under each one the builds made from it — the same page developers and
+administrators use, read-only for you apart from the build review.
 
 **The words.** A **stream** is a branch of the game. A **build** is a package
 made from one stream at one changelist. A **release** is a build that shipped.
 An asset has versions; the game has builds.
 
-- **Click a build** to open it; click it again, or press **Hide**, to close it.
+- **Click a stream** to see its builds; click a build to open it. Clicking
+  again, or pressing **Hide**, closes it.
 - **Files** opens a version's manifest as a tree, with each file's hash and size.
 - **Compare builds** shows what changed between two builds.
 

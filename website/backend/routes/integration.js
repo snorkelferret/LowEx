@@ -125,6 +125,7 @@ const insertBuild = db.prepare(`
         name,
         stream,
         changelist,
+        released_on,
         build_id,
         built_at,
         base_stream,
@@ -140,7 +141,7 @@ const insertBuild = db.prepare(`
         source,
         created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reported', NULL)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'reported', NULL)
 `);
 
 const buildByIdRow = db.prepare('SELECT * FROM builds WHERE id = ?');
@@ -430,6 +431,16 @@ router.post(
 
         const name = rawName || `${stream} @ CL ${changelist}`;
 
+        // WHEN A BUILD IS A RELEASE. Optional, and the build process is the
+        // one that knows: a build that shipped, with its date.
+        const releasedOn = String(body.released_on || '').trim() || null;
+
+        if (releasedOn && !/^\d{4}-\d{2}-\d{2}$/.test(releasedOn)) {
+            return res.status(400).json({
+                error: 'released_on must be YYYY-MM-DD.'
+            });
+        }
+
         const rawBuildId = String(body.build_id || '').trim();
 
         if (rawBuildId.length > 120) {
@@ -570,7 +581,8 @@ router.post(
                 // else recorded.
                 db.prepare(`
                     UPDATE builds
-                    SET build_id = COALESCE(build_id, ?),
+                    SET released_on = COALESCE(released_on, ?),
+                        build_id = COALESCE(build_id, ?),
                         built_at = COALESCE(built_at, ?),
                         base_stream = COALESCE(base_stream, ?),
                         base_changelist = COALESCE(base_changelist, ?),
@@ -585,6 +597,7 @@ router.post(
                         source = 'reported'
                     WHERE id = ?
                 `).run(
+                    releasedOn,
                     rawBuildId || null,
                     builtAt,
                     baseStream || null,
@@ -611,6 +624,7 @@ router.post(
                 name,
                 stream,
                 changelist,
+                releasedOn,
                 rawBuildId || null,
                 builtAt,
                 baseStream || null,
