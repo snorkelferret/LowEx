@@ -12999,10 +12999,11 @@ no upside. If something seems to need one of them, ask.
            PDBs, counts, stage, first errors).
        R3  base_stream/base_changelist on CANDIDATE BUILDS.
        R4  FAILURES reported too, with the stage and the excerpt.
-       R5  WHAT IS IN THE GAME — the inclusion receipt (which approved version
-           went into which changelist/stream, and the depot paths), and the
-           approved list the tool imports from. Both are proposed; the shapes
-           are open to proposals from the game side.
+       R5  WHAT IS IN THE GAME — the approved list the tool imports from is
+           BUILT (GET /api/integration/approved, 2026-11-19); the inclusion
+           receipt (which approved version went into which changelist/stream,
+           and the depot paths) is proposed, and its shape is open to
+           proposals from the game side.
        R6  the account/client/key rules (val, val-agent, ticket, 0600 key,
            integration tooling on).
 

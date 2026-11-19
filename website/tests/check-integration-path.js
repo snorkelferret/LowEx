@@ -129,6 +129,26 @@ async function main() {
                     (3, '${F3}', '${F3}', 100),
                     (4, '${P2}', '${P2}', 50);
 
+                -- STORE CONTENT FOR THE APPROVED LIST. Two Factory versions
+                -- approved for //LE/main, one Rock approved for //LE/exp, and
+                -- a main build that already holds Factory v1.
+                INSERT INTO assets (id, name, category)
+                VALUES (1, 'StoreFactory', 'Prop'), (2, 'StoreRock', 'Environment');
+
+                INSERT INTO asset_versions
+                    (id, asset_id, version_number, created_by, version_note, manifest_hash)
+                VALUES
+                    (1, 1, 1, 1, 'in the build', 'aaaa'),
+                    (2, 1, 2, 1, 'waiting',      'bbbb'),
+                    (3, 2, 1, 1, 'exp only',     'cccc');
+
+                INSERT INTO asset_version_files
+                    (asset_version_id, stored_file_id, filename, relative_path)
+                VALUES
+                    (1, 1, 'factory.fbx', 'export'),
+                    (2, 3, 'factory_v2.fbx', 'export'),
+                    (3, 2, 'rock.png', 'textures');
+
                 INSERT INTO workspace_versions
                     (id, workspace_asset_id, version_number, created_by, version_note, manifest_hash)
                 VALUES
@@ -150,6 +170,21 @@ async function main() {
                     (1, 1, 'passed', '${H1}', CURRENT_TIMESTAMP),
                     (1, 2, 'passed', '${H2}', CURRENT_TIMESTAMP),
                     (1, 3, 'passed', '${H3}', CURRENT_TIMESTAMP);
+
+                INSERT INTO creative_approvals
+                    (id, workspace_asset_id, workspace_version_id, requested_by,
+                     status, decided_by, decided_at, repository_asset_id,
+                     repository_version_id, destination_kind, destination_stream)
+                VALUES
+                    (10, 1, 1, 1, 'approved', 1, '2026-11-01 10:00:00', 1, 1, 'game', '//LE/main'),
+                    (11, 1, 2, 1, 'approved', 1, '2026-11-02 10:00:00', 1, 2, 'game', '//LE/main'),
+                    (12, 1, 3, 1, 'approved', 1, '2026-11-03 10:00:00', 2, 3, 'game', '//LE/exp');
+
+                INSERT INTO builds (id, name, changelist, stream, source)
+                VALUES (10, 'existing main build', 50, '//LE/main', 'reported');
+
+                INSERT INTO build_assets (build_id, asset_version_id, added_by)
+                VALUES (10, 1, 1);
 
                 INSERT INTO api_keys (name, key_prefix, key_hash)
                 VALUES ('check-tool', '${KEY.slice(0, 12)}', '${KEY_HASH}');
@@ -232,6 +267,12 @@ async function main() {
 
     report.check('with tooling off, a valid key is still refused', off.status === 403,
         `expected 403, got ${off.status}`);
+
+    const offApproved = await server.call('GET',
+        '/api/integration/approved?stream=//LowExpectations/main', { headers: auth });
+
+    report.check('and the approved list is refused too', offApproved.status === 403,
+        `expected 403, got ${offApproved.status}`);
 
     const writableAgain = new Database(server.dbPath);
     writableAgain.prepare(`UPDATE app_settings SET value = '1' WHERE key = 'integration_tooling'`).run();
@@ -733,6 +774,65 @@ async function main() {
     report.check('and a rejected build stops being offered as advice',
         reviewedAgain?.receipt?.newer_build === null,
         `newer: ${JSON.stringify(reviewedAgain?.receipt?.newer_build)}`);
+
+    // -----------------------------------------------------------------
+    // THE APPROVED LIST
+    // -----------------------------------------------------------------
+
+    const approvedNoKey = await server.get('/api/integration/approved?stream=//LE/main');
+
+    report.check('the approved list needs a key', approvedNoKey.status === 401,
+        `expected 401, got ${approvedNoKey.status}`);
+
+    const approvedNoStream = await server.call('GET', '/api/integration/approved',
+        { headers: auth });
+
+    report.check('a missing stream is refused', approvedNoStream.status === 400,
+        `expected 400, got ${approvedNoStream.status}`);
+
+    const approvedBadStream = await server.call('GET',
+        '/api/integration/approved?stream=not-a-stream', { headers: auth });
+
+    report.check('a malformed stream is refused', approvedBadStream.status === 400,
+        `expected 400, got ${approvedBadStream.status}`);
+
+    const approvedMain = await server.call('GET',
+        '/api/integration/approved?stream=//LE/main', { headers: auth });
+
+    report.check('the approved list is served', approvedMain.status === 200
+        && Array.isArray(approvedMain.json?.versions),
+        `expected 200, got ${approvedMain.status} — ${approvedMain.text.slice(0, 200)}`);
+
+    const mainVersions = approvedMain.json?.versions || [];
+    const storeFactory = mainVersions.find(version => version.asset_version_id === 2);
+
+    report.check('it holds what is approved for the stream and still to go in',
+        Boolean(storeFactory) && storeFactory.asset_name === 'StoreFactory',
+        `versions: ${JSON.stringify(mainVersions)}`);
+
+    report.check('including the version approved while this test ran',
+        mainVersions.some(version => version.asset_name === 'Factory'
+            && version.files.length === 2),
+        `versions: ${JSON.stringify(mainVersions.map(v => v.asset_name))}`);
+
+    report.check('and excludes a version a build of the stream already holds',
+        !mainVersions.some(version => version.asset_version_id === 1),
+        `versions: ${JSON.stringify(mainVersions.map(v => v.asset_version_id))}`);
+
+    report.check('each version carries its files as addresses and hashes',
+        storeFactory?.files?.length === 1
+        && storeFactory.files[0].sha256 === F3
+        && storeFactory.files[0].size === 100
+        && storeFactory.files[0].filename === 'factory_v2.fbx',
+        `files: ${JSON.stringify(storeFactory?.files)}`);
+
+    const approvedExp = await server.call('GET',
+        '/api/integration/approved?stream=//LE/exp', { headers: auth });
+
+    report.check('another stream sees its own approvals',
+        (approvedExp.json?.versions || []).length === 1
+        && approvedExp.json.versions[0].asset_version_id === 3,
+        `versions: ${JSON.stringify(approvedExp.json?.versions)}`);
 
     // -----------------------------------------------------------------
     // STREAMS

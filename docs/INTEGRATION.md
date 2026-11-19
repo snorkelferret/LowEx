@@ -9,12 +9,13 @@ It covers three questions, and they are separate:
 |---|---|---|
 | was this asset tested, and where? | **test receipt** | **built and proven** |
 | what version of the game exists? | **build record** | **built** |
-| which approved assets are in the game? | **approved list** (portal → tool) and **inclusion receipt** (tool → portal) | proposed |
+| which approved assets are in the game? | **approved list** (portal → tool) | **built** |
+| | **inclusion receipt** (tool → portal) | proposed |
 
-*State: the test receipt and the build record answer today. The approved list
-and the inclusion receipt are marked **proposed** — a contract to build
-against, not a description of something that answers now. That distinction is
-kept throughout, because a contract that describes an endpoint returning 404 is
+*State: the test receipt, the build record and the approved list answer today.
+The inclusion receipt is marked **proposed** — a contract to build against,
+not a description of something that answers now. That distinction is kept
+throughout, because a contract that describes an endpoint returning 404 is
 worse than one that says so.*
 
 ---
@@ -311,14 +312,33 @@ rule is not built yet** — the gate still checks the stream, not the build.
 
 ---
 
-## 3. The approved list — PROPOSED, NOT BUILT
+## 3. The approved list — BUILT
 
-**`GET /api/integration/approved?stream=//LowExpectations/main`** does not
-exist yet. This is the portal → tool half of "which assets are in the game".
+**`GET /api/integration/approved?stream=//LowExpectations/main`**
 
-The tool needs to know **what it is allowed to import** into a game version,
-and where the bytes are. It should not browse the store's filesystem and guess,
-and it must not be able to read a private workspace.
+This is the portal → tool half of "which assets are in the game", and the one
+place the portal ANSWERS rather than is told. The one-way rule forbids the
+portal from calling out; it does not forbid the tool from asking a question the
+portal can answer from its own records.
+
+It returns the versions **approved for that stream** that a build of the stream
+does not already hold — the import list. A version approved for another stream
+is not here. The exclusion is inferred from build membership until the
+inclusion receipt exists; then it becomes exact.
+
+**Request**
+
+```
+GET /api/integration/approved?stream=//LowExpectations/main
+Authorization: Bearer <key>
+```
+
+| status | meaning |
+|---|---|
+| `200` | the list |
+| `400` | no stream, or a malformed one |
+| `401` | no key, or the wrong one |
+| `403` | integration tooling is off |
 
 ### Response
 
@@ -330,6 +350,7 @@ and it must not be able to read a private workspace.
       "asset_id": 4,
       "asset_name": "Factory",
       "asset_version_id": 4,
+      "version_number": 1,
       "manifest_hash": "77dc…",
       "category": "Prop",
       "approved_at": "2026-11-18 17:55:36",

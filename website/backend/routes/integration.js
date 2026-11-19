@@ -146,6 +146,51 @@ const insertBuild = db.prepare(`
 
 const buildByIdRow = db.prepare('SELECT * FROM builds WHERE id = ?');
 
+// THE IMPORT LIST: approved store versions for one game stream, minus anything
+// already held by a build of that stream. The tool reads addresses and hashes
+// from this and the bytes from the store; no content travels through the
+// portal (docs/INTEGRATION.md §3).
+const approvedForStream = db.prepare(`
+    SELECT
+        av.id            AS asset_version_id,
+        av.asset_id,
+        av.version_number,
+        av.manifest_hash,
+        a.name           AS asset_name,
+        a.category,
+        ca.decided_at    AS approved_at
+    FROM asset_versions av
+    JOIN assets a ON a.id = av.asset_id AND a.is_active = 1
+    JOIN creative_approvals ca ON ca.id = (
+        SELECT MAX(c2.id)
+        FROM creative_approvals c2
+        WHERE c2.repository_version_id = av.id
+          AND c2.status = 'approved'
+          AND c2.destination_kind = 'game'
+          AND c2.destination_stream = ?
+    )
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM build_assets ba
+        JOIN builds b ON b.id = ba.build_id
+        WHERE ba.asset_version_id = av.id
+          AND b.stream = ?
+    )
+    ORDER BY a.name COLLATE NOCASE, av.version_number
+`);
+
+const filesOfApprovedVersion = db.prepare(`
+    SELECT
+        wvf.relative_path,
+        wvf.filename,
+        sf.sha256,
+        sf.file_size AS size
+    FROM asset_version_files wvf
+    JOIN stored_files sf ON sf.id = wvf.stored_file_id
+    WHERE wvf.asset_version_id = ?
+    ORDER BY wvf.relative_path, wvf.filename
+`);
+
 
 function text(value, max) {
     const trimmed = String(value ?? '').trim();
@@ -669,5 +714,63 @@ router.post(
         }
     }
 );
+
+
+// ---------------------------------------------------------------------------
+// GET /api/integration/approved?stream=... — what the tool may import
+// ---------------------------------------------------------------------------
+//
+// THE PORTAL -> TOOL READ, the one thing the portal ANSWERS rather than is
+// told. The one-way rule forbids the portal from calling out; it does not
+// forbid the tool from asking a question the portal can answer from its own
+// records (docs/INTEGRATION.md, "The one rule").
+//
+// THE LIST IS ADDRESSES, NOT CONTENT. Each version is a manifest hash and a
+// set of files with their SHAs and sizes; the tool reads the blobs from the
+// store on the same machine and verifies them against those hashes. Nothing
+// is streamed through the portal.
+//
+// APPROVED FOR THIS STREAM, AND NOT ALREADY IN IT. A version whose approval
+// named another stream is not here; nor is one already held by a build of
+// this stream — it has gone in, and importing it again would duplicate it.
+// The inclusion receipt will make that second condition exact rather than
+// inferred from build membership (contract §4, proposed).
+
+router.get('/approved', requireApiKey, (req, res) => {
+    if (!getSetting('integration_tooling')) {
+        return res.status(403).json({
+            error:
+                'Integration tooling is off. An administrator must enable it ' +
+                'before the portal serves the approved list.'
+        });
+    }
+
+    const stream = String(req.query?.stream || '').trim();
+
+    if (!stream || stream.length > 200 || !STREAM.test(stream)) {
+        return res.status(400).json({
+            error: 'stream must be a Perforce stream path, such as //LowExpectations/main.'
+        });
+    }
+
+    try {
+        const versions = approvedForStream.all(stream, stream).map(row => ({
+            asset_id: row.asset_id,
+            asset_name: row.asset_name,
+            asset_version_id: row.asset_version_id,
+            version_number: row.version_number,
+            manifest_hash: row.manifest_hash,
+            category: row.category,
+            approved_at: row.approved_at,
+            files: filesOfApprovedVersion.all(row.asset_version_id)
+        }));
+
+        return res.json({ stream, versions });
+
+    } catch (err) {
+        console.error('Could not build the approved list:', err);
+        return res.status(500).json({ error: 'Could not build the approved list' });
+    }
+});
 
 module.exports = router;
