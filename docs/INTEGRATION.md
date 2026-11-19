@@ -443,12 +443,27 @@ to consult them. That is the next rule, not a rewrite.
 
 ## Requests to the game side
 
-*2026-11-19. The portal's side of the build record is built and proven with
-test payloads; nothing has reported a real build yet. These are the things
-needed next, in the order they become useful. Propose a change below or in a
-message; the portal records the decision in `website/TODO`.*
+*2026-11-19. The portal's side of both records is built and proven with test
+payloads; nothing real has arrived yet. These are the things needed next, in
+the order they become useful. Propose a change below or in a message; the
+portal records the decision in `website/TODO`.*
 
-### R1 — Report one real build
+### R1 — Say which stream the developer worked in
+
+That is the **test receipt** (§1, built). When a developer tests an asset, the
+thing running inside the editor posts it: `workspace_version_id`, the
+**stream the editor was on** (the task stream), its `parent_stream` (the game
+stream it was branched from), the game `changelist`, the `levels` the asset was
+placed in, the exchange file and its hash, and the result.
+
+The portal cannot work this out for itself — it has no game content and never
+asks Perforce. Without this report it cannot say which stream a developer used,
+which is exactly the question the submission gate is built on.
+
+If the editor tool is not yours, say who produces it; the report has to come
+from whatever is running inside the editor.
+
+### R2 — Report one real build
 
 `POST /api/integration/builds` is waiting. Send one report for the stream you
 actually build, with as many of the measured fields as the pipeline can honestly
@@ -482,34 +497,44 @@ The first real report is also the test that the page reads it: the portal shows
 it under the stream, with its stats, and marks it over the size or time limit
 if it is.
 
-### R2 — Candidate builds name their base
+### R3 — Candidate builds name their base
 
 When you build from a task stream, send `base_stream` and `base_changelist` as
 well. That is what tells the portal which game stream the candidate was built
 over, and it is the pair that lets a change be tested in the game without
 changing the game.
 
-### R3 — Report failures too
+### R4 — Report failures too
 
 A build that failed is a fact, not a missing report. Send `result: "failed"`,
 the stage, and the excerpt. The portal refuses to accept a failed build and
 shows it with its reason; a fixed build is a new report at a new changelist.
 
-### R4 — The account, the client, the key
+### R5 — Say what is in the game
+
+That is the **inclusion receipt** (§4, proposed). When an approved version is
+integrated, the thing that did it reports the `asset_version_id`, the
+`changelist` that contains it, the `stream` written to, the `depot_paths` it
+wrote, the levels it was placed in, and whether it went in.
+
+It answers "which assets are in the game" with a record made by the process
+that did it, rather than an administrator typing a changelist afterwards. It
+also completes the file matcher: the change-commit notification says which
+depot files changed, and this says which approved version those files are.
+
+The other half is the **approved list** (§3, proposed):
+`GET /api/integration/approved?stream=...`, a set of addresses and hashes the
+tool imports from. If neither shape suits the tool, propose the shape you need
+— the portal owns the document because the portal validates against it.
+
+### R6 — The account, the client, the key
 
 `val` for now, in **your own client** named `val-agent`, authenticated by
 ticket. Receipts and build reports say `p4_user: "val"`, because that is the
 account that did the work. The key is issued on the portal machine with
 `node scripts/api-key.js --create "..."`, shown once, kept in a 0600 file, and
-never in a message or a repository. **Integration tooling** must be on, or both
+never in a message or a repository. **Integration tooling** must be on, or the
 endpoints refuse the key.
-
-### R5 — What you need from the portal
-
-The **approved list** (`GET /api/integration/approved`) and the **inclusion
-receipt** are proposed, not built (sections 3 and 4). If the shape in the
-contract does not suit the tool, propose the shape you need — the portal owns
-the document because the portal validates against it.
 
 ---
 

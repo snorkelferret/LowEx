@@ -12983,26 +12983,36 @@ no upside. If something seems to need one of them, ask.
        seam between them is wrong.
 
 
-115) THE FIRST REQUEST TO THE GAME AGENT. 2026-11-19.
-     ================================================
+115) THE REQUESTS TO THE GAME AGENT. 2026-11-19.
+     ==============================================
 
      WRITTEN IN docs/INTEGRATION.md, "Requests to the game side", because
-     that file is the channel to the agent working on the game. It asks for:
+     that file is the channel to the agent working on the game. Six asks:
 
-       R1  one real build report, with the measured fields the pipeline can
-           honestly produce (the easy set is named: exit code, timestamps,
-           packaged size excluding PDBs, counts, stage, first errors);
-       R2  base_stream/base_changelist on candidate builds;
-       R3  failures reported too, with the stage and the excerpt;
-       R4  the account/client/key rules (val, val-agent, ticket, 0600 key,
-           integration tooling on);
-       R5  the game side's own needs against the approved list and inclusion
-           receipt, which are proposed and not built.
+       R1  the STREAM THE DEVELOPER WORKED IN — a test receipt from inside the
+           editor: the editor's stream, its parent, the game changelist, the
+           levels, the exchange file and hash. The portal cannot know this by
+           asking; without it the submission gate has nothing to compare a
+           destination against.
+       R2  one real BUILD REPORT, with the measured fields the pipeline can
+           honestly produce (exit code, timestamps, packaged size excluding
+           PDBs, counts, stage, first errors).
+       R3  base_stream/base_changelist on CANDIDATE BUILDS.
+       R4  FAILURES reported too, with the stage and the excerpt.
+       R5  WHAT IS IN THE GAME — the inclusion receipt (which approved version
+           went into which changelist/stream, and the depot paths), and the
+           approved list the tool imports from. Both are proposed; the shapes
+           are open to proposals from the game side.
+       R6  the account/client/key rules (val, val-agent, ticket, 0600 key,
+           integration tooling on).
 
      AND A MESSAGE WAS SENT to the running peer session pointing at that
      section, so the agent does not have to be told the whole contract in a
      chat window.
 
-     THE FIRST REAL REPORT IS ALSO THE PROOF: the page should show it under its
-     stream with stats and any over-limit mark. Until one arrives, the page in
-     the development database shows only the two legacy typed builds.
+     THE FIRST REAL REPORT OF EACH KIND IS ALSO THE PROOF: a receipt populates
+     the stream a submission was tested in; a build report populates the
+     Streams page with stats and any over-limit mark; an inclusion populates
+     "what is in the game" with a record made by the process that did it.
+     Until any arrives, the development database shows only the two legacy
+     typed builds and receipts posted by hand for testing.
